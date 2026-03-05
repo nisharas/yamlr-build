@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: privileged-i12511
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: privileged-i12511
+  template:
+    metadata:
+      labels:
+        app: privileged-i12511
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.19
+        securityContext:
+          privileged: true

@@ -1,0 +1,22 @@
+{
+    "kind": "PolicyReport",
+    "results": [
+        {
+            "message": "Validation error: Containers must run as non-root",
+            "policy": "disallow-root-user",
+            "rule": "check-runasnonroot",
+            "result": "fail",
+            "severity": "high",
+            "resources": [
+                {
+                    "kind": "Deployment",
+                    "name": "frontend",
+                    "namespace": "default"
+                }
+            ]
+        }
+    ],
+    "summary": {
+        "fail": 1
+    }
+}

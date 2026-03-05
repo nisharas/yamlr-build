@@ -8,12 +8,13 @@ Tests the standard best-practice rules:
 3. Security Context (Root)
 4. Probes (Missing)
 """
-import sys
-import shutil
+
 import logging
+import shutil
+import sys
 from pathlib import Path
+
 from yamlr.core.engine import YamlrEngine
-from yamlr.core.config import ConfigManager
 
 # Setup Logging
 logging.basicConfig(level=logging.INFO)
@@ -38,17 +39,21 @@ spec:
           privileged: true    # ERROR: Privileged
 """
 
+
 def setup_env():
-    if TEST_ROOT.exists(): shutil.rmtree(TEST_ROOT)
+    if TEST_ROOT.exists():
+        shutil.rmtree(TEST_ROOT)
     TEST_ROOT.mkdir(parents=True)
-    (TEST_ROOT / "bad.yaml").write_text(BAD_MANIFEST, encoding='utf-8')
+    (TEST_ROOT / "bad.yaml").write_text(BAD_MANIFEST, encoding="utf-8")
+
 
 def test_analyzers():
     logger.info("TEST: Running Core Analyzers")
-    
+
     # DEBUG: Inspect Registry
     from yamlr.analyzers.registry import AnalyzerRegistry
-    AnalyzerRegistry.register_defaults() # Force registration to check
+
+    AnalyzerRegistry.register_defaults()  # Force registration to check
     all_analyzers = AnalyzerRegistry.get_all_analyzers()
     logger.info(f"DEBUG: Registry has {len(all_analyzers)} analyzers")
     for a in all_analyzers:
@@ -56,10 +61,10 @@ def test_analyzers():
 
     # Init Engine
     engine = YamlrEngine(str(TEST_ROOT), "catalog/k8s_v1_distilled.json")
-    
+
     # Run Audit
     res = engine.audit_and_heal_file("bad.yaml")
-    
+
     # Check Logs for findings
     found_issues = []
     if "logic_logs" in res:
@@ -75,19 +80,26 @@ def test_analyzers():
 
     # Assertions
     failures = []
-    if "latest_tag" not in found_issues: failures.append("Failed to detect :latest tag")
-    if "missing_requests" not in found_issues: failures.append("Failed to detect missing resources")
-    if "privileged" not in found_issues: failures.append("Failed to detect privileged container")
-    if "missing_probes" not in found_issues: failures.append("Failed to detect missing probes")
-    
+    if "latest_tag" not in found_issues:
+        failures.append("Failed to detect :latest tag")
+    if "missing_requests" not in found_issues:
+        failures.append("Failed to detect missing resources")
+    if "privileged" not in found_issues:
+        failures.append("Failed to detect privileged container")
+    if "missing_probes" not in found_issues:
+        failures.append("Failed to detect missing probes")
+
     if failures:
         logger.error("❌ Analyzer Verification Failed:")
-        for f in failures: logger.error(f"  - {f}")
+        for f in failures:
+            logger.error(f"  - {f}")
         logger.info("DEBUG LOGS:")
-        for l in res.get("logic_logs", []): print(l)
+        for l in res.get("logic_logs", []):
+            print(l)
         raise AssertionError("Analyzer check failed")
-    
+
     logger.info("✅ All Core Analyzers Verified Successfully")
+
 
 if __name__ == "__main__":
     try:

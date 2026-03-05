@@ -1,0 +1,16 @@
+name: 'Yamlr'
+description: 'High-Fidelity Kubernetes Healer & Validator (Scan, Heal, OPA)'
+author: 'Yamlr Team'
+branding:
+  icon: 'shield'
+  color: 'purple'
+inputs:
+  args:
+    description: 'Arguments to pass to yamlr (e.g. "scan . --opa-bundle ...")'
+    required: false
+    default: 'scan .'
+runs:
+  using: 'docker'
+  image: 'Dockerfile'
+  args:
+    - ${{ inputs.args }}

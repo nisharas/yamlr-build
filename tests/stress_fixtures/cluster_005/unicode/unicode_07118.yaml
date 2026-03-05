@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: unicode-i3066
+  labels:
+    🚀: rocket
+    app: unicode-i3066
+data:
+  message: Hello 世界 🌍
+  emoji: 🔥💯✅
+  rtl: مرحبا

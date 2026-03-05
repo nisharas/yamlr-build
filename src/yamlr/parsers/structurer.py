@@ -2,377 +2,385 @@
 """
 Yamlr STRUCTURER - The Reconciled Architect
 -------------------------------------------
-Critical Fix: Handle nested forced_arrays (e.g., apiGroups under rules).
+Rebuilds the YAML tree from identified shards.
+Decomposed and Hardened: v1.1 Refactor.
 
 Author: Nishar A Sunkesala / Yamlr Team
-Date: 2026-01-26
+Date: 2026-02-13
 """
 
 import logging
-from typing import Any, Dict, List, Optional, TYPE_CHECKING, Union
 from io import StringIO
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+
 from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap, CommentedSeq
 
 from yamlr.models import Shard
+from yamlr.healers.stabilizer import K8sStabilizer
+from yamlr.parsers.physicist import IndentationPhysicist, T_MAP, T_SEQ
+from yamlr.parsers.schema_healer import SchemaHealer
 
 if TYPE_CHECKING:
     from yamlr.core.context import HealContext
+    from yamlr.validators.schema_validator import SchemaValidator
 
 logger = logging.getLogger("yamlr.parsers.structurer")
 
 class YamlrStructurer:
     """
-    The Architect: Rebuilds the YAML tree from identified shards.
+    The Architect: Orchestrates YAML tree reconstruction.
     """
 
-    def __init__(self, catalog: Dict[str, Any]):
+    def __init__(self, catalog: Dict[str, Any], validator: Optional["SchemaValidator"] = None):
+        """
+        Why: Internal documentation policy compliance.
+        What: Auto-generated summary.
+        """
         self.catalog = catalog
+        self.validator = validator
         self.yaml_engine = YAML()
         self.yaml_engine.preserve_quotes = True
-        self.yaml_engine.indent(mapping=2, sequence=4, offset=2)
+        self.yaml_engine.indent(mapping=2, sequence=2, offset=0)
+
+        # Decomposed Components
+        self.physicist = IndentationPhysicist()
+        self.healer = SchemaHealer(catalog, validator)
         
-        # Fields that MUST be arrays in Kubernetes
-        self.forced_arrays = {
-            "containers", "initContainers", "ephemeralContainers", 
-            "ports", "env", "envFrom", "volumeMounts", "volumeDevices",
-            "volumes", "args", "command", "imagePullSecrets", 
-            "tolerations", "nodeSelector", "hostAliases",
-            "rules", "subjects", "roleRef", "paths", "hosts",
-            "matchExpressions", "endpoints", "subsets", 
-            "addresses", "notReadyAddresses", "topologyKeys",
-            "finalizers", "ownerReferences", "managedFields",
-            "conditions", "taints", "apiGroups", "resources", "verbs"
+        # [MODULARITY FIX] Allow injection of custom secret paths
+        # Default covers standard K8s Secrets + SealedSecrets + Helm encrypted values
+        self.preserve_quote_paths = {
+            "data", "stringData", "binaryData", 
+            "encryptedData", # SealedSecrets
+            "auth", "secret", "token", # Generic sensitive fields
+            "password", "key"
         }
 
-    def reconstruct(self, context: 'HealContext') -> List[CommentedMap]:
+    def reconstruct(self, context: "HealContext") -> List[CommentedMap]:
         """[Stage 6] Rebuilds the folder-like structure from flat data shards."""
-        all_documents = []
-        current_shards = []
+        all_documents: List[CommentedMap] = []
+        current_shards: List[Shard] = []
         doc_count = 0
-        
+
         try:
-            if hasattr(context.shadow_engine, 'majority_indent'):
-                m_indent = context.shadow_engine.majority_indent
-                self.yaml_engine.indent(mapping=m_indent, sequence=m_indent*2, offset=m_indent)
+            if hasattr(context.shadow_engine, "majority_indent"):
+                m_indent = max(2, context.shadow_engine.majority_indent)
+                self.yaml_engine.indent(mapping=m_indent, sequence=m_indent, offset=0)
 
             for shard in context.shards:
                 if shard.is_doc_boundary:
                     if current_shards:
-                        this_kind = context.identities[doc_count].kind if doc_count < len(context.identities) else None
-                        try:
-                            doc = self._build_tree(current_shards, this_kind)
-                            all_documents.append(doc)
-                        except Exception as e:
-                            logger.error(f"Stage 6: Failed to build tree for document {doc_count} (kind: {this_kind}): {e}")
+                        doc = self._process_doc(current_shards, doc_count, context)
+                        if doc: all_documents.append(doc)
                         current_shards = []
                         doc_count += 1
                 else:
                     current_shards.append(shard)
-            
+
             if current_shards:
-                this_kind = context.identities[doc_count].kind if doc_count < len(context.identities) else None
-                try:
-                    doc = self._build_tree(current_shards, this_kind)
-                    all_documents.append(doc)
-                except Exception as e:
-                    logger.error(f"Stage 6: Failed to build tree for final document (kind: {this_kind}): {e}")
+                doc = self._process_doc(current_shards, doc_count, context)
+                if doc: all_documents.append(doc)
+
+            # Process tracked duplicate keys into findings
+            if hasattr(self, "duplicate_keys") and self.duplicate_keys:
+                from yamlr.analyzers.base import AnalysisResult
+                for d_key, d_shard in self.duplicate_keys:
+                    kbs_kind = context.identities[0].kind if context.identities else "Unknown"
+                    kbs_name = context.identities[0].name if context.identities else "unknown"
+                    context.findings.append(AnalysisResult(
+                        analyzer_name="StructurerDuplicateKey",
+                        severity="WARNING",
+                        message=f"Duplicate key '{d_key}' detected at line {d_shard.line_no}. The latter value overwritten the former.",
+                        resource_name=kbs_name,
+                        resource_kind=kbs_kind,
+                        file_path="unknown",
+                        rule_id="yaml/duplicate-key"
+                    ))
 
             return all_documents
-            
         except Exception as e:
             logger.error(f"Stage 6: Critical reconstruction failure: {e}")
             raise
+
+    def _process_doc(self, shards: List[Shard], index: int, context: "HealContext") -> Optional[CommentedMap]:
+        """Processes a single document group of shards."""
+        identity = context.identities[index] if index < len(context.identities) else None
+        kind = identity.kind if identity else None
+        api = identity.api_version if identity else None
+        
+        try:
+            doc = self._build_tree(shards, kind, api)
+            self._normalize_doc(doc)
+            return doc
+        except Exception as e:
+            import traceback
+            logger.error(f"Stage 6: Failed document {index} (kind: {kind}): {e}")
+            logger.error(traceback.format_exc())
+            return None
+
+    def _normalize_doc(self, doc: CommentedMap):
+        """Applies K8s standardizations to the reconstructed document."""
+        try:
+            kind = (doc.get("kind") or "").lower()
+            spec = doc.get("spec") or {}
+            pod_spec = spec if kind == "pod" else (spec.get("template") or {}).get("spec") or {}
+
+            for c in pod_spec.get("containers") or []:
+                self.normalize_resources(c)
+                self.normalize_envfrom(c)
+
+            self.normalize_metadata(doc)
+            K8sStabilizer.normalize_deployment_selector(doc)
+        except Exception as e:
+            logger.debug(f"Normalization skipped: {e}")
+
+    def normalize_resources(self, container: dict):
+        """Compatibility proxy for K8sStabilizer."""
+        K8sStabilizer.normalize_resources(container)
+
+    def normalize_envfrom(self, container: dict):
+        """Compatibility proxy for K8sStabilizer."""
+        K8sStabilizer.normalize_envfrom(container)
+
+    def normalize_metadata(self, doc: dict):
+        """Compatibility proxy for K8sStabilizer."""
+        return K8sStabilizer.normalize_metadata(doc)
+
+    def normalize_deployment_selector_from_template(self, doc: dict):
+        """Compatibility proxy for K8sStabilizer."""
+        K8sStabilizer.normalize_deployment_selector(doc)
 
     def serialize(self, documents: List[CommentedMap], compact: bool = False) -> str:
         """[Stage 9] Turns the internal tree back into a text file (YAML)."""
         output = StringIO()
         if compact:
             self.yaml_engine.indent(mapping=2, sequence=2, offset=0)
-        
         try:
             if len(documents) > 1:
                 self.yaml_engine.dump_all(documents, output)
             elif documents:
                 self.yaml_engine.dump(documents[0], output)
-            else:
-                return ""
             return output.getvalue()
-        except Exception as e:
-            logger.error(f"Stage 9: Serialization failed: {e}")
-            raise
         finally:
             output.close()
 
-    def _build_tree(self, shards: List[Shard], default_kind: Optional[str]) -> CommentedMap:
-        """
-        [Optimized v2] The core engine that puts the pieces back together.
-        """
+    def _build_tree(self, shards: List[Shard], default_kind: str, default_api: str) -> CommentedMap:
+        """The core engine that delegates to Physicist and Healer."""
         rebuilt_tree = CommentedMap()
-        active_kind = default_kind
         
-        # Identity Discovery (Fast Scan)
-        if not active_kind:
-            for s in shards:
-                if s.key == "kind" and s.value:
-                    active_kind = str(s.value).strip("'\"")
-                    break
+        # 1. Setup Context
+        active_kind, active_api = self._discover_identity(shards, default_kind, default_api)
+        self.healer.set_resource_context(active_api, active_kind)
+        self.physicist.reset(rebuilt_tree)
         
-        # Heuristic Learning Mode
-        kind_schema = self.catalog.get(active_kind, {"fields": {}})
-        if active_kind and not kind_schema.get("fields"):
-            logger.info(f"Learning Mode: Heuristic recovery for unknown kind '{active_kind}'")
-
-        # Cache Locals for Speed
-        forced_arrays = self.forced_arrays
-        clean_value = self._clean_value
-        apply_layout = self._apply_layout
-        
-        # Stack: [(indent: int, container: Map/Seq, schema: dict)]
-        # We use a simpler stack structure for speed: indent is the primary key
-        stack = [(-1, rebuilt_tree, kind_schema)]
-        
-        # Cache Types
-        T_MAP = CommentedMap
-        T_SEQ = CommentedSeq
-        T_INT = int
+        if not hasattr(self, "duplicate_keys"):
+            self.duplicate_keys = []
 
         for i, shard in enumerate(shards):
-            # Skip empty lines (comments and spacing handled by previous shard layout)
             if not shard.key and shard.value is None and not shard.is_list_item:
                 continue
 
-            # Fast property access
-            s_key = shard.key
+            # 2. Extract Shard Properties
+            s_key = self.healer.apply_typo_fix(shard)
             s_val = shard.value
-            s_indent = shard.indent if shard.indent is not None else 0
+            s_indent = shard.indent or 0
             s_is_list = shard.is_list_item
-
-            # =================================================================
-            # 1. OPTIMIZED STACK MANAGEMENT (Indentation Physics)
-            # =================================================================
-            # Pop deeper scopes until we find the parent
-            # Avoids tuple unpacking inside the condition
-            while True:
-                last_ident = stack[-1][0]
-                
-                # If we are deeper, we are good (break)
-                if s_indent > last_ident:
-                    break
-                    
-                # If same indent:
-                if s_indent == last_ident:
-                    # Special case: List items at the same indent are SIBLINGS, not children
-                    # So we don't pop.
-                    if s_is_list and isinstance(stack[-1][1], T_SEQ):
-                        break
-                    
-                    # Special case: Sibling fields in a map inside a sequence
-                    # Check if grandparent is a sequence
-                    if len(stack) > 1 and isinstance(stack[-2][1], T_SEQ):
-                         break
-                
-                # If we are shallower (or same indent but not special case), pop
-                if len(stack) > 1:
-                    stack.pop()
-                else:
-                    break
-
-            # Current Context
-            parent_indent, parent_container, parent_schema = stack[-1]
             
-            # Schema lookup (Dictionary get is fast, no need to optimize much)
-            field_info = parent_schema.get("fields", {}).get(s_key, {}) if s_key else {}
-
-            # =================================================================
-            # 2. CONTAINER SELECTION & CREATION
-            # =================================================================
+            # 3. Resolve Scope via Physics
+            self.physicist.resolve_scope(s_indent, s_is_list, s_key, self.healer)
             
-            # CASE A: We are adding to a Sequence (List)
-            if isinstance(parent_container, T_SEQ):
-                # If it's not a list item ("-"), but has a key, it's a map inside a list
-                if not s_is_list and s_key:
-                    # Check if we should add to the LAST item in the list (sibling field)
-                    # or start a NEW item (implicit list item)
-                    
-                    # Heuristic: Is this a child of the current last item?
-                    # Check nesting: is the NEXT shard indented relative to this one?
-                    is_parent = (i + 1 < len(shards) and 
-                               (shards[i+1].indent or 0) > s_indent)
+            # [PARITY FIX] Handle Tri-State Ambiguity (Nest-Prev)
+            # If same indent as sibling, check if we belong to it instead.
+            self._handle_nest_prev_ambiguity(s_indent, s_key, s_is_list)
+            
+            p_indent, p_cont, p_key, dot_path, _ = self.physicist.get_context()
 
-                    # Try to reuse the last item if it exists and matches indent
-                    use_existing = False
-                    if len(parent_container) > 0 and isinstance(parent_container[-1], T_MAP):
-                         # If we are at the same indentation as the map in the stack
-                         # effectively we are adding a key to that map
-                         if len(stack) > 1 and s_indent == stack[-1][0]:
-                             use_existing = True
-
-                    if use_existing:
-                        existing_map = stack[-1][1]
-                        if is_parent:
-                            if s_key in forced_arrays:
-                                new_seq = T_SEQ()
-                                existing_map[s_key] = new_seq
-                                apply_layout(existing_map, shard, is_key=True)
-                                stack.append((s_indent, new_seq, field_info))
-                            else:
-                                new_map = T_MAP()
-                                existing_map[s_key] = new_map
-                                apply_layout(new_map, shard, is_key=False)
-                                stack.append((s_indent, new_map, field_info))
-                        else:
-                            existing_map[s_key] = clean_value(s_val)
-                            apply_layout(existing_map, shard, is_key=True)
-                    else:
-                        # New Map Item
-                        new_item = T_MAP()
-                        if is_parent:
-                            if s_key in forced_arrays:
-                                new_seq = T_SEQ()
-                                new_item[s_key] = new_seq
-                                parent_container.append(new_item)
-                                apply_layout(new_item, shard, is_key=True)
-                                stack.append((s_indent, new_item, field_info)) # Map
-                                stack.append((s_indent, new_seq, field_info))  # Seq
-                            else:
-                                new_map = T_MAP() # Should this be the same new_item? NO.
-                                # Wait, if key has children, the key IS the map entry
-                                # BUT we are inside a sequence. 
-                                # The structure is: - key: (new map)
-                                # Actually, it's: - key: val
-                                
-                                # Correct logic:
-                                # We add 'new_item' to list. 'new_item' gets 's_key'
-                                # If 's_key' is parent, then `new_item[s_key]` = nested_map
-                                nested_val = clean_value(s_val)
-                                new_item[s_key] = nested_val if nested_val is not None else T_MAP() # Placeholder
-                                
-                                parent_container.append(new_item)
-                                apply_layout(new_item, shard, is_key=True)
-                                stack.append((s_indent, new_item, field_info))
-                                
-                                # If it was a parent, we need to push the CHILD container
-                                # For normal maps, the child container is the value of the key
-                                if isinstance(new_item[s_key], T_MAP):
-                                     stack.append((s_indent, new_item[s_key], field_info))
-                        else:
-                            new_item[s_key] = clean_value(s_val)
-                            parent_container.append(new_item)
-                            apply_layout(new_item, shard, is_key=True)
-                            stack.append((s_indent, new_item, field_info))
-                    continue
-
-            # CASE B: Explicit List Item ("- ...")
+            # 4. Hybrid Construction Logic (Container Dispatch)
             if s_is_list:
-                target_seq = parent_container
-                
-                # If parent is a Map, we might need to Auto-Vivify a sequence
-                if isinstance(parent_container, T_MAP) and s_key:
-                    if s_key not in parent_container:
-                        parent_container[s_key] = T_SEQ()
-                    target_seq = parent_container[s_key]
-                
-                # Handle "- value" vs "- key: value"
-                if not s_key:
-                    if isinstance(target_seq, T_MAP):
-                        # SAFETY FIX: Parent is a Map (default assumption), but we found a scalar list.
-                        # Instead of crashing with .append(), synthesize a key.
-                        # This turns "- item" into "item_N: item" which Validator will flag as type error.
-                        idx = len(target_seq)
-                        target_seq[f"item_{idx}"] = clean_value(s_val)
-                    else:
-                        target_seq.append(clean_value(s_val))
-                else:
-                    new_item = T_MAP()
-                    new_item[s_key] = clean_value(s_val)
-                    if isinstance(target_seq, T_MAP):
-                        # Same safety fix for keyed items, though rare
-                        # ("- key: val" inside a Map -> "item_N: {key: val}")
-                        idx = len(target_seq)
-                        target_seq[f"item_{idx}"] = new_item
-                    else:
-                        target_seq.append(new_item)
-                    apply_layout(new_item, shard, is_key=True)
-                    stack.append((s_indent, new_item, field_info))
+                self._handle_explicit_list_item(p_cont, shard, s_key, s_val, s_indent, dot_path)
                 continue
 
-            # CASE C: Map Key ("key: value")
-            is_parent = (i + 1 < len(shards) and (shards[i+1].indent or 0) > s_indent)
-            
-            if is_parent and s_key:
-                if s_key in forced_arrays:
-                    new_seq = T_SEQ()
-                    parent_container[s_key] = new_seq
-                    apply_layout(parent_container, shard, is_key=True)
-                    stack.append((s_indent, new_seq, field_info))
-                else:
-                    new_map = T_MAP()
-                    parent_container[s_key] = new_map
-                    apply_layout(new_map, shard, is_key=False)
-                    stack.append((s_indent, new_map, field_info))
-            
-            elif s_key:
-                val = clean_value(s_val)
-                if s_key in forced_arrays and not isinstance(val, list):
-                    val = [val]
-                parent_container[s_key] = val
-                apply_layout(parent_container, shard, is_key=True)
+            if isinstance(p_cont, T_SEQ):
+                self._handle_sequence_append(p_cont, shard, s_key, s_val, s_indent, s_is_list, dot_path, p_indent)
+                continue
+
+            self._handle_map_entry(p_cont, shard, i, shards, s_key, s_val, s_indent, dot_path)
 
         return rebuilt_tree
 
+    def _discover_identity(self, shards: List[Shard], d_kind: str, d_api: str) -> Tuple[str, str]:
+        """Scans shards for kind/apiVersion if not provided."""
+        ak, api = d_kind, d_api
+        for s in shards:
+            if not ak and s.key == "kind": ak = str(s.value).strip("'\"")
+            if not api and s.key == "apiVersion": api = str(s.value).strip("'\"")
+            if ak and api: break
+        return ak or "", api or ""
+
+    def _handle_sequence_append(self, seq, shard, key, val, indent, is_list, dot_path, p_indent):
+        """Case A: Adding to an existing Sequence."""
+        if not is_list and key:
+            # Check if we belong to the last item in the sequence
+            target = None
+            should_merge = False
+            
+            if len(seq) > 0 and isinstance(seq[-1], T_MAP):
+                if indent == p_indent:
+                    should_merge = True
+                elif indent > p_indent:
+                     # Heuristic: If indentation is deeper but it's a valid field of the item, 
+                     # assume it belongs to the previous item (messy indentation healing).
+                     if self.healer.is_valid_sibling(dot_path, key):
+                         should_merge = True
+
+            if should_merge:
+                target = seq[-1]
+            else:
+                target = T_MAP()
+                seq.append(target)
+                self.physicist.push(indent, target, None, dot_path)
+
+            if self._is_parent(shard, indent):
+                self._create_nested_container(target, shard, key, indent, dot_path)
+            else:
+                if isinstance(target, dict) and key in target:
+                    self.duplicate_keys.append((key, shard))
+                target[key] = self.healer.clean_value(val, None, dot_path, key, is_flow=shard.is_flow_style)
+                self._apply_layout(target, shard, is_key=True)
+
+    def _handle_explicit_list_item(self, cont, shard, key, val, indent, dot_path):
+        """Case B: Shard has '-' marker."""
+        if isinstance(cont, T_MAP) and key and not self.healer.should_be_array(key, dot_path):
+            # Schema-heal: Not an array but marked as one
+            if key in cont:
+                self.duplicate_keys.append((key, shard))
+            cont[key] = self.healer.clean_value(val, key, dot_path, key, is_flow=shard.is_flow_style)
+            self._apply_layout(cont, shard, is_key=True)
+            self.physicist.push(indent, cont, None, dot_path)
+            return
+
+        target_seq = None
+        if isinstance(cont, T_MAP) and key:
+            if key not in cont:
+                target_seq = T_SEQ()
+                cont[key] = target_seq
+            else:
+                target_seq = cont[key]
+                # Auto-heal: If target is not a list, convert it to one (Scalar -> List[Scalar])
+                if not isinstance(target_seq, list):
+                    new_seq = T_SEQ()
+                    new_seq.append(target_seq)
+                    cont[key] = new_seq
+                    target_seq = new_seq
+        else:
+            target_seq = cont
+            
+        # Fallback for Map Collision (Map -> Map with generated key)
+        if isinstance(target_seq, (dict, T_MAP)):
+             safe_key = f"item_{len(target_seq)}"
+             if isinstance(val, str) and val and len(val) < 20 and " " not in val:
+                  safe_key = val
+             
+             cleaned_val = self.healer.clean_value(val, None, dot_path, key, is_flow=shard.is_flow_style)
+             target_seq[safe_key] = cleaned_val
+             
+             if isinstance(cleaned_val, (dict, list)):
+                 self.physicist.push(indent, cleaned_val, None, dot_path)
+             return
+
+        if not key:
+            target_seq.append(self.healer.clean_value(val, None, dot_path, None, is_flow=shard.is_flow_style))
+        else:
+            new_item = T_MAP()
+            new_item[key] = self.healer.clean_value(val, key, dot_path, key, is_flow=shard.is_flow_style)
+            target_seq.append(new_item)
+            self.physicist.update_item_indent(indent)
+            self._apply_layout(new_item, shard, is_key=True)
+            self.physicist.push(indent, new_item, None, dot_path)
+
+    def _handle_map_entry(self, cont, shard, idx, shards, key, val, indent, dot_path):
+        """Case C: Standard key-value entry."""
+        if not key: return
+        
+        if self._is_parent(shard, indent, idx, shards, dot_path):
+            self._create_nested_container(cont, shard, key, indent, dot_path)
+        else:
+            final_val = self.healer.clean_value(val, None, dot_path, key, is_flow=shard.is_flow_style)
+            if self.healer.should_be_array(key, dot_path) and not isinstance(final_val, list):
+                final_val = [final_val]
+            if isinstance(cont, dict) and key in cont:
+                self.duplicate_keys.append((key, shard))
+            cont[key] = final_val
+            self._apply_layout(cont, shard, is_key=True)
+
+    def _is_parent(self, shard, indent, idx=None, shards=None, dot_path=""):
+        """Checks if the next shard implies a child relationship."""
+        if shard.value is not None:
+            return False
+            
+        if shards and idx is not None and idx + 1 < len(shards):
+            next_s = shards[idx + 1]
+            if (next_s.indent or 0) > indent: return True
+            # Flush-left array child check
+            if (next_s.indent or 0) == indent and self.healer.should_be_array(shard.key, dot_path):
+                return True
+        return False
+
+    def _create_nested_container(self, parent, shard, key, indent, dot_path):
+        """Creates and pushes a new Map or Seq container."""
+        if self.healer.should_be_array(key, dot_path):
+            child = T_SEQ()
+        else:
+            child = T_MAP()
+            if shard.value is not None:
+                # Preservation for scalar parents (ConfigMaps)
+                if key in ("name", "namespace") and indent == 0:
+                    parent[key] = self.healer.clean_value(shard.value, key, dot_path, key)
+                    return
+
+        parent[key] = child
+        self._apply_layout(parent if isinstance(child, T_SEQ) else child, shard, is_key=not isinstance(child, T_MAP))
+        self.physicist.push(indent, child, key, f"{dot_path}.{key}" if dot_path else key)
+
     def _apply_layout(self, container: Any, shard: Shard, is_key: bool = False):
         """Attaches saved comments and spacing."""
-        # Check explicit attribute to avoid hasattr overhead
         if shard.layout_sequence:
-            comments = []
-            for item in shard.layout_sequence:
-                if isinstance(item, str): 
-                    comments.append(item)
-                elif hasattr(item, "count"): 
-                    comments.extend([""] * int(item.count))
+            comments = [str(item) if isinstance(item, str) else "" * int(getattr(item, "count", 0)) for item in shard.layout_sequence]
             if comments:
-                try: 
+                try:
                     container.yaml_set_start_comment("\n".join(comments), indent=shard.indent)
-                except: 
-                    pass
-
+                except Exception as e:
+                    logger.debug(f"Layout: Start-comment injection failed for {shard.key or 'unnamed'}: {e}")
         if shard.comment and is_key and isinstance(container, CommentedMap):
-            try: 
+            try:
                 container.yaml_add_eol_comment(shard.comment, key=shard.key)
-            except: 
-                pass
+            except Exception as e:
+                logger.debug(f"Layout: EOL-comment injection failed for {shard.key}: {e}")
 
-    def _clean_value(self, val: Any) -> Any:
+    def _handle_nest_prev_ambiguity(self, s_indent: int, s_key: str, s_is_list: bool):
         """
-        [Optimized] Ensures numbers stay numbers and booleans stay booleans.
-        Short-circuits for common cases.
+        [Parity] Resolves if a shard at the same indent as its parent actually belongs 
+        to the previous sibling as a child (Ambiguity Resolution).
         """
-        if val is None: return None
-        if not isinstance(val, str): return val
-        
-        # Fast path for simple strings (identifiers, names)
-        # 90% of K8s values are alphanumeric strings
-        if val.isalnum() and not val.isdigit():
-             lower = val.lower()
-             if lower == "true": return True
-             if lower == "false": return False
-             return val
+        if s_is_list or not s_key: return
 
-        v = val.strip().strip("'\"")
-        
-        # Check booleans again after stripping
-        v_lower = v.lower()
-        if v_lower == "true": return True
-        if v_lower == "false": return False
-        
-        # Try number conversion only if it looks like one
-        if v and (v[0].isdigit() or v[0] == '-'):
-            try: 
-                return float(v) if "." in v else int(v)
-            except: 
-                return v
-        return v
+        l_indent, l_cont, _, l_path, _ = self.physicist.get_context()
+        if s_indent != l_indent or not isinstance(l_cont, T_MAP) or not l_cont:
+            return
 
-# Compatibility Alias
-KubeStructurer = YamlrStructurer
+        # Check State 2: Does it belong to the previous sibling as a child?
+        if self.healer.validator and self.healer.definition_key:
+            if not self.healer.is_valid_sibling(l_path, s_key):
+                last_key = list(l_cont.keys())[-1]
+                field_def = self.healer.get_field_schema(l_path, last_key)
+                
+                if field_def and s_key in field_def.get("properties", {}):
+                    # It belongs to the previous sibling! Nest it.
+                    prev_val = l_cont[last_key]
+                    if prev_val is None:
+                        prev_val = T_MAP()
+                        l_cont[last_key] = prev_val
+                    
+                    if isinstance(prev_val, T_MAP):
+                        new_path = f"{l_path}.{last_key}" if l_path else last_key
+                        self.physicist.push(s_indent, prev_val, last_key, new_path)

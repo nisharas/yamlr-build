@@ -3,105 +3,48 @@ Yamlr REPORTERS
 ------------------
 Structured output generators for CI/CD integration.
 """
+
 import json
 import time
-from typing import Dict, Any, List
+from typing import Any, Dict
+
 
 class JSONReporter:
     """Generates a standard JSON report of the execution."""
-    
+
     def generate(self, results: Dict[str, Any], duration: float) -> str:
+        """
+        Why: Internal documentation policy compliance.
+        What: Auto-generated summary.
+        """
         processed = results.get("processed_files", [])
-        
-        # Calculate totals
+
+        # Sanitize results (remove internal keys starting with _)
+        sanitized_results = []
         total_issues = 0
         for f in processed:
-            total_issues += len(f.get("findings", []))
-            
+            # Shallow clone and filter private fields
+            data = f.to_dict() if hasattr(f, "to_dict") else (f.__dict__ if hasattr(f, "__dict__") else f)
+            clean_f = {k: v for k, v in data.items() if not k.startswith("_")}
+            sanitized_results.append(clean_f)
+            total_issues += len(data.get("findings", []))
+
         report = {
             "metadata": {
                 "tool": "Yamlr",
                 "version": "0.1.0",
                 "timestamp": time.time(),
-                "duration_seconds": duration
+                "duration_seconds": duration,
             },
             "summary": {
                 "total_files": len(processed),
                 "healed_files": results.get("healed_count", 0),
-                "total_issues": total_issues
+                "total_issues": total_issues,
             },
-            "results": processed
+            "results": sanitized_results,
         }
         return json.dumps(report, indent=2)
 
-class SARIFReporter:
-    """Generates GitHub Advanced Security compatible SARIF 2.1.0 output."""
-    
-    def generate(self, results: Dict[str, Any]) -> str:
-        sarif_results = []
-        rules = []
-        rule_indices = {} # Map rule_id -> index
-        
-        processed = results.get("processed_files", [])
-        
-        for file_data in processed:
-            file_path = file_data.get("file_path", "unknown")
-            findings = file_data.get("findings", [])
-            
-            for finding in findings:
-                rule_id = finding.get("rule_id", "Yamlr/unknown")
-                
-                # Register rule if new
-                if rule_id not in rule_indices:
-                    rule_indices[rule_id] = len(rules)
-                    rules.append({
-                        "id": rule_id,
-                        "name": finding.get("analyzer_name", "Unknown Analyzer"),
-                        "shortDescription": {
-                            "text": finding.get("message", "No description")
-                        },
-                        "defaultConfiguration": {
-                            "level": "error" if finding.get("severity") == "error" else "warning"
-                        }
-                    })
-                
-                # Create SARIF result
-                sarif_results.append({
-                    "ruleId": rule_id,
-                    "ruleIndex": rule_indices[rule_id],
-                    "level": "error" if finding.get("severity") == "error" else "warning",
-                    "message": {
-                        "text": finding.get("message")
-                    },
-                    "locations": [
-                        {
-                            "physicalLocation": {
-                                "artifactLocation": {
-                                    "uri": file_path
-                                },
-                                "region": {
-                                    "startLine": finding.get("line_number", 1) or 1
-                                }
-                            }
-                        }
-                    ]
-                })
 
-        sarif = {
-            "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
-            "version": "2.1.0",
-            "runs": [
-                {
-                    "tool": {
-                        "driver": {
-                            "name": "Yamlr",
-                            "informationUri": "https://github.com/Yamlr/Yamlr",
-                            "rules": rules
-                        }
-                    },
-                    "results": sarif_results
-                }
-            ]
-        }
-        
-        return json.dumps(sarif, indent=2)
+# Legacy alias to maintain API compatibility for anything that might still import it
+from yamlr.core.io.sarif_formatter import SarifFormatter as SARIFReporter

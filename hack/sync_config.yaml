@@ -3,7 +3,7 @@ remotes:
     url: "https://github.com/yamlr/yamlr-enterprise.git"
     branch: "main"
     exclude: []
-  
+
   core:
     url: "https://github.com/yamlr/yamlr-core.git"
     branch: "main"

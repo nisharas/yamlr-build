@@ -2,7 +2,7 @@
 
 ## Maintainers
 
-Yamlr is maintained by the Yamlr Team. 
+Yamlr is maintained by the Yamlr Team.
 
 ## Decision Making
 

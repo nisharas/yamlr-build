@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: multiline-i3536
+data: {}
+key1: value1
+key2: value2

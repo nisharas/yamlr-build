@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: orphan-cm-i5441
+data:
+  key: value
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orphan-deploy-i5441
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: orphan-i5441
+  template:
+    metadata:
+      labels:
+        app: orphan-i5441
+    spec:
+      containers:
+                # Note: ConfigMap is NOT referenced
+      - name: nginx
+        image: nginx:1.19

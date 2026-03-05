@@ -1,0 +1,9 @@
+# Header comment
+apiVersion: v1  # inline comment
+kind: ConfigMap
+metadata:
+  name: comments-i3757
+data:
+    # Orphan comment
+  key: value  # value comment
+  url: http://example.com#fragment # not a comment"

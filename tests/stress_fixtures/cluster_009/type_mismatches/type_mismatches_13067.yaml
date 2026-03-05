@@ -1,0 +1,17 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: type-mismatch-i15106
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: type-i15106
+  template:
+    metadata:
+      labels:
+        app: type-i15106
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.19

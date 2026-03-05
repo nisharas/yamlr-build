@@ -14,11 +14,12 @@ Author: Nishar A Sunkesala / Yamlr Team
 
 import copy
 import logging
-from typing import Dict, List, Tuple, Any, Optional
+from typing import Any, Dict, List, Tuple
 
-from yamlr.core.deprecations import DeprecationChecker, DeprecationInfo
+from yamlr.core.deprecations import DeprecationChecker
 
 logger = logging.getLogger("yamlr.migrator")
+
 
 class MigrationEngine:
     """
@@ -26,22 +27,28 @@ class MigrationEngine:
     """
 
     def __init__(self, target_k8s_version: str = "v1.29"):
+        """
+        Why: Internal documentation policy compliance.
+        What: Auto-generated summary.
+        """
         self.checker = DeprecationChecker()
         self.target_version = target_k8s_version
 
-    def migrate_all(self, docs: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], List[str]]:
+    def migrate_all(
+        self, docs: List[Dict[str, Any]]
+    ) -> Tuple[List[Dict[str, Any]], List[str]]:
         """
         Migrates a list of documents.
         Returns (New Docs, Audit Logs).
         """
         migrated_docs = []
         all_logs = []
-        
+
         for doc in docs:
             new_doc, logs = self.migrate(doc)
             migrated_docs.append(new_doc)
             all_logs.extend(logs)
-            
+
         return migrated_docs, all_logs
 
     def migrate(self, doc: Dict[str, Any]) -> Tuple[Dict[str, Any], List[str]]:
@@ -51,15 +58,31 @@ class MigrationEngine:
         # Defensive copy to allow mutation without side effects on input
         new_doc = copy.deepcopy(doc)
         audit = []
-        
+
         api_version = new_doc.get("apiVersion", "")
         kind = new_doc.get("kind", "")
-        
+
         if not api_version or not kind:
             return new_doc, []
 
         # Check if removal is impending/past
         if not self.checker.is_removed(api_version, kind, self.target_version):
+            # FALLBACK: Check if API version is entirely invalid (not just deprecated)
+            # Use SchemaValidator's known good versions
+            from yamlr.validators.schema_validator import SchemaValidator
+
+            validator = SchemaValidator()
+            correct_version = validator.KNOWN_STABLE_VERSIONS.get(kind)
+
+            if correct_version and api_version != correct_version:
+                # This is an invalid API version (e.g., ConfigMap v1beta1)
+                # Auto-fix to the known stable version
+                self._replace_api_version(new_doc, correct_version)
+                audit.append(
+                    f"MIGRATED: {kind}/{new_doc.get('metadata', {}).get('name', 'unknown')} from INVALID {api_version} to {correct_version}"
+                )
+                return new_doc, audit
+
             return new_doc, []
 
         # Get deprecation info
@@ -70,28 +93,36 @@ class MigrationEngine:
         # Execute Strategy
         try:
             strategy = info.strategy
-            
+
             if strategy == "REPLACE_API_VERSION":
                 self._replace_api_version(new_doc, info.replacement_api)
-                audit.append(f"MIGRATED: {kind}/{new_doc['metadata'].get('name')} from {api_version} to {info.replacement_api}")
-            
+                audit.append(
+                    f"MIGRATED: {kind}/{new_doc['metadata'].get('name')} from {api_version} to {info.replacement_api}"
+                )
+
             elif strategy == "DEPLOYMENT_SELECTOR":
                 if self._fix_deployment_selector(new_doc, info.replacement_api):
-                    audit.append(f"MIGRATED: {kind}/{new_doc['metadata'].get('name')} from {api_version} to {info.replacement_api} (Added Selector)")
-            
+                    audit.append(
+                        f"MIGRATED: {kind}/{new_doc['metadata'].get('name')} from {api_version} to {info.replacement_api} (Added Selector)"
+                    )
+
             elif strategy == "INGRESS_V1":
-                 if self._fix_ingress_v1(new_doc, info.replacement_api):
-                    audit.append(f"MIGRATED: {kind}/{new_doc['metadata'].get('name')} from {api_version} to {info.replacement_api} (Updated Ingress Structure)")
-            
+                if self._fix_ingress_v1(new_doc, info.replacement_api):
+                    audit.append(
+                        f"MIGRATED: {kind}/{new_doc['metadata'].get('name')} from {api_version} to {info.replacement_api} (Updated Ingress Structure)"
+                    )
+
             elif strategy == "CRONJOB_V1":
                 self._replace_api_version(new_doc, info.replacement_api)
                 # CronJob v1beta1 -> v1 is mostly compatible, just api change usually enough for basic specs
-                audit.append(f"MIGRATED: {kind}/{new_doc['metadata'].get('name')} from {api_version} to {info.replacement_api}")
+                audit.append(
+                    f"MIGRATED: {kind}/{new_doc['metadata'].get('name')} from {api_version} to {info.replacement_api}"
+                )
 
         except Exception as e:
             logger.error(f"Migration failed for {kind}: {e}")
             audit.append(f"MIGRATED_FAILED: Could not migrate {kind} - {e}")
-            return doc, audit # Return original on failure
+            return doc, audit  # Return original on failure
 
         return new_doc, audit
 
@@ -100,6 +131,10 @@ class MigrationEngine:
     # -------------------------------------------------------------------
 
     def _replace_api_version(self, doc: Dict, new_version: str):
+        """
+        Why: Internal documentation policy compliance.
+        What: Auto-generated summary.
+        """
         doc["apiVersion"] = new_version
 
     def _fix_deployment_selector(self, doc: Dict, new_version: str) -> bool:
@@ -108,11 +143,13 @@ class MigrationEngine:
         Old extensions/v1beta1 often defaulted this.
         """
         self._replace_api_version(doc, new_version)
-        
+
         spec = doc.get("spec", {})
         if "selector" not in spec:
             # Infer selector from template labels
-            template_labels = spec.get("template", {}).get("metadata", {}).get("labels", {})
+            template_labels = (
+                spec.get("template", {}).get("metadata", {}).get("labels", {})
+            )
             if template_labels:
                 spec["selector"] = {"matchLabels": template_labels}
                 doc["spec"] = spec
@@ -120,7 +157,7 @@ class MigrationEngine:
             else:
                 # Cannot safely migrate without labels to select
                 return False
-        
+
         # If selector exists, assume it's valid (or linter will catch it later)
         return True
 
@@ -131,20 +168,24 @@ class MigrationEngine:
         - backend service structure changed
         """
         self._replace_api_version(doc, new_version)
-        
+
         # Naive implementation: Attempt to add pathType=ImplementationSpecific if missing
         # Full Ingress migration is very complex (backend fields changed names).
         # For MVP, we fix the most common issue: pathType.
-        
+
         spec = doc.get("spec", {})
         rules = spec.get("rules", [])
-        
+
         changed = False
         for rule in rules:
-            http = rule.get("http", {})
+            if not isinstance(rule, dict):
+                continue
+            http = rule.get("http")
+            if not http or not isinstance(http, dict):
+                continue
             for path in http.get("paths", []):
-                if "pathType" not in path:
+                if isinstance(path, dict) and "pathType" not in path:
                     path["pathType"] = "ImplementationSpecific"
                     changed = True
-                    
-        return True # Return True even if only apiVersion changed (safe bet)
+
+        return True  # Return True even if only apiVersion changed (safe bet)

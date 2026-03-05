@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: no-probes-i11316
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: no-probes-i11316
+  template:
+    metadata:
+      labels:
+        app: no-probes-i11316
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.19
+        ports:
+        - containerPort: 80

@@ -21,7 +21,7 @@ cd "$SCRIPT_DIR"
 LOG_FILE=$(mktemp)
 cleanup() {
     local exit_code=$?
-    tput cnorm 
+    tput cnorm
     if [ "$exit_code" -ne 0 ] && [ "$exit_code" -ne 130 ]; then
         echo -e "\n\033[31m💥 Build failed. See logs at: $LOG_FILE\033[0m"
     fi
@@ -34,7 +34,7 @@ spinner() {
     local pid="$1"
     local delay=0.1
     local spinstr='|/-\\'
-    tput civis 
+    tput civis
     while ps -p "$pid" > /dev/null 2>&1; do
         local temp="${spinstr#?}"
         printf " [%c] " "$spinstr"
@@ -91,7 +91,7 @@ echo -n "🐍 Compiling 'yamlr' (Identity-Aware)..."
     source "$VENV_DIR/$VENV_BIN/activate"
     # We explicitly include the 'src' path and the 'yamlr' package root
     export PYTHONPATH="$SCRIPT_DIR/src"
-    
+
     "$VP_PYINSTALLER" --onefile --clean --name yamlr \
                 --paths "$SCRIPT_DIR/src" \
                 --add-data "$SCRIPT_DIR/catalog${PYINSTALLER_SEPARATOR}yamlr/catalog" \

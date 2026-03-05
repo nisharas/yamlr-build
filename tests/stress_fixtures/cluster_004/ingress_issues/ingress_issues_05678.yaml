@@ -1,0 +1,16 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: broken-ingress-i7081
+spec:
+  rules:
+  - host: example-i7081.com
+    http:
+      paths:
+        path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: nonexistent-svc-i7081
+            port:
+              number: '80'

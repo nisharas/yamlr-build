@@ -1,11 +1,12 @@
 from abc import ABC, abstractmethod
-from typing import Tuple, Dict, Any
+from typing import Any, Dict
+
 
 class BaseHeuristic(ABC):
     """
     Abstract strategy for a specific healing heuristic.
     """
-    
+
     @property
     @abstractmethod
     def name(self) -> str:
@@ -22,11 +23,11 @@ class BaseHeuristic(ABC):
     def apply(self, line: str, context: Dict[str, Any]) -> str:
         """
         Applies the heuristic to a single line of code.
-        
+
         Args:
             line: The raw line content (stripped or semi-processed)
             context: Shared state (e.g., stats counter, block state)
-            
+
         Returns:
             The potentially modified line.
         """

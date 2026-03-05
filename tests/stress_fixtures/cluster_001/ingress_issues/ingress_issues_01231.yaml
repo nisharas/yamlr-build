@@ -1,0 +1,16 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: broken-ingress-i7205
+spec:
+  rules:
+  - host: example-i7205.com
+    http:
+      paths:
+        path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: nonexistent-svc-i7205
+            port:
+              number: '80'

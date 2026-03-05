@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ghost-svc-i4035
+spec:
+  selector:
+    app: myapp-i4035
+  ports:
+  - port: 80
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ghost-deploy-i4035
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: myapp-i4035
+  template:
+    metadata:
+      labels:
+        app: myapp-i4035
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.19

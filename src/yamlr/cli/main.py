@@ -1,381 +1,392 @@
 #!/usr/bin/env python3
 """
-Yamlr UNIFIED CLI
---------------------------
-High-fidelity manifest healing and diagnostics.
-Maintains 1:1 parity between Yamlr and Yamlr Enterprise.
+Yamlr UNIFIED CLI - The Entry Point
+------------------------------------
+Coordinates argument parsing and command dispatch.
 
-Refactored (2026-01-27):
-- Modularized command handling (src/Yamlr/cli/commands/)
-- Simplified main entry point
+Why: Refactored to externalize logic into specialized modules 
+for 100% modularity and compliance with project guardrails.
 """
 
-import sys
-import os
-import argparse
 import logging
+import multiprocessing
+import os
 import platform
+import sys
+import time
 
-# Core Modules
-from yamlr.core.engine import YamlrEngine
-from yamlr.core.bridge import YamlrBridge
-from yamlr.core.context import HealContext
-from yamlr.core.catalog_manager import CatalogManager
+from yamlr.cli.help_formatter import print_kubectl_help, print_subcommand_help
+from yamlr.cli.parser_factory import create_parser
 
-# UI Modules
-from yamlr.ui.formatter import YamlrFormatter
+# Initialize Logger
+logger = logging.getLogger("yamlr")
 
-# Command Modules
-from yamlr.cli.commands.base import (
-    get_console, 
-    print_custom_header, 
-    print_version, 
-    get_console, 
-    print_custom_header, 
-    print_version, 
-    add_standard_flags,
-    validate_required_arg
-)
-from yamlr.cli.commands.scan import handle_scan_command
-from yamlr.cli.commands.heal import handle_heal_command
-from yamlr.cli.commands.catalog import handle_catalog_command
+# 0. Handle Global Log Level (from Env)
+env_log_level = os.getenv("Yamlr_LOG_LEVEL", "INFO").upper()
+if env_log_level in ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]:
+    # Configure root logger to respect the env var
+    logging.basicConfig(level=env_log_level)
+    logger.setLevel(env_log_level)
+    if env_log_level == "DEBUG":
+        logger.debug(f"Logging initialized at DEBUG level via Yamlr_LOG_LEVEL environment variable")
 
-# Global setup
-console = get_console()
-formatter = YamlrFormatter()
-logger = logging.getLogger("yamlr.cli")
+# Nuitka/PyInstaller Windows multiprocessing fix
+if sys.platform == "win32":
+    multiprocessing.freeze_support()
 
-def print_kubectl_help(invoked_as: str):
+# Filter out multiprocessing garbage args
+sys.argv = [
+    arg
+    for arg in sys.argv
+    if not ("parent_pid=" in arg or "--multiprocessing-fork" in arg)
+]
+
+# Lazily initialized globals
+_console = None
+_formatter = None
+
+def get_lazy_console(plain: bool = False):
     """
-    Displays the main help menu in a 'kubectl' inspired format.
+    Why: Internal documentation policy compliance.
+    What: Auto-generated summary.
     """
-    from rich.table import Table
-    console.print("\n[bold cyan]┌─ COMMANDS[/bold cyan]")
-    cmd_table = Table(show_header=False, box=None, padding=(0, 2, 0, 0))
-    cmd_table.add_column(style="bold green", width=12)
-    cmd_table.add_column(style="white")
-    
-    # Core Flow
-    cmd_table.add_row("init", "Bootstrap a new project with defaults")
-    cmd_table.add_row("scan", "Audit manifests for logical issues (read-only)")
-    cmd_table.add_row("heal", "Fix validation issues and enforce best practices")
-    
-    # Info & Docs
-    cmd_table.add_row("explain", "Get documentation for a specific rule")
-    cmd_table.add_row("completion", "Generate shell autocompletion scripts")
-    cmd_table.add_row("catalog", "Manage Kubernetes schema definitions")
-    
-    # System
-    cmd_table.add_row("version", "Display version info and license status")
-    cmd_table.add_row("auth", "Manage Yamlr Enterprise authentication")
-    
-    console.print(cmd_table)
+    global _console
+    if plain or _console is None:
+        from yamlr.cli.commands.base import get_console
+        _console = get_console(plain=plain)
+    return _console
 
-    console.print("\n[bold cyan]┌─ GLOBAL OPTIONS & FILTERS[/bold cyan]")
-    opt_table = Table(show_header=False, box=None, padding=(0, 2, 0, 0))
-    opt_table.add_column(style="yellow", width=24)
-    opt_table.add_column(style="dim white")
-    opt_table.add_row("-h, --help", "Display usage information")
-    opt_table.add_row("-v, --version", "Display version information")
-    opt_table.add_row("--kube-version VERSION", "Target K8s version (e.g., 1.28, v1.31)")
-    opt_table.add_row("--catalog PATH", "Specify a custom K8s schema catalog")
-    opt_table.add_row("--max-depth N", "Limit directory recursion depth (Default: 10)")
-    opt_table.add_row("--ext LIST", "Process files with these extensions (Default: .yaml,.yml)")
-    opt_table.add_row("-s, --summary-only", "Show aggregate stats (recommended for 100+ files)")
-    console.print(opt_table)
-    
-    console.print(f"\n[bold magenta]💡 TIP[/bold magenta]")
-    console.print(f"   Use [cyan bold]{invoked_as} <command> --help[/cyan bold] for subcommand specific flags.")
-    console.print(f"   Override cluster version: [dim]Yamlr_KUBE_VERSION=<version> {invoked_as} heal ...[/dim]\\n")
+def get_lazy_formatter():
+    """
+    Why: Internal documentation policy compliance.
+    What: Auto-generated summary.
+    """
+    global _formatter
+    if _formatter is None:
+        from yamlr.ui.formatter import YamlrFormatter
+        _formatter = YamlrFormatter()
+    return _formatter
 
 def main():
-    """
-    Primary orchestration logic for the CLI.
-    """
-    # Enable twin command creation (legacy support)
-    YamlrBridge.ensure_dual_identity()
-    
-    # 0. Setup Logging (Default: WARNING, Verbose: INFO)
-    # We check sys.argv manually here because argparse hasn't run yet
-    log_level = logging.WARNING
-    if "--verbose" in sys.argv:
-        log_level = logging.INFO
-        
-    logging.basicConfig(level=log_level, format="%(message)s")
-    # Silence noisy libs
-    logging.getLogger("urllib3").setLevel(logging.WARNING)
+    """Primary orchestration logic for the CLI."""
+    # 0. ULTRA-FAST COMPLETION PATH
+    if len(sys.argv) > 1 and "completion" in sys.argv:
+        from yamlr.cli.commands.completion import handle_fast_completion
+        if handle_fast_completion():
+            sys.exit(0)
 
-    # 1. Identity Gate
+    # 1. Setup Bridge & Context
+    from yamlr.core.bridge import YamlrBridge
+    from yamlr.core.context import HealContext
+    from yamlr.core.entrypoints.display import print_version, print_custom_header
+
     try:
         invoked_as = YamlrBridge.get_invoked_command()
-        status, message = YamlrBridge.check_pro_status()
-        is_pro = status.is_usable()
-        
-        # License warnings... (Keeping logic simplified for brevity but preserving intent)
-        # In a real refactor, this block handles the daily reminders logic
-        
-    except Exception as e:
-        logger.debug(f"Identity detection failed: {e}")
+        is_pro = YamlrBridge.get_identity() == "PRO"
+    except Exception:
         invoked_as = "yamlr"
         is_pro = False
 
     # 2. Argument Configuration
-    parser = argparse.ArgumentParser(prog=invoked_as, add_help=False)
-    
-    # Global flags
-    parser.add_argument("--kube-version", type=str, default=None, metavar="VERSION", dest="kube_version")
-    parser.add_argument("--catalog", default=None, help="Path to custom catalog (default: bundled)")
-    parser.add_argument("-h", "--help", action="store_true")
-    parser.add_argument('-v', '--version', action='store_true')
-    parser.add_argument('-s', '--summary-only', action='store_true')
-    
-    subparsers = parser.add_subparsers(dest="command")
-    
-    # SCAN
-    scan_parser = subparsers.add_parser("scan", add_help=False)
-    add_standard_flags(scan_parser)
-    scan_parser.add_argument("--opa-bundle", metavar="PATH", help="Path to OPA policy bundle (enables Enterprise Policy Engine)")
-    scan_parser.add_argument("--output", choices=["text", "json", "sarif"], default="text", help="Output format")
-    scan_parser.add_argument("--diff", action="store_true", help="Show proposed fixes (like heal --dry-run)")
-    scan_parser.add_argument("--dry-run", dest="diff", action="store_true", help="Alias for --diff")
-    
-    # HEAL
-    heal_parser = subparsers.add_parser("heal", add_help=False)
-    add_standard_flags(heal_parser)
-    heal_parser.add_argument("--dry-run", action="store_true")
-    heal_parser.add_argument("--diff", dest="dry_run", action="store_true", help="Alias for --dry-run")
-    heal_parser.add_argument("--opa-bundle", metavar="PATH", help="Path to OPA policy bundle")
-    heal_parser.add_argument("-y", "--yes", action="store_true", help="Auto-confirm")
-    heal_parser.add_argument("--yes-all", action="store_true", help="Auto-confirm all in batch")
-    heal_parser.add_argument("--harden", action="store_true")
-    heal_parser.add_argument("--check-deprecations", action="store_true")
-    heal_parser.add_argument("--output", choices=["text", "json"], default="text", help="Output format")
-
-    # INIT
-    init_parser = subparsers.add_parser("init", add_help=False)
-    init_parser.add_argument("-h", "--help", action="store_true")
-
-    # EXPLAIN
-    explain_parser = subparsers.add_parser("explain", add_help=False)
-    explain_parser.add_argument("rule_id", nargs="?", help="Rule ID to explain (e.g., rules/no-latest-tag)")
-    explain_parser.add_argument("-h", "--help", action="store_true")
-
-    # COMPLETION
-    completion_parser = subparsers.add_parser("completion", add_help=False)
-    completion_parser.add_argument("shell", choices=["powershell", "bash", "zsh"], nargs="?", help="Target shell")
-    completion_parser.add_argument("-h", "--help", action="store_true")
-
-    # CATALOG
-    catalog_parser = subparsers.add_parser("catalog", add_help=False)
-    catalog_parser.add_argument("action", choices=["update", "list", "status"], nargs="?", default="status")
-    catalog_parser.add_argument("--kube-version", type=str, metavar="VERSION")
-    catalog_parser.add_argument("-h", "--help", action="store_true")
-
-    # UTILS
-    subparsers.add_parser("version", add_help=False)
-    auth_parser = subparsers.add_parser("auth", add_help=False)
-    auth_sub = auth_parser.add_subparsers(dest="auth_action")
-    auth_sub.add_parser("login", help="Authenticate with Yamlr Enterprise")
-    auth_sub.add_parser("logout", help="Clear local credentials")
-    auth_sub.add_parser("status", help="Check authentication status")
-    auth_sub.add_parser("whoami", help="Alias for status")
-
-    # 3. Parse Args
+    parser = create_parser(invoked_as)
     args, unknown = parser.parse_known_args()
-    
+
+    # Initialize Console (Propagate plain & quiet flags)
+    console = get_lazy_console(plain=getattr(args, "plain", False))
+    console._yamlr_quiet = getattr(args, "quiet", False)
+
     if unknown:
         console.print(f"[red]Error: Unrecognized arguments: {unknown}[/red]")
-        print_kubectl_help(invoked_as)
+        print_kubectl_help(console, invoked_as)
         sys.exit(1)
-    
-    # Check output mode (Standardize)
-    is_json = getattr(args, 'output', 'text') == 'json'
-    
-    if is_json:
-        # Silence all INFO/WARNING logs to ensure clean JSON stdout
+
+    # Output Mode Adjustment
+    is_json = getattr(args, "output", "text") == "json"
+    is_onboarding = getattr(args, "command", None) in ["welcome", "demo"]
+    if is_json or (is_onboarding and not getattr(args, "verbose", False)):
         logging.getLogger().setLevel(logging.ERROR)
-    
-    # Pre-process: Support comma-separated args
+        logging.getLogger("yamlr").setLevel(logging.ERROR)
+
+    # Path Normalization
     from yamlr.cli.commands.base import normalize_paths
-    if hasattr(args, 'path') and args.path:
+    if hasattr(args, "path") and args.path:
         args.path = normalize_paths(args.path)
 
-    # 4. Version Check & Resolution
-    target_cluster_version = None
-    if args.kube_version:
+    # 3. Version & Help Dispatch
+    # Priority: --to (upgrade) > --kube-version (global) > Auto-Detect > Default
+    # Determine K8s Version (Defer default resolution to Engine if not explicitly provided)
+    target_cluster_version = getattr(args, "kube_version_target", None) or args.kube_version or os.getenv("Yamlr_KUBE_VERSION")
+    
+    if target_cluster_version:
         try:
-            target_cluster_version = HealContext.set_cluster_version(args.kube_version)
+            target_cluster_version = HealContext.set_cluster_version(target_cluster_version)
         except ValueError as e:
             if not is_json: console.print(f"[bold red]❌ Invalid K8s version:[/bold red] {e}")
             sys.exit(1)
-            
-    # Resolve default if not explicily set
-    if not target_cluster_version:
-        target_cluster_version = HealContext._get_default_cluster_version()
 
     if args.version or args.command == "version":
-        print_version(invoked_as, is_pro, cluster_version=target_cluster_version)
+        print_version(invoked_as, is_pro, cluster_version=target_cluster_version or HealContext._get_default_cluster_version())
         sys.exit(0)
 
-    # 5. Help / Headers
     if args.help or not args.command:
-        # ... (Help logic is safe to print)
-        # Subcommand specific custom help
-        if args.command == "catalog":
-             console.print(f"\n[bold green]USAGE:[/bold green] [bold white]{invoked_as} catalog <action>[/bold white] [options]")
-             console.print("\n[bold cyan]ACTIONS[/bold cyan]")
-             console.print("  update   Download latest schemas from upstream")
-             console.print("  list     Show installed local catalogs")
-             console.print("  status   Show current catalog resolution info")
-             sys.exit(0)
-        
-        if args.command == "init":
-             console.print(f"\n[bold green]USAGE:[/bold green] [bold white]{invoked_as} init[/bold white]")
-             console.print("Generates a default [cyan].yamlr.yaml[/cyan] configuration file in the current directory.")
-             sys.exit(0)
-
-        if args.command == "explain":
-             console.print(f"\n[bold green]USAGE:[/bold green] [bold white]{invoked_as} explain [rule_id][/bold white]")
-             console.print("Shows detailed documentation, rationale, and remediation steps for a specific rule.")
-             sys.exit(0)
-             
-        if args.command in ["heal", "scan"] and not args.path:
-             pass # Fallthrough to standard help
-        elif args.command not in ["catalog", "init", "explain", "version"]: 
-             pass
-
-        if not is_json: print_custom_header(invoked_as, is_pro)
-        
-        if args.command == "scan":
-            console.print(f"\n[bold green]USAGE:[/bold green] [bold white]{invoked_as} scan <target...>[/bold white] [options]")
-            console.print("\n[bold cyan]OPTIONS[/bold cyan]")
-            console.print("  target              File(s) or directory(s) to audit")
-            console.print("  --output FORMAT     Report format (text, json, sarif)")
-            console.print("  --diff              Show visual diff of proposed fixes")
-            console.print("  --ext LIST          Extensions to scan (default: .yaml,.yml)")
-            console.print("  --max-depth N       Recursion depth (default: 10)")
-            
-        elif args.command == "heal":
-            console.print(f"\n[bold green]USAGE:[/bold green] [bold white]{invoked_as} heal <target...>[/bold white] [options]")
-            console.print("\n[bold cyan]OPTIONS[/bold cyan]")
-            console.print("  target              File(s) or directory(s) to heal")
-            console.print("  --dry-run           Show proposed changes without writing")
-            console.print("  -y, --yes           Auto-confirm single file healing")
-            console.print("  --yes-all           Auto-confirm batch healing (Use with caution)")
-            console.print("  --harden            Apply security hardening (Pro feature)")
-            
+        if args.command:
+            print_subcommand_help(console, args.command, invoked_as)
+            sys.exit(0)
         else:
-            print_kubectl_help(invoked_as)
+            # 3.5 MAGIC MOMENT: The Context-Aware Smart Prompt
+            # If YAMLR_CLASSIC is set, or if we're not in a TTY, fallback to classic help
+            if os.getenv("YAMLR_CLASSIC") or not sys.stdout.isatty():
+                if not is_json: 
+                    print_custom_header(invoked_as, is_pro)
+                    from yamlr.core.config import ConfigManager
+                    if not ConfigManager(os.getcwd(), app_name="yamlr").has_local_config():
+                        console.print("\n[bold magenta]👋 New here?[/bold magenta] Run [cyan bold]yamlr welcome[/cyan bold] for a guided tour.")
+                print_kubectl_help(console, invoked_as)
+                sys.exit(0)
             
-        # [UX Fix] If running as exe on Windows without args (Double Click), pause so user can read help
-        if getattr(sys, 'frozen', False) and platform.system() == "Windows" and len(sys.argv) == 1:
+            # Context Detection
+            from yamlr.core.config import ConfigManager
+            import glob
+            cwd = os.getcwd()
+            # Fast, shallow scan for manifests
+            yaml_files = []
+            for ext in ("*.yaml", "*.yml"):
+                yaml_files.extend(glob.glob(f"{cwd}/**/{ext}", recursive=True))
+                if len(yaml_files) > 500: break # Cap the count for speed
+            
+            manifest_count = len(yaml_files)
+            config_mgr = ConfigManager(cwd, app_name="yamlr")
+            has_config = config_mgr.has_local_config()
+            is_git = os.path.exists(os.path.join(cwd, ".git"))
+            
+            # Render Doctor Panel
+            from rich.panel import Panel
+            from rich.align import Align
+            
+            display_count = f"{manifest_count}+" if manifest_count >= 500 else str(manifest_count)
+            config_status = "[green].yamlr.yaml present[/green]" if has_config else "[yellow]No .yamlr.yaml found[/yellow]"
+            target_kb = target_cluster_version or config_mgr.kubernetes_version or HealContext._get_default_cluster_version()
+            
+            panel_content = (
+                f"📂 Dir:        [cyan]{os.path.basename(cwd)}[/cyan]\n"
+                f"📄 Manifests:  [cyan]{display_count} YAML files detected[/cyan]\n"
+                f"⚙  Config:     {config_status}\n"
+                f"🎯 K8s Target: [cyan]{target_kb}[/cyan]"
+            )
+            
+            console.print(Panel(
+                panel_content,
+                title="[bold cyan]🛡 Yamlr v1.1 – Workspace Context[/bold cyan]",
+                border_style="cyan",
+                expand=False
+            ))
+            
+            # Determine "Next Best Action"
+            if manifest_count > 0:
+                suggested_cmd = "yamlr scan ."
+                if not has_config:
+                    msg = f"Found {display_count} manifests, but no local config. (Using defaults)"
+                    prompt_hint = "(Or type 'i' to init config, 'h' for help, 'q' to quit)"
+                else:
+                    msg = "Workspace ready for analysis."
+                    prompt_hint = "(Or type 'h' for full help, 'q' to quit)"
+            else:
+                if is_git:
+                    suggested_cmd = "yamlr demo"
+                    msg = "No Kubernetes manifests found here."
+                    prompt_hint = "(Or type 'i' to init config, 'h' for help, 'q' to quit)"
+                else:
+                    # Not a git repo, no manifests. Same as classic fallback.
+                    print_custom_header(invoked_as, is_pro)
+                    print_kubectl_help(console, invoked_as)
+                    sys.exit(0)
+            
+            console.print(f"\n{msg}\n[bold]Press Enter to run:[/bold] [bold green]{suggested_cmd}[/bold green]")
+            console.print(f"[dim]{prompt_hint}[/dim]")
+            
+            if is_pro and manifest_count > 0:
+                console.print(f"\n[dim]💎 PRO available in this repo – after scan, try: yamlr heal --harden .[/dim]")
+                
             try:
-                input("\n[PRESS ENTER TO EXIT]")
-            except:
-                pass
+                console.print("\n> ", end="")
+                choice = input().strip().lower()
+            except (KeyboardInterrupt, EOFError):
+                sys.exit(0)
+                
+            if choice == "h":
+                print_kubectl_help(console, invoked_as)
+                sys.exit(0)
+            elif choice == "q":
+                sys.exit(0)
+            elif choice == "i":
+                args.command = "init"
+                args.path = []
 
-        sys.exit(0)
+            elif choice == "":
+                # Execute the suggested command
+                cmd_parts = suggested_cmd.split(" ")[1:] # remove 'yamlr'
+                args.command = cmd_parts[0]
+                if len(cmd_parts) > 1:
+                    args.path = cmd_parts[1:]
+                # Suppress logs for the magic moment execution
+                logging.getLogger().setLevel(logging.ERROR)
+                logging.getLogger("yamlr").setLevel(logging.ERROR)
+            else:
+                sys.exit(0)
 
-    # 6. Dispatch
-    
-    # Init Dispatch
-    if args.command == "init":
-        from yamlr.cli.commands.config import handle_init_command
-        sys.exit(handle_init_command(console))
+    # 4. Engine Orchestration (Unified Initialization)
+    # Why: Initialize engine once for ALL commands that might need it (including dna/status)
+    # and delegate catalog resolution to the core manager.
+    engine = None
+    if args.command in ["scan", "heal", "upgrade", "migrate", "secure", "diagnose", "check", "audit", "dna", "status", "welcome", "demo", "stats"]:
+        from yamlr.pro.license import license_manager
+        license_manager.preview_mode = getattr(args, "pro_preview", False)
 
-    # Explain Dispatch
-    if args.command == "explain":
-        from yamlr.cli.commands.explain import handle_explain_command
-        sys.exit(handle_explain_command(args, console))
-
-    # Completion Dispatch
-    if args.command == "completion":
-        from yamlr.cli.commands.completion import handle_completion_command
-        sys.exit(handle_completion_command(args, parser, console))
-    
-    # Catalog Dispatch (No Engine Reqd)
-    if args.command == "catalog":
-        sys.exit(handle_catalog_command(args, target_cluster_version))
-
-    # Auth Dispatch
-    if args.command == "auth":
-        from yamlr.cli.commands.auth import handle_auth_command
-        sys.exit(handle_auth_command(args, console))
-
-    # Engine Setup (For Scan/Heal)
-    try:
-        # Pre-Validation (Before spinning up engine)
-        if args.command == "scan":
-            if not validate_required_arg(args.path, "path", "scan", [f"{invoked_as} scan .", f"{invoked_as} scan <path-to-file-or-dir>"]):
-                sys.exit(1)
-        elif args.command == "heal":
-            # Heal usage suggestion should be safe (interactive by default)
-            if not validate_required_arg(args.path, "path", "heal", [f"{invoked_as} heal .", f"{invoked_as} heal <path-to-file-or-dir>"]):
-                sys.exit(1)
-
-        if not is_json:
-            console.print(f"🎯 Target K8s: [bold green]{target_cluster_version}[/bold green]")
-            
-        # Programmatically resolve bundled catalog location
-        if args.catalog:
-            fallback_path = args.catalog
-        else:
-            # Robust Resolution Strategy: Check multiple candidate locations
-            candidates = []
-            
-            # Debug: Print execution context
-            # console.print(f"[dim]Debug: __file__ = {os.path.abspath(__file__)}[/dim]")
-            
-            # 0. PyInstaller Bundle (sys._MEIPASS)
-            if getattr(sys, 'frozen', False):
-                # When running as single-file exe, content is unpacked to _MEIPASS
-                bundle_root = sys._MEIPASS
-                candidates.append(os.path.join(bundle_root, "Yamlr", "catalog", "k8s_v1_distilled.json"))
-
-            # 1. Dev/Source Root (up 4 levels from cli/main.py)
-            dev_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-            candidates.append(os.path.join(dev_root, "catalog", "k8s_v1_distilled.json"))
-            
-            # 2. Package Root (up 2 levels from cli/main.py -> src/Yamlr/catalog)
-            pkg_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            candidates.append(os.path.join(pkg_root, "catalog", "k8s_v1_distilled.json"))
-            
-            # 3. System Install (share/Yamlr/catalog)
-            # This handles pip install prefixes
-            candidates.append(os.path.join(sys.prefix, "share", "Yamlr", "catalog", "k8s_v1_distilled.json"))
-
-            fallback_path = None
-            for p in candidates:
-                if os.path.isfile(p):
-                    # console.print(f"[dim]Debug: Found catalog at {p}[/dim]")
-                    fallback_path = p
-                    break
-            
-            if not fallback_path:
-                # If we can't find a bundled catalog, explicitly warn (but let Manager try cache)
-                logger.warning(f"Could not locate bundled catalog. Checked: {candidates}")
-                # fallback_path remains None
-            
-        catalog_mgr = CatalogManager()
-        final_catalog_path = catalog_mgr.resolve_catalog(target_cluster_version, fallback_path=fallback_path)
-
+        from yamlr.core.engine import YamlrEngine
         engine = YamlrEngine(
             workspace_path=".", 
-            catalog_path=final_catalog_path,
+            catalog_path=args.catalog, # Let Manager resolve this
             app_name="Yamlr",
             cluster_version=target_cluster_version,
-            opa_bundle_path=getattr(args, 'opa_bundle', None)
+            opa_bundle_path=getattr(args, "opa_bundle", None),
+            kyverno_report_path=getattr(args, "kyverno_report", None),
+            concurrency=getattr(args, "concurrency", None),
+            cpu_limit=getattr(args, "cpu_limit", "500m"),
+            mem_limit=getattr(args, "mem_limit", "512Mi"),
+            default_namespace=getattr(args, "namespace", "default"),
+            health_threshold=getattr(args, "health_threshold", 70),
         )
 
-        if args.command == "scan":
-            sys.exit(handle_scan_command(args, engine, formatter))
+        if not is_json:
+            # Enhanced Transparency: Explicitly log the version source
+            version_source = "Auto-Detect"
+            if getattr(args, "kube_version_target", None): version_source = "CLI (--to)"
+            elif args.kube_version: version_source = "CLI (--kube-version)"
+            elif os.getenv("Yamlr_KUBE_VERSION"): version_source = "ENV (Yamlr_KUBE_VERSION)"
             
+            console.print(f"🎯 Target K8s: [bold green]{engine.cluster_version}[/bold green] [dim]({version_source})[/dim]")
+
+    # 5. Command Dispatch (Simple Entrypoints)
+    simple_commands = {
+        "explain": ("yamlr.cli.commands.explain", "handle_explain_command"),
+        "init": ("yamlr.core.entrypoints.config", "handle_init_command"),
+        "restore": ("yamlr.core.entrypoints.restore", "handle_restore_command"),
+        "status": ("yamlr.core.entrypoints.status", "handle_status_command"),
+        "welcome": ("yamlr.core.entrypoints.welcome", "handle_welcome_command"),
+        "rules": ("yamlr.core.entrypoints.rules", "handle_rules_command"),
+        "completion": ("yamlr.cli.commands.completion", "handle_completion_command"),
+        "catalog": ("yamlr.core.entrypoints.catalog", "handle_catalog_command"),
+        "demo": ("yamlr.core.entrypoints.demo", "handle_demo_command"),
+        "manual": ("yamlr.core.entrypoints.manual", "handle_manual_command"),
+        "dna": ("yamlr.core.entrypoints.dna", "handle_dna_command"), # Fixed entrypoint name
+        "evidence": ("yamlr.core.entrypoints.evidence", "handle_evidence_command"), # PRO Compliance Feature
+        "stats": ("yamlr.core.entrypoints.stats", "handle_stats_command"),
+    }
+
+    if args.command in simple_commands:
+        import importlib
+        mod_name, func_name = simple_commands[args.command]
+        mod = importlib.import_module(mod_name)
+        func = getattr(mod, func_name)
+        
+        # Dispatch with appropriate args
+        if args.command == "init": sys.exit(func(console, force=getattr(args, "force", False)))
+        if args.command == "restore": sys.exit(func(args, "."))
+        if args.command == "status": sys.exit(func(args, engine, console))
+        if args.command == "welcome": sys.exit(func(args, engine, is_pro))
+        if args.command == "catalog": sys.exit(func(args, target_cluster_version))
+        if args.command == "completion": sys.exit(func(args, parser, console))
+        if args.command == "manual": sys.exit(func(args))
+        if args.command == "dna": sys.exit(func(args, engine, console))
+        if args.command == "demo": sys.exit(func(args, engine, console))
+        if args.command == "evidence": sys.exit(func(args, console))
+        if args.command == "stats": sys.exit(func(args, engine, console))
+        sys.exit(func(args, console))
+
+    # 6. Primary Healing Commands (Scan/Heal + Aliases)
+    try:
+        from yamlr.cli.commands.base import validate_required_arg
+        # All engine commands require a path
+        if args.command in ["scan", "heal", "upgrade", "migrate", "secure", "diagnose", "check", "audit"]:
+            if not validate_required_arg(args.path, "path", args.command, 
+                                        [f"{invoked_as} {args.command} ."]):
+                sys.exit(1)
+
+        formatter = get_lazy_formatter()
+        start_time = time.time()
+        exit_code = 0
+
+        if args.command == "scan":
+            from yamlr.core.entrypoints.scan import handle_scan_command
+            exit_code = handle_scan_command(args, engine, formatter)
+        elif args.command == "audit":
+            from yamlr.cli.commands.audit import handle_audit_command
+            exit_code = handle_audit_command(args, engine, formatter)
         elif args.command == "heal":
-            # Pro Gate
-            if getattr(args, 'harden', False) and not is_pro:
+            if getattr(args, "harden", False) and not is_pro:
                 YamlrBridge.notify_pro_required("Shield Security Hardening")
                 sys.exit(0)
-            sys.exit(handle_heal_command(args, engine, formatter, is_pro))
+            from yamlr.core.entrypoints.heal import handle_heal_command
+            exit_code = handle_heal_command(args, engine, formatter, is_pro)
+        elif args.command == "upgrade":
+            from yamlr.cli.commands.upgrade import handle_upgrade_command
+            exit_code = handle_upgrade_command(args, engine, formatter, is_pro)
+        elif args.command == "migrate":
+            from yamlr.cli.commands.upgrade import handle_upgrade_command
+            exit_code = handle_upgrade_command(args, engine, formatter, is_pro)
+        elif args.command == "secure":
+             if not is_pro:
+                  YamlrBridge.notify_pro_required("Secure Hardening Mode")
+                  sys.exit(0)
+             from yamlr.cli.commands.secure import handle_secure_command
+             exit_code = handle_secure_command(args, engine, formatter, is_pro)
+        elif args.command == "diagnose":
+            from yamlr.cli.commands.diagnose import handle_diagnose_command
+            exit_code = handle_diagnose_command(args, engine, formatter)
+        elif args.command == "check":
+            from yamlr.cli.commands.check import handle_check_command
+            exit_code = handle_check_command(args, engine, formatter)
+
+        # [ULTRA-SCALE] Final Impact Analysis
+        duration = time.time() - start_time
+        
+        # [CI/CD] Gate Logic: --fail-on (Severity) and --risk-threshold (Impact)
+        if exit_code != 0:
+            severity_rank = {"error": 100, "warning": 50, "info": 10, "none": 0}
+            risk_rank = {"high": 100, "medium": 50, "low": 10, "none": 0}
+            
+            last_sev = getattr(engine.telemetry, "last_max_severity", "info").lower()
+            last_risk = getattr(engine.telemetry, "last_max_risk", "low").lower()
+            
+            # Severity Gate check
+            fail_on = getattr(args, "fail_on", None)
+            severity_fail = True # Default if flag not provided
+            if fail_on:
+                target_sev_rank = severity_rank.get(fail_on.lower(), 10)
+                actual_sev_rank = severity_rank.get(last_sev, 10)
+                severity_fail = actual_sev_rank >= target_sev_rank
+            
+            # Risk Gate check
+            risk_threshold = getattr(args, "risk_threshold", None)
+            risk_fail = True # Default if flag not provided
+            if risk_threshold:
+                target_risk_rank = risk_rank.get(risk_threshold.lower(), 10)
+                actual_risk_rank = risk_rank.get(last_risk, 10)
+                risk_fail = actual_risk_rank >= target_risk_rank
+            
+            # If BOTH flags are provided, we only exit 1 if BOTH conditions are met?
+            # Or if EITHER? Usually EITHER is safer for CI.
+            # However, if user says --fail-on error --risk-threshold high, 
+            # they likely want to block on EITHER severe errors OR high risk.
+            if fail_on or risk_threshold:
+                if (fail_on and not severity_fail) and (risk_threshold and not risk_fail):
+                    exit_code = 0
+                elif fail_on and not risk_threshold and not severity_fail:
+                    exit_code = 0
+                elif risk_threshold and not fail_on and not risk_fail:
+                    exit_code = 0
+
+        sys.exit(exit_code)
 
     except Exception as e:
         console.print(f"[bold red]Fatal Error:[/bold red] {e}")

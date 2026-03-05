@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: norway-i3296
+data:
+  NO: Norway
+  ON: Ontario
+  OFF: Offline
+  YES: Affirmative

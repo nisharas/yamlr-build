@@ -7,26 +7,27 @@ Extracts:
 """
 
 from typing import List
-from yamlr.models import Shard, ManifestIdentity
+
+from yamlr.models import ManifestIdentity, Shard
 
 
 class VolumeExtractor:
     """Extracts PVC references from Pod specs."""
-    
+
     @staticmethod
     def extract_if_applicable(
         shard: Shard,
         key: str,
         val: str,
         path_keys: List[str],
-        identity: ManifestIdentity
+        identity: ManifestIdentity,
     ) -> bool:
         """
         Extract PVC name if in volume reference context.
-        
+
         Note: We don't require 'volumes' in path because it may be
         replaced by list item keys during iteration.
-        
+
         Returns:
             bool: True if extraction was performed
         """
@@ -34,5 +35,5 @@ class VolumeExtractor:
             if val and val not in identity.volume_refs:
                 identity.volume_refs.append(val)
             return True
-        
+
         return False

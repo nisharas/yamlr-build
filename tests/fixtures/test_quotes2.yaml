@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: test-quotes
+data:
+  FEATURE_FLAG_X: 'true'
+  PORT: '8080'
+  VALID_STRING: hello

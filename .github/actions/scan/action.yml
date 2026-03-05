@@ -1,0 +1,29 @@
+name: 'Yamlr Scan'
+description: 'Fast, semantic Kubernetes manifest auditor.'
+inputs:
+  path:
+    description: 'Path(s) to scan (comma separated or glob)'
+    required: false
+    default: '.'
+  args:
+    description: 'Additional arguments for yamlr scan (e.g. --harden)'
+    required: false
+    default: ''
+  sarif_output:
+    description: 'Path to save SARIF report'
+    required: false
+    default: 'yamlr-results.sarif'
+
+runs:
+  using: 'docker'
+  image: 'Dockerfile'
+  args:
+    - 'scan'
+    - '${{ inputs.path }}'
+    - '--output=sarif'
+    - '--output=${{ inputs.sarif_output }}'
+    - '${{ inputs.args }}'
+
+branding:
+  icon: 'shield'
+  color: 'green'

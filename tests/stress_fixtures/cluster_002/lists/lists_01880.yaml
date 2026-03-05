@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: flush-list-i1021
+spec:
+  containers:
+  - name: nginx
+    image: nginx

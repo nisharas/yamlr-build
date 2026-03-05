@@ -1,0 +1,27 @@
+name: 'Yamlr Heal'
+description: 'Autonomous Kubernetes manifest auto-fixer.'
+inputs:
+  path:
+    description: 'Path(s) to heal'
+    required: false
+    default: '.'
+  args:
+    description: 'Additional arguments for yamlr heal (e.g. --enforce-limits)'
+    required: false
+    default: '--yes-all --no-backup'
+  commit_changes:
+    description: 'Automatically commit fixed manifests (Not recommended for PRs)'
+    required: false
+    default: 'false'
+
+runs:
+  using: 'docker'
+  image: 'Dockerfile'
+  args:
+    - 'heal'
+    - '${{ inputs.path }}'
+    - '${{ inputs.args }}'
+
+branding:
+  icon: 'activity'
+  color: 'blue'

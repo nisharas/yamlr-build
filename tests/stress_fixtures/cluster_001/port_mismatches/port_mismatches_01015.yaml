@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: port-mismatch-svc-i6542
+spec:
+  selector:
+    app: port-mismatch-i6542
+  ports:
+  - port: 80
+    targetPort: '9999'
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: port-mismatch-deploy-i6542
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: port-mismatch-i6542
+  template:
+    metadata:
+      labels:
+        app: port-mismatch-i6542
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.19
+        ports:
+        - containerPort: 80
