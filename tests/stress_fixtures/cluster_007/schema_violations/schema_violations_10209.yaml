@@ -1,0 +1,17 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: typo-spec-i14613
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: typo-i14613
+  template:
+    metadata:
+      labels:
+        app: typo-i14613
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.19

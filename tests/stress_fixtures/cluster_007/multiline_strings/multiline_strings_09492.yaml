@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: multiline-i3561
+data:
+  script: '|key1: value1'
+  key2: value2

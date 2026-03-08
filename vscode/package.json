@@ -1,0 +1,82 @@
+{
+    "name": "yamlr-vscode",
+    "displayName": "Yamlr",
+    "description": "Autonomous Kubernetes Manifest Healer & Diagnostics",
+    "version": "1.1.0",
+    "publisher": "yamlr",
+    "engines": {
+        "vscode": "^1.80.0"
+    },
+    "categories": [
+        "Linters",
+        "Programming Languages"
+    ],
+    "activationEvents": [
+        "onLanguage:yaml"
+    ],
+    "main": "./dist/extension.js",
+    "contributes": {
+        "configuration": {
+            "title": "Yamlr",
+            "properties": {
+                "yamlr.path": {
+                    "type": "string",
+                    "default": "yamlr",
+                    "description": "Path to the yamlr executable or python module."
+                },
+                "yamlr.kubeVersion": {
+                    "type": "string",
+                    "default": "1.31",
+                    "description": "Target Kubernetes version for validation."
+                },
+                "yamlr.trace.server": {
+                    "type": "string",
+                    "enum": [
+                        "off",
+                        "messages",
+                        "verbose"
+                    ],
+                    "default": "off",
+                    "description": "Traces the communication between VS Code and the yamlr language server."
+                },
+                "yamlr.strictValidation": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Enable strict verification mode (fails on unknown K8s kinds)."
+                },
+                "yamlr.harden": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "[PRO] Automatically apply security hardening."
+                },
+                "yamlr.enforceLimits": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "[PRO] Enforce CPU and Memory limits."
+                },
+                "yamlr.enforceProbes": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "[PRO] Enforce Liveness and Readiness probes."
+                }
+            }
+        }
+    },
+    "scripts": {
+        "vscode:prepublish": "npm run compile",
+        "compile": "tsc -p ./",
+        "watch": "tsc -watch -p ./",
+        "pretest": "npm run compile && npm run lint",
+        "lint": "eslint src --ext ts",
+        "test": "node ./out/test/runTest.js"
+    },
+    "devDependencies": {
+        "@types/vscode": "^1.80.0",
+        "@types/node": "18.x",
+        "@typescript-eslint/eslint-plugin": "^6.0.0",
+        "@typescript-eslint/parser": "^6.0.0",
+        "eslint": "^8.45.0",
+        "typescript": "^5.1.6",
+        "@vscode/test-electron": "^2.3.3"
+    }
+}

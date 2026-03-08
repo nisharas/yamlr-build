@@ -1,0 +1,14 @@
+- id: yamlr-scan
+  name: Yamlr Scan
+  description: Fast, semantic Kubernetes manifest auditor.
+  entry: yamlr scan
+  language: python
+  files: \.(yaml|yml)$
+  args: ["--output=text"]
+- id: yamlr-check
+  name: Yamlr Check
+  description: Ultra-fast syntax validation (no network).
+  entry: yamlr check
+  language: python
+  files: \.(yaml|yml)$
+  args: ["--output=text"]

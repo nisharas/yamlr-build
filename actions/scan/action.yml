@@ -1,0 +1,43 @@
+name: 'Yamlr Guard'
+description: 'Autonomous K8s Manifest Sentinel (Binary-in-a-Box)'
+author: 'Yamlr'
+
+inputs:
+  path:
+    description: 'Path to scan (file or directory)'
+    required: false
+    default: '.'
+  config:
+    description: 'Path to .yamlr.yaml'
+    required: false
+  fail-on-error:
+    description: 'Fail the build if issues are found'
+    required: false
+    default: 'true'
+  kube-version:
+    description: 'Target Kubernetes version for validation'
+    required: false
+  github-token:
+    description: 'GitHub token to automatically post a summary comment on Pull Requests'
+    required: false
+  extra-args:
+    description: 'Universal passthrough for any current or future Yamlr CLI flags (e.g., "--strict --harden")'
+    required: false
+    default: ''
+
+outputs:
+  health-score:
+    description: 'The overall health score of the scanned manifests'
+  results-sarif:
+    description: 'Path to the generated SARIF report'
+
+runs:
+  using: 'docker'
+  image: 'Dockerfile'
+  env:
+    INPUT_PATH: ${{ inputs.path }}
+    INPUT_CONFIG: ${{ inputs.config }}
+    INPUT_FAIL_ON_ERROR: ${{ inputs.fail-on-error }}
+    INPUT_KUBE_VERSION: ${{ inputs.kube-version }}
+    GITHUB_TOKEN: ${{ inputs.github-token }}
+    INPUT_EXTRA_ARGS: ${{ inputs.extra-args }}

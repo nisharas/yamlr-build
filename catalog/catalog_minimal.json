@@ -1,0 +1,101 @@
+{
+    "Namespace": {
+        "fields": {
+            "metadata": {
+                "type": "object",
+                "fields": {
+                    "name": {
+                        "type": "string"
+                    }
+                }
+            }
+        }
+    },
+    "Pod": {
+        "fields": {
+            "metadata": {
+                "type": "object"
+            },
+            "spec": {
+                "type": "object",
+                "fields": {
+                    "containers": {
+                        "type": "array",
+                        "item_type": "object",
+                        "fields": {
+                            "name": {
+                                "type": "string"
+                            },
+                            "image": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "Service": {
+        "fields": {
+            "metadata": {
+                "type": "object"
+            },
+            "spec": {
+                "type": "object",
+                "fields": {
+                    "selector": {
+                        "type": "object"
+                    },
+                    "ports": {
+                        "type": "array",
+                        "item_type": "object"
+                    }
+                }
+            }
+        }
+    },
+    "Deployment": {
+        "fields": {
+            "metadata": {
+                "type": "object"
+            },
+            "spec": {
+                "type": "object",
+                "fields": {
+                    "replicas": {
+                        "type": "integer"
+                    },
+                    "selector": {
+                        "type": "object"
+                    },
+                    "template": {
+                        "type": "object"
+                    }
+                }
+            }
+        }
+    },
+    "ConfigMap": {
+        "fields": {
+            "metadata": {
+                "type": "object"
+            },
+            "data": {
+                "type": "object"
+            }
+        }
+    },
+    "Secret": {
+        "fields": {
+            "metadata": {
+                "type": "object"
+            },
+            "data": {
+                "type": "object"
+            },
+            "stringData": {
+                "type": "object"
+            }
+        }
+    }
+}

@@ -1,0 +1,1 @@
+from yamlr.core.entrypoints.completion import handle_completion_command

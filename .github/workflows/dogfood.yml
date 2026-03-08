@@ -1,0 +1,20 @@
+name: Yamlr Distribution Test
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  # 1. Test the Action itself (Docker Build + Run)
+  action-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+            
+      # This effectively runs 'docker build .' and 'yamlr scan .'
+      - name: Dogfood Yamlr Action
+        uses: ./
+        with:
+          args: scan .

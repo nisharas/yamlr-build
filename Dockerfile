@@ -16,28 +16,27 @@ COPY catalog/ catalog/
 RUN pip install .
 
 # Build binary
-# Note: We use a simplified inline build command for Docker context
+# Build binary
+# Must match hack/build_binaries.py logic
 RUN pyinstaller --noconfirm --onefile --clean \
-    --name akeso \
-    --paths src \
-    --add-data "catalog:akeso/catalog" \
+    --name yamlr \
     --collect-all rich \
-    --strip \
-    src/akeso/cli/main.py
+    --add-data "src/yamlr/core/data:yamlr/core/data" \
+    --add-data "catalog:Yamlr/catalog" \
+    src/yamlr/__main__.py
 
 # Stage 2: Runner
-# Uses Google Distroless for maximum security (CNCF Best Practice)
-# "cc" image includes basic libraries needed for Python binaries
-FROM gcr.io/distroless/cc-debian12
+# Using python-slim instead of distroless to allow shell execution (GitHub Actions)
+FROM python:3.11-slim
 
 WORKDIR /app
 
 # Copy binary from builder
-COPY --from=builder /app/dist/akeso /usr/local/bin/akeso
-
-# Create alias symlink
-# Distroless shell is limited, so we copy instead
-COPY --from=builder /app/dist/akeso /usr/local/bin/kubecuro
+COPY --from=builder /app/dist/yamlr /usr/local/bin/yamlr
 
 # Verify
-ENTRYPOINT ["/usr/local/bin/akeso"]
+COPY tools/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# Verify
+ENTRYPOINT ["/entrypoint.sh"]

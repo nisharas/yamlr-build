@@ -3,16 +3,16 @@ requires = ["setuptools>=64.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "akeso"
+name = "yamlr"
 version = "0.1.0"
-description = "Akeso OSS: High-fidelity Kubernetes manifest healing engine (Foundation for Kubecuro)."
+description = "Yamlr: High-fidelity Kubernetes manifest healing engine."
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "Apache-2.0"}
 authors = [
-    {name = "Nishar A Sunkesala", email = "akesoforge@outlook.com"}
+    {name = "Nishar A Sunkesala", email = "maintainers@yamlr.dev"}
 ]
-keywords = ["kubernetes", "yaml", "devops", "sre", "akeso", "kubecuro"]
+keywords = ["kubernetes", "yaml", "devops", "sre", "yamlr", "manifest-healing"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: Apache Software License",
@@ -23,6 +23,11 @@ classifiers = [
 dependencies = [
     "ruamel.yaml>=0.17.21",
     "rich>=12.0.0",
+    "jsonschema>=4.20.0",
+    "requests>=2.28.0",
+    "PyYAML>=6.0",
+    "reportlab>=4.0.0",
+    "pydantic>=2.0.0",
 ]
 
 [project.optional-dependencies]
@@ -32,20 +37,17 @@ dev = [
     "mypy>=1.0",
 ]
 
-# For creating the standalone binaries for Akeso OSS
+# For creating the standalone binaries for Yamlr
 build = ["pyinstaller>=6.4.0"]
 
-# --- DUAL ENTRY POINTS ---
-# Both commands launch the same logic. 
-# engine.py uses AkesoBridge to detect which name was typed.
+# Standard Entry Point
 [project.scripts]
-akeso = "akeso.cli.main:main"
-kubecuro = "akeso.cli.main:main"
+yamlr = "yamlr.cli.main:main"
 
 [project.urls]
-Homepage = "https://akeso.dev"
-Issues = "https://github.com/akeso-oss/akeso/issues"
-Repository = "https://github.com/akeso-oss/akeso.git"
+Homepage = "https://yamlr.dev"
+Issues = "https://github.com/yamlr-dev/yamlr/issues"
+Repository = "https://github.com/yamlr-dev/yamlr.git"
 
 # --- SETUPTOOLS CONFIGURATION ---
 [tool.setuptools]
@@ -54,12 +56,13 @@ package-dir = {"" = "src"}
 [tool.setuptools.packages.find]
 where = ["src"]
 # Explicitly exclude pro modules from OSS builds
-exclude = ["tests*", "catalog*", "akeso.pro*"]
+# This ensures "src/yamlr/pro" is not packaged in the OSS wheel
+exclude = ["tests*", "catalog*", "yamlr.pro*"]
 namespaces = true
 
 [tool.setuptools.package-data]
 # Include the K8s catalogs in the distribution
-akeso = ["catalog/*.json"]
+yamlr = ["catalog/*.json"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

@@ -1,0 +1,548 @@
+"rule/no-latest-tag":
+  name: "Avoid Latest Tag"
+  severity: "Warning"
+  description: "Container images should use immutable version tags or digests instead of 'latest'."
+  rationale: "Using 'latest' makes deployments non-deterministic and rollbacks unreliable because the tag can point to different image builds over time."
+  remediation: "Pin the image to a specific SHA digest or version tag (for example, 'nginx:1.25.3' or 'nginx@sha256:<digest>')."
+  example: |
+    # Bad: uses the moving 'latest' tag
+    containers:
+      - name: web
+        image: nginx:latest
+    # Good: pinned version
+    containers:
+      - name: web
+        image: nginx:1.25.3
+
+"rule/resource-requests":
+  name: "Resource Requests Missing"
+  severity: "Warning"
+  description: "Containers should define CPU and memory resource requests."
+  rationale: "Requests guide the scheduler to place Pods on nodes with enough capacity, reducing unexpected OOM kills and node pressure."
+  remediation: "Add 'resources.requests' with both 'cpu' and 'memory' values sized for normal load."
+  example: |
+    # Missing requests (scheduler has no guarantee)
+    containers:
+      - name: api
+        image: my-api:1.0.0
+    # With CPU and memory requests
+      - name: api
+        image: my-api:1.0.0
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "256Mi"
+
+"rule/resource-limits":
+  name: "Resource Limits Missing"
+  severity: "Warning"
+  description: "Containers should define CPU and memory resource limits."
+  rationale: "Without limits, a single container can consume all node resources, causing performance issues or outages for other Pods."
+  remediation: "Add 'resources.limits' with 'cpu' and 'memory' values that cap worst-case usage."
+  example: |
+    # No limits (container can starve neighbors)
+    containers:
+      - name: worker
+        image: my-worker:1.0.0
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "512Mi"
+    # With limits
+      - name: worker
+        image: my-worker:1.0.0
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "512Mi"
+          limits:
+            cpu: "1"
+            memory: "1Gi"
+
+"rule/run-as-non-root":
+  name: "Container Runs as Root"
+  severity: "High"
+  description: "Containers should run as a non-root user."
+  rationale: "Root containers increase the impact of a breakout and may be blocked by cluster Pod Security settings."
+  remediation: "Add 'securityContext.runAsNonRoot: true' at Pod or container level, and ensure the image runs correctly as a non-root UID."
+  example: |
+    # Risky: no securityContext, likely runs as root
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: api
+    spec:
+      template:
+        spec:
+          containers:
+            - name: api
+              image: my-api:1.0.0
+    # Safer: enforce non-root user
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: api
+    spec:
+      template:
+        spec:
+          securityContext:
+            runAsNonRoot: true
+          containers:
+            - name: api
+              image: my-api:1.0.0
+
+"rule/no-privileged":
+  name: "Privileged Container"
+  severity: "Critical"
+  description: "Containers should not run in privileged mode."
+  rationale: "Privileged containers effectively bypass most isolation and can access the host, which is rarely required for application workloads."
+  remediation: "Set 'securityContext.privileged: false' or remove the field, and use specific capabilities or host access only when strictly necessary."
+  example: |
+    # Bad: privileged container
+    containers:
+      - name: agent
+        image: debug-tool:latest
+        securityContext:
+          privileged: true
+    # Better: drop privileged, add only needed capabilities
+      - name: agent
+        image: debug-tool:latest
+        securityContext:
+          privileged: false
+          capabilities:
+            add: ["NET_ADMIN"]
+
+"rule/missing-liveness":
+  name: "Missing Liveness Probe"
+  severity: "Warning"
+  description: "Containers should define a livenessProbe."
+  rationale: "Liveness probes tell Kubernetes when to restart a container; without one, a deadlocked or stuck process can remain running indefinitely."
+  remediation: "Add a 'livenessProbe' (httpGet, exec, or tcpSocket) to the container spec."
+  example: |
+    # No livenessProbe: stuck processes are not restarted
+    containers:
+      - name: api
+        image: my-api:1.0.0
+    # With livenessProbe
+      - name: api
+        image: my-api:1.0.0
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 15
+
+"rule/missing-readiness":
+  name: "Missing Readiness Probe"
+  severity: "Warning"
+  description: "Containers should define a readinessProbe."
+  rationale: "Readiness probes tell Kubernetes when a container is ready to receive traffic; without one, traffic may be sent to containers that are still initializing, causing 503 responses."
+  remediation: "Add a 'readinessProbe' to the container spec that reflects application startup and warmup."
+  example: |
+    # No readinessProbe: traffic may hit before app is ready
+    containers:
+      - name: web
+        image: my-web:1.0.0
+    # With readinessProbe
+      - name: web
+        image: my-web:1.0.0
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+
+"rule/ghost-service":
+  name: "Ghost Service"
+  severity: "Warning"
+  description: "A Service exists but its selector matches no Pods."
+  rationale: "The Service becomes a dead end for traffic, usually due to a typo in selector labels or a missing workload."
+  remediation: "Verify 'service.spec.selector' matches the 'metadata.labels' in your Deployment or Pod template."
+  example: |
+    # Service selector does not match Deployment labels -> ghost service
+    apiVersion: v1
+    kind: Service
+    metadata:
+      name: api
+    spec:
+      selector:
+        app: api        # Expects 'app=api'
+      ports:
+        - port: 80
+          targetPort: 8080
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: api
+    spec:
+      template:
+        metadata:
+          labels:
+            app: api-v2  # Mismatch: 'api-v2' != 'api'
+
+"rule/orphan-resource":
+  name: "Orphan Config/Secret"
+  severity: "Info"
+  description: "A ConfigMap or Secret exists but is not referenced by any workload."
+  rationale: "Orphan resources clutter the namespace and increase risk if sensitive data is kept around unnecessarily."
+  remediation: "Delete the resource if it is unused, or reference it from workloads via 'envFrom' or 'volumes' if it should be in use."
+  example: |
+    # Orphan ConfigMap: defined but not used by any Pod
+    apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: unused-config
+    data:
+      LOG_LEVEL: debug
+    # Referenced ConfigMap: used by a Deployment
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: api
+    spec:
+      template:
+        spec:
+          containers:
+            - name: api
+              image: my-api:1.0.0
+              envFrom:
+                - configMapRef:
+                    name: unused-config
+
+"rule/broken-volume":
+  name: "Broken Volume Reference"
+  severity: "Error"
+  description: "A Pod references a PersistentVolumeClaim (PVC) that does not exist in the workspace."
+  rationale: "The Pod will remain Pending because the required storage cannot be mounted."
+  remediation: "Add the missing PVC manifest to your project or fix the typo in 'volumes[].persistentVolumeClaim.claimName'."
+  example: |
+    # Pod references non-existent PVC 'app-data'
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: app
+    spec:
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: app-data
+      containers:
+        - name: app
+          image: my-app:1.0.0
+          volumeMounts:
+            - name: data
+              mountPath: /data
+    # Fix: add matching PVC
+    apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: app-data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 10Gi
+
+"rule/port-mismatch":
+  name: "Service Port Mismatch"
+  severity: "Error"
+  description: "Service targetPort does not exist on the target Pod containers."
+  rationale: "Traffic is accepted by the Service but dropped by the Pod because no process listens on the configured port."
+  remediation: "Update 'service.spec.ports[].targetPort' to match a 'containerPort' defined in your workload."
+  example: |
+    # Mismatch: Service routes to targetPort 8080, but container listens on 8000
+    apiVersion: v1
+    kind: Service
+    metadata:
+      name: web
+    spec:
+      selector:
+        app: web
+      ports:
+        - port: 80
+          targetPort: 8080
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: web
+    spec:
+      template:
+        metadata:
+          labels:
+            app: web
+        spec:
+          containers:
+            - name: web
+              image: my-web:1.0.0
+              ports:
+                - containerPort: 8000
+
+"rule/ingress-broken":
+  name: "Broken Ingress Backend"
+  severity: "Error"
+  description: "Ingress references a Service or port that does not exist."
+  rationale: "External traffic reaching the Ingress controller will receive 502/503 errors because the backend service is unreachable."
+  remediation: "Verify the Service name and port in the Ingress rules match an existing Service and declared Service port."
+  example: |
+    # Ingress points to non-existent Service 'web-svc'
+    apiVersion: networking.k8s.io/v1
+    kind: Ingress
+    metadata:
+      name: web
+    spec:
+      rules:
+        - http:
+            paths:
+              - path: /
+                pathType: Prefix
+                backend:
+                  service:
+                    name: web-svc   # No such Service
+                    port:
+                      number: 80
+    # Fix: define Service 'web-svc' with matching port
+    apiVersion: v1
+    kind: Service
+    metadata:
+      name: web-svc
+    spec:
+      selector:
+        app: web
+      ports:
+        - port: 80
+          targetPort: 8080
+
+"rule/schema-mismatch":
+  name: "K8s Schema Violation"
+  severity: "Error"
+  description: "The resource manifest does not comply with the Kubernetes OpenAPI schema."
+  rationale: "Kubernetes will reject this manifest; this usually indicates an invalid field name, wrong data type, or missing required field."
+  remediation: "Review the visual diff and use 'yamlr heal' to align the manifest with the target cluster's schema."
+  example: |
+    # Invalid field 'imagee' (typo) will cause schema violation
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: bad-pod
+    spec:
+      containers:
+        - name: app
+          imagee: my-app:1.0.0   # 'image' is the valid field
+    # Fix: use correct field name
+      containers:
+        - name: app
+          image: my-app:1.0.0
+
+"rule/opa-violation":
+  name: "OPA Policy Violation"
+  severity: "Mixed"
+  description: "The manifest violated an external OPA/Rego policy."
+  rationale: "Enterprise policies (for example, 'must have owner label') may block deployments or CI/CD pipelines when violated."
+  remediation: "Review the OPA message and update labels, annotations, or fields in the manifest to satisfy the policy."
+  example: |
+    # Example OPA policy: require 'owner' label on all Deployments
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: api
+      labels:
+        app: api
+        # Missing 'owner' label -> OPA violation
+    # Fix: add required label
+      labels:
+        app: api
+        owner: platform-team
+
+"rule/unsafe-hostpath":
+  name: "Unsafe HostPath Mount"
+  severity: "High"
+  description: "Detects hostPath volumes that mount unapproved paths on the node filesystem."
+  rationale: "hostPath mounts can expose sensitive parts of the node and are a common vector for privilege escalation and data exfiltration; most clusters should restrict or forbid them."
+  remediation: "Avoid hostPath where possible. Prefer 'emptyDir', 'configMap', or persistent volumes. If hostPath is required, mount only approved directories (for example '/var/log' or '/tmp') and enforce an allowlist via policy."
+  example: |
+    # Unsafe: hostPath to root filesystem
+    volumes:
+      - name: host-root
+        hostPath:
+          path: /      # Not in approved prefixes
+    # Safer: use PVC or a restricted hostPath path
+    volumes:
+      - name: logs
+        hostPath:
+          path: /var/log  # Example of an approved prefix
+
+"rule/host-network":
+  name: "Host Network Enabled"
+  severity: "Warning"
+  description: "Workloads should not use hostNetwork in regular namespaces."
+  rationale: "hostNetwork exposes Pods directly on the node network stack, increasing blast radius and bypassing some network isolation. It is typically reserved for system components."
+  remediation: "Remove 'hostNetwork: true' unless strictly required. Prefer normal cluster networking, and if needed, restrict hostNetwork to system namespaces only."
+  example: |
+    # Risky: hostNetwork enabled in application namespace
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: nginx
+      namespace: production
+    spec:
+      template:
+        spec:
+          hostNetwork: true
+          containers:
+            - name: nginx
+              image: nginx:1.25.3
+    # Better: disable hostNetwork and use ClusterIP/Service
+      template:
+        spec:
+          hostNetwork: false
+          containers:
+            - name: nginx
+              image: nginx:1.25.3
+
+"rule/allow-privilege-escalation":
+  name: "Privilege Escalation Allowed"
+  severity: "High"
+  description: "Containers should not enable allowPrivilegeEscalation."
+  rationale: "allowPrivilegeEscalation lets a process gain more privileges than its parent and is often disallowed by hardened Pod Security policies."
+  remediation: "Set 'securityContext.allowPrivilegeEscalation: false' for containers, and ensure applications do not rely on privilege escalation."
+  example: |
+    # Risky: explicitly allows privilege escalation
+    containers:
+      - name: app
+        image: my-app:1.0.0
+        securityContext:
+          allowPrivilegeEscalation: true
+    # Safer: explicitly disable privilege escalation
+      - name: app
+        image: my-app:1.0.0
+        securityContext:
+          allowPrivilegeEscalation: false
+
+"rule/service-no-selector":
+  name: "Service Without Selector"
+  severity: "Warning"
+  description: "A Service is defined without a selector and is not clearly a special-case Service."
+  rationale: "Services without selectors do not automatically route to Pods and often indicate a misconfiguration unless used for advanced patterns."
+  remediation: "Add a 'spec.selector' that matches your workload labels, or explicitly mark the Service as 'ExternalName' or headless if that is the intended pattern."
+  example: |
+    # Suspicious: ClusterIP Service without selector or special type
+    apiVersion: v1
+    kind: Service
+    metadata:
+      name: api
+    spec:
+      type: ClusterIP
+      ports:
+        - port: 80
+      # No selector defined
+    # Typical pattern: add selector to point at Pods
+    apiVersion: v1
+    kind: Service
+    metadata:
+      name: api
+    spec:
+      selector:
+        app: api
+      ports:
+        - port: 80
+          targetPort: 8080
+
+"rule/missing-configmap-target":
+  name: "Missing ConfigMap Target"
+  severity: "Warning"
+  description: "A workload references a ConfigMap that is not defined in the supplied manifests."
+  rationale: "Pods depending on this ConfigMap will fail to start or behave unexpectedly if the referenced ConfigMap is missing from the cluster or the deployment bundle."
+  remediation: "Create a ConfigMap with the referenced name in this file/set, or update the reference to an existing ConfigMap. If the ConfigMap is intentionally optional, mark the reference as 'optional: true'."
+  example: |
+    # Pod references non-existent ConfigMap 'app-config'
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: web
+    spec:
+      template:
+        spec:
+          containers:
+            - name: web
+              image: my-web:1.0.0
+              envFrom:
+                - configMapRef:
+                    name: app-config   # No such ConfigMap in this file/set
+
+    # Fix 1: define matching ConfigMap
+    apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: app-config
+    data:
+      APP_ENV: prod
+
+    # Fix 2: update reference to an existing ConfigMap
+    # envFrom:
+    #   - configMapRef:
+    #       name: web-config
+
+    # Fix 3: explicitly mark as optional if it may not exist
+    # envFrom:
+    #   - configMapRef:
+    #       name: app-config
+    #       optional: true
+
+"rule/network-policy-missing":
+  name: Missing Network Policy
+  severity: warning
+  description: The namespace (or resource) lacks a default-deny NetworkPolicy.
+  rationale: |
+    By default, all pods in a cluster can communicate with each other. 
+    Implementing a default-deny policy ensures a "Zero Trust" posture, 
+    requiring explicit allow-rules for traffic.
+  remediation: |
+    Create a default-deny NetworkPolicy for the namespace. 
+    Yamlr can auto-generate this using: `yamlr heal --harden`.
+  example: |
+    apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata:
+      name: default-deny-all
+    spec:
+      podSelector: {}
+      policyTypes: ["Ingress", "Egress"]
+
+"rule/untrusted-registry":
+  name: "Untrusted Image Registry"
+  severity: "High"
+  description: "Container images should only be pulled from approved enterprise registries."
+  rationale: "Pulling from public or untrusted registries increases the risk of supply chain attacks, malware, and inconsistent build environments."
+  remediation: "Update the 'image' field to use an approved registry (for example, 'cr.my-company.com/nginx:1.25') or add the registry to 'security.trusted_registries' in .yamlr.yaml."
+  example: |
+    # Bad: pulling from public docker.io when restricted
+    containers:
+      - name: web
+        image: nginx:latest
+    # Good: pulling from trusted internal registry
+    containers:
+      - name: web
+        image: cr.my-company.com/nginx:1.25.3
+
+"schema/validation-error":
+  name: "Strict Schema Violation"
+  severity: "Error"
+  description: "The manifest contains a structural error that makes it invalid for the target Kubernetes version."
+  rationale: "Structural errors (like incorrect indentation or missing required top-level fields) prevent the manifest from being parsed by the K8s API."
+  remediation: "Review the exact field listed in the error and align it with the K8s API documentation for that Resource Kind."
+
+"schema/invalid-api-version":
+  name: "Invalid API Version"
+  severity: "Error"
+  description: "The specified apiVersion is not recognized by any schema in the current catalog."
+  rationale: "Using an incorrect apiVersion (for example, 'app/v1' instead of 'apps/v1') will cause 'kubectl apply' to fail immediately."
+  remediation: "Correct the apiVersion. Use 'yamlr explain rules' to see supported versions."
+
+"policy.rego/required-labels":
+  name: "Required Labels Missing"
+  severity: "Mixed"
+  description: "The manifest is missing one or more required labels as defined by external OPA/Rego policies."
+  rationale: "Enterprise governance often requires labels like 'environment', 'owner', or 'cost-center' for resource tracking and billing."
+  remediation: "Add the missing labels to the 'metadata.labels' section of the manifest."

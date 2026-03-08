@@ -1,0 +1,273 @@
+{
+  "Namespace": {
+    "fields": {
+      "metadata": {
+        "type": "object",
+        "fields": {
+          "name": { "type": "string" },
+          "finalizers": { "type": "array", "item_type": "string" }
+        }
+      }
+    }
+  },
+
+  "ServiceAccount": {
+    "fields": {
+      "metadata": { "type": "object" },
+      "secrets": { "type": "array", "item_type": "object" }
+    }
+  },
+
+  "Pod": {
+    "fields": {
+      "metadata": { "type": "object" },
+      "spec": { "ref": "PodSpec" }
+    }
+  },
+
+  "PodTemplateSpec": {
+    "fields": {
+      "metadata": { "type": "object" },
+      "spec": { "ref": "PodSpec" }
+    }
+  },
+
+  "PodSpec": {
+    "fields": {
+      "serviceAccountName": { "type": "string" },
+      "automountServiceAccountToken": { "type": "boolean" },
+      "restartPolicy": { "type": "string" },
+      "nodeSelector": { "type": "object" },
+      "securityContext": { "ref": "PodSecurityContext" },
+      "containers": {
+        "type": "array",
+        "item_type": "object",
+        "fields": {
+          "name": { "type": "string" },
+          "image": { "type": "string" },
+          "imagePullPolicy": { "type": "string" },
+
+          "command": { "type": "array", "item_type": "string" },
+          "args": { "type": "array", "item_type": "string" },
+
+          "ports": {
+            "type": "array",
+            "item_type": "object",
+            "fields": {
+              "containerPort": { "type": "integer" },
+              "name": { "type": "string" }
+            }
+          },
+
+          "env": {
+            "type": "array",
+            "item_type": "object",
+            "fields": {
+              "name": { "type": "string" },
+              "value": { "type": "string" }
+            }
+          },
+
+          "resources": {
+            "type": "object",
+            "fields": {
+              "limits": {
+                "type": "object",
+                "fields": {
+                  "cpu": { "type": "string" },
+                  "memory": { "type": "string" }
+                }
+              },
+              "requests": {
+                "type": "object",
+                "fields": {
+                  "cpu": { "type": "string" },
+                  "memory": { "type": "string" }
+                }
+              }
+            }
+          },
+
+          "securityContext": { "ref": "ContainerSecurityContext" },
+
+          "livenessProbe": { "ref": "Probe" },
+          "readinessProbe": { "ref": "Probe" },
+          "startupProbe": { "ref": "Probe" }
+        }
+      }
+    }
+  },
+
+  "PodSecurityContext": {
+    "fields": {
+      "runAsNonRoot": { "type": "boolean" },
+      "runAsUser": { "type": "integer" },
+      "fsGroup": { "type": "integer" }
+    }
+  },
+
+  "ContainerSecurityContext": {
+    "fields": {
+      "privileged": { "type": "boolean" },
+      "allowPrivilegeEscalation": { "type": "boolean" },
+      "runAsNonRoot": { "type": "boolean" }
+    }
+  },
+
+  "Probe": {
+    "fields": {
+      "initialDelaySeconds": { "type": "integer" },
+      "periodSeconds": { "type": "integer" },
+      "timeoutSeconds": { "type": "integer" },
+      "failureThreshold": { "type": "integer" },
+      "successThreshold": { "type": "integer" },
+
+      "httpGet": {
+        "type": "object",
+        "fields": {
+          "path": { "type": "string" },
+          "port": { "type": "int_or_string" }
+        }
+      },
+
+      "tcpSocket": {
+        "type": "object",
+        "fields": {
+          "port": { "type": "int_or_string" }
+        }
+      },
+
+      "exec": {
+        "type": "object",
+        "fields": {
+          "command": { "type": "array", "item_type": "string" }
+        }
+      }
+    }
+  },
+
+  "Deployment": {
+    "fields": {
+      "metadata": { "type": "object" },
+      "spec": {
+        "type": "object",
+        "fields": {
+          "replicas": { "type": "integer" },
+          "selector": { "type": "object" },
+          "template": { "ref": "PodTemplateSpec" },
+          "strategy": { "type": "object" }
+        }
+      }
+    }
+  },
+
+  "StatefulSet": {
+    "fields": {
+      "metadata": { "type": "object" },
+      "spec": {
+        "type": "object",
+        "fields": {
+          "replicas": { "type": "integer" },
+          "serviceName": { "type": "string" },
+          "template": { "ref": "PodTemplateSpec" },
+          "volumeClaimTemplates": { "type": "array", "item_type": "object" }
+        }
+      }
+    }
+  },
+
+  "DaemonSet": {
+    "fields": {
+      "metadata": { "type": "object" },
+      "spec": {
+        "type": "object",
+        "fields": {
+          "selector": { "type": "object" },
+          "template": { "ref": "PodTemplateSpec" }
+        }
+      }
+    }
+  },
+
+  "JobSpec": {
+    "fields": {
+      "template": { "ref": "PodTemplateSpec" },
+      "backoffLimit": { "type": "integer" }
+    }
+  },
+
+  "Job": {
+    "fields": {
+      "metadata": { "type": "object" },
+      "spec": { "ref": "JobSpec" }
+    }
+  },
+
+  "JobTemplateSpec": {
+    "fields": {
+      "spec": { "ref": "JobSpec" }
+    }
+  },
+
+  "CronJob": {
+    "fields": {
+      "metadata": { "type": "object" },
+      "spec": {
+        "type": "object",
+        "fields": {
+          "schedule": { "type": "string" },
+          "jobTemplate": { "ref": "JobTemplateSpec" }
+        }
+      }
+    }
+  },
+
+  "Service": {
+    "fields": {
+      "metadata": { "type": "object" },
+      "spec": {
+        "type": "object",
+        "fields": {
+          "type": { "type": "string" },
+          "selector": { "type": "object" },
+          "ports": {
+            "type": "array",
+            "item_type": "object",
+            "fields": {
+              "port": { "type": "integer" },
+              "targetPort": { "type": "int_or_string" }
+            }
+          }
+        }
+      }
+    }
+  },
+
+  "Ingress": {
+    "fields": {
+      "metadata": { "type": "object" },
+      "spec": {
+        "type": "object",
+        "fields": {
+          "ingressClassName": { "type": "string" },
+          "rules": { "type": "array", "item_type": "object" }
+        }
+      }
+    }
+  },
+
+  "ConfigMap": {
+    "fields": {
+      "metadata": { "type": "object" },
+      "data": { "type": "object" }
+    }
+  },
+
+  "Secret": {
+    "fields": {
+      "metadata": { "type": "object" },
+      "data": { "type": "object" },
+      "stringData": { "type": "object" }
+    }
+  }
+}

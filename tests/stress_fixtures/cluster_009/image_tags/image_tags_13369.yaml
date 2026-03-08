@@ -1,0 +1,17 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bad-tag-i10564
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bad-tag-i10564
+  template:
+    metadata:
+      labels:
+        app: bad-tag-i10564
+    spec:
+      containers:
+      - name: app
+        image: mysql:latest

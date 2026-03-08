@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: anchor-i3492
+data:
+  defaults: '*undefined_anchor'
+  values:
+    key: value

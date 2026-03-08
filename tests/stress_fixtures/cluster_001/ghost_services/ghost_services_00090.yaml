@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ghost-svc-i4164
+spec:
+  selector:
+    app: myapp-i4164
+  ports:
+  - port: 80
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ghost-deploy-i4164
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: myapp-i4164
+  template:
+    metadata:
+      labels:
+        app: myapp-i4164
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.19

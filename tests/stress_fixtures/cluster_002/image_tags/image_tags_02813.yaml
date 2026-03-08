@@ -1,0 +1,17 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bad-tag-i10285
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bad-tag-i10285
+  template:
+    metadata:
+      labels:
+        app: bad-tag-i10285
+    spec:
+      containers:
+      - name: app
+        image: nginx:latest
