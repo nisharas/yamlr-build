@@ -71,9 +71,11 @@ class SchemaStore:
         Why: Internal documentation policy compliance.
         What: Auto-generated summary.
         """
-        fetch_version = self.version.lstrip('v')
-        url = self.GITHUB_URL_TEMPLATE.format(version=fetch_version)
-        logger.info(f"📥 Downloading K8s v{fetch_version} schema from GitHub...")
+        from yamlr.core.bridge import YamlrBridge
+        if YamlrBridge.is_offline_mode():
+            logger.debug("Offline Mode: Skipping schema download from GitHub.")
+            return None
+
         try:
             response = requests.get(url, timeout=60)
             response.raise_for_status()

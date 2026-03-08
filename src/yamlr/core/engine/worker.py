@@ -98,7 +98,8 @@ def _execute_healing_task(file_info: Dict[str, Any]) -> Any:
         if adapters_dir:
             try:
                 from yamlr.pro.compliance.adapters import AdapterEngine
-                from ruamel.yaml import YAML
+                from yamlr.core.utils import get_hardened_yaml
+                ryaml = get_hardened_yaml()
                 import io
                 
                 adapter_engine = AdapterEngine(adapters_dir)
@@ -106,7 +107,7 @@ def _execute_healing_task(file_info: Dict[str, Any]) -> Any:
                 adapter_hits = [f for f in serialized_findings if f.get("rule_id") in adapter_engine.adapters]
                 
                 if adapter_hits:
-                    ryaml = YAML()
+                    ryaml = get_hardened_yaml(typ="rt", pure=False) # Roundtrip
                     ryaml.preserve_quotes = True
                     docs = list(ryaml.load_all(healed_text))
                     adapted_any = False

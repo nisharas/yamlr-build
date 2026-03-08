@@ -39,7 +39,8 @@ class YamlrStructurer:
         """
         self.catalog = catalog
         self.validator = validator
-        self.yaml_engine = YAML()
+        from yamlr.core.utils import get_hardened_yaml
+        self.yaml_engine = get_hardened_yaml(typ="rt", pure=False) # Roundtrip for structure preservation
         self.yaml_engine.preserve_quotes = True
         self.yaml_engine.indent(mapping=2, sequence=2, offset=0)
 

@@ -22,6 +22,9 @@ class FileSystemManager:
     """
     Abstration layer for local file system operations.
     """
+    
+    # [Security] Prevent OOM by limiting file reading size (50MB default)
+    MAX_FILE_SIZE = 50 * 1024 * 1024 
 
     def __init__(self, workspace_root: Path, app_name: str = "Yamlr"):
         """
@@ -60,7 +63,14 @@ class FileSystemManager:
                 self.backup_dir.mkdir(exist_ok=True)
 
     def read_text(self, path: Path) -> str:
-        """Reads text file with BOM handling."""
+        """Reads text file with BOM handling and size guards."""
+        # [Security] Guard against massive files (OOM/DoS)
+        try:
+            if path.stat().st_size > self.MAX_FILE_SIZE:
+                raise IOError(f"File too large: {path.name} (Max {self.MAX_FILE_SIZE // (1024*1024)}MB)")
+        except (FileNotFoundError, PermissionError):
+            pass # Let read_text handle these naturally
+
         return path.read_text(encoding="utf-8-sig")
 
     def atomic_write(self, target_path: Path, content: str) -> None:
@@ -111,18 +121,9 @@ class FileSystemManager:
             rel_path = target_path.relative_to(self.workspace)
         except ValueError:
             # File is outside workspace - preserve structure under 'external' folder
-            # Convert absolute path to safe relative structure
-            # D:\manifests-test\file.yaml → external\D\manifests-test\file.yaml
+            # [Fix] Ensure rel_path is truly relative by stripping the anchor (e.g. '/' or 'C:\')
             abs_path = target_path.resolve()
-            # Remove drive letter and leading separators safely
-            path_parts = list(abs_path.parts)
-            if len(path_parts) > 0 and ":" in path_parts[0]:
-                # Windows path with drive letter (e.g., 'D:')
-                drive = path_parts[0].replace(":", "")
-                rel_path = Path("external") / drive / Path(*path_parts[1:])
-            else:
-                # Unix path or relative path
-                rel_path = Path("external") / Path(*path_parts)
+            rel_path = Path("external") / abs_path.relative_to(abs_path.anchor)
 
         # Replicate directory structure inside backup folder
         backup_dest_dir = self.backup_dir / rel_path.parent
@@ -139,7 +140,7 @@ class FileSystemManager:
         # Baseline MAX_PATH is 260. We use 200 as a safe threshold for the parent dir.
         if len(str(backup_dest_dir)) > 200:
             import hashlib
-            path_hash = hashlib.sha1(str(rel_path.parent).encode()).hexdigest()[:12]
+            path_hash = hashlib.sha256(str(rel_path.parent).encode()).hexdigest()[:12]
             backup_dest_dir = self.backup_dir / "sharded" / path_hash
 
         backup_dest_dir.mkdir(parents=True, exist_ok=True)
@@ -168,8 +169,8 @@ class FileSystemManager:
                     try:
                         old.unlink()
                         logger.debug(f"Rotated backup: {old}")
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.debug(f"Backup rotation: Failed to unlink {old}: {e}")
         except Exception as e:
             logger.warning(f"Backup rotation warning: {e}")
 

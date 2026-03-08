@@ -100,11 +100,12 @@ class YamlrManager:
                     "C:\\Users\\Public",
                 ]
             else:
+                import tempfile
                 self.allowed_host_paths = [
                     "/data",
                     "/etc/config",
                     "/var/log",
-                    "/tmp",
+                    tempfile.gettempdir(),
                     "/mnt",
                 ]
 

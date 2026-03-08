@@ -221,7 +221,7 @@ def audit_and_heal_file(
         if adapters_dir:
             try:
                 from yamlr.pro.compliance.adapters import AdapterEngine
-                from ruamel.yaml import YAML
+                from yamlr.core.utils import get_hardened_yaml
                 import io
                 
                 adapter_engine = AdapterEngine(adapters_dir)
@@ -229,7 +229,7 @@ def audit_and_heal_file(
                 
                 if adapter_hits:
                     # Strip string for safety
-                    ryaml = YAML()
+                    ryaml = get_hardened_yaml(typ="rt", pure=False) # Roundtrip
                     ryaml.preserve_quotes = True
                     docs = list(ryaml.load_all(healed_text))
                     adapted_any = False
@@ -295,19 +295,19 @@ def audit_and_heal_file(
                 identities_list.append(ident_data)
             res_kind = identities_list[0].get("kind", "Unknown")
 
-        # SECURITY: ABSOLUTE PATH SAFEGUARDS
-        if is_modified:
-            try:
-                import yaml
-                updated_docs = list(yaml.safe_load_all(healed_text))
-                path_errors = validate_absolute_paths(updated_docs, engine.allowed_host_paths)
-                if path_errors:
-                    all_logic_logs.append("⚠️ Security Warning: Unsafe absolute paths detected in healed manifest:")
-                    for err in path_errors:
-                        all_logic_logs.append(f"  → {err}")
-                        health_score = max(0, health_score - 15)
-            except Exception as e:
-                logger.debug(f"Path security check failed (parsing error): {e}")
+        # SECURITY: hostPath SAFEGUARDS
+        try:
+            from yamlr.core.utils import get_hardened_yaml
+            yaml_h = get_hardened_yaml(typ="safe")
+            updated_docs = list(yaml_h.load_all(healed_text))
+            path_errors = validate_absolute_paths(updated_docs, engine.allowed_host_paths)
+            if path_errors:
+                all_logic_logs.append("⚠️ Security Warning: Unsafe hostPath detected in manifest:")
+                for err in path_errors:
+                    all_logic_logs.append(f"  → {err}")
+                    health_score = max(0, health_score - 15)
+        except Exception as e:
+            logger.debug(f"Path security check failed (parsing error): {e}")
 
         remediation = None
         if serialized_findings and display_status in ["WARN", "PREVIEW"]:
@@ -462,6 +462,20 @@ def audit_stream(
         if identities:
             identities_list = [id.to_dict() for id in identities]
             res_kind = identities_list[0].get("kind", "Unknown")
+
+        # SECURITY: hostPath SAFEGUARDS (also for streams)
+        try:
+            from yamlr.core.utils import get_hardened_yaml
+            yaml_h = get_hardened_yaml(typ="safe")
+            updated_docs = list(yaml_h.load_all(healed_text))
+            path_errors = validate_absolute_paths(updated_docs, engine.allowed_host_paths)
+            if path_errors:
+                logs.append("⚠️ Security Warning: Unsafe hostPath detected in content:")
+                for err in path_errors:
+                    logs.append(f"  → {err}")
+                    score = max(0, score - 15)
+        except Exception as e:
+            logger.debug(f"Stream security check failed: {e}")
 
         return HealFileResult(
             file_path=source_name,

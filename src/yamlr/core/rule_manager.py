@@ -5,8 +5,8 @@ from pathlib import Path
 
 # Use safe standard lib YAML if available or fallback to ruamel
 try:
-    from ruamel.yaml import YAML
-    yaml = YAML(typ='safe', pure=True)
+    from yamlr.core.utils import get_hardened_yaml
+    yaml = get_hardened_yaml(typ='safe', pure=True)
 except ImportError:
     # Fallback to simple parser if strictly needed, but Yamlr implies ruamel
     import yaml

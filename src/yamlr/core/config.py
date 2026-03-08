@@ -13,8 +13,6 @@ from fnmatch import fnmatch
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from ruamel.yaml import YAML
-
 logger = logging.getLogger("yamlr.config")
 
 
@@ -67,7 +65,8 @@ class ConfigManager:
         2. .<app_name>.yaml
         3. .yamlr.yaml
         """
-        yaml = YAML(typ="safe")
+        from yamlr.core.utils import get_hardened_yaml
+        yaml = get_hardened_yaml(typ="safe")
         current_dir = self.workspace.resolve()
 
         while True:

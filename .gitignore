@@ -171,6 +171,7 @@ VENV/
 !COMPETITIVE_ANALYSIS.md
 !USER_GUIDE.md
 !AI_SAFETY_STRATEGY.md
+!OUTREACH_TEMPLATES.md
 
 # Debug / Temp
 debug_backup.py
@@ -179,6 +180,7 @@ reproduce_match.py
 legacy_monolith/
 tmp/
 .tmp/
+bandit_*.json
 
 # Project-specific
 catalog/k8sv1distilled.json  # Regenerate

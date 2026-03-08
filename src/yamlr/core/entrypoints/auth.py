@@ -22,6 +22,13 @@ def handle_auth_command(args, console):
 
             key_file = config_dir / "license.key"
             key_file.write_text(license_key, encoding="utf-8")
+            
+            # [Security] Restrict permissions: 0600 (owner read/write only)
+            import os
+            try:
+                os.chmod(key_file, 0o600)
+            except Exception as e:
+                logger.warning(f"Failed to set secure permissions on license key: {e}")
 
             console.print(f"[green]✅ License key saved to {key_file}[/green]")
             console.print("[dim]Use 'Yamlr auth' to verify status.[/dim]")

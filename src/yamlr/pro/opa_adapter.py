@@ -71,9 +71,9 @@ class OpaAnalyzer(BaseAnalyzer):
 
         # Use ruamel.yaml as it is our core dependency (avoiding extra PyYAML req)
         try:
-            from ruamel.yaml import YAML
+            from yamlr.core.utils import get_hardened_yaml
 
-            self.yaml = YAML(typ="safe")
+            self.yaml = get_hardened_yaml(typ="safe")
         except ImportError:
             self.yaml = None
 
@@ -91,6 +91,11 @@ class OpaAnalyzer(BaseAnalyzer):
 
         # 1. Handle Remote URL
         if raw_path.startswith("http://") or raw_path.startswith("https://"):
+            from yamlr.core.bridge import YamlrBridge
+            if YamlrBridge.is_offline_mode():
+                logger.debug(f"Offline Mode: Skipping remote policy download: {raw_path}")
+                return None
+            
             try:
                 logger.debug(f"Downloading remote policy bundle: {raw_path}")
                 # Use a temp file for the download (cache could be better but temp is safe)

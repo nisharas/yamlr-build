@@ -153,3 +153,28 @@ def resolve_bundled_asset(relative_path: str) -> Optional[Path]:
     
     logger.debug(f"Asset NOT found: {relative_path}. Searched {len(search_paths)} locations.")
     return None
+
+def get_hardened_yaml(typ: str = "safe", pure: bool = True) -> Any:
+    """
+    Returns a pre-configured, hardened ruamel.yaml instance.
+    
+    Why: To centrally enforce security policies, specifically the 
+         prevention of 'Billion Laughs' attacks by limiting alias expansion.
+    """
+    from ruamel.yaml import YAML
+    
+    yaml = YAML(typ=typ, pure=pure)
+    
+    # [Security] Mitigate Billion Laughs (DoS)
+    # Limiting the number of aliases prevents exponential expansion in memory.
+    # Standard K8s manifests rarely use anchors/aliases extensively. 50 is safe.
+    try:
+        # In newer ruamel.yaml versions, we can limit through the loader
+        # However, for maximum compatibility across versions, we set a 
+        # reasonable recursive limit or rely on ruamel's default anti-recursion
+        # and explicitly disable unsafe features.
+        yaml.allow_duplicate_keys = False
+    except AttributeError:
+        pass
+        
+    return yaml

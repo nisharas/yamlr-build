@@ -122,3 +122,24 @@ class YamlrBridge:
         What: Auto-generated summary.
         """
         return (Path.home() / ".Yamlr" / "license.key").exists()
+
+    @staticmethod
+    def is_offline_mode() -> bool:
+        """
+        Centralized "Network Kill Switch".
+        Returns True if Yamlr should avoid making ANY outbound network calls.
+        Driven by: Yamlr_OFFLINE=true OR detected test environments.
+        """
+        if os.getenv("Yamlr_OFFLINE") == "true":
+            return True
+        
+        # Detect common test environments
+        test_markers = [
+            "PYTEST_CURRENT_TEST",
+            "YAMLR_TEST",
+            "UNITTEST_ON"  # Optional marker for native unittest
+        ]
+        if any(marker in os.environ for marker in test_markers):
+            return True
+        
+        return False

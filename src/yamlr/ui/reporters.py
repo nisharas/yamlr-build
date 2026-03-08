@@ -29,6 +29,9 @@ class JSONReporter:
             sanitized_results.append(clean_f)
             total_issues += len(data.get("findings", []))
 
+        # [FREE-12-08] Enforce strict determinism for CI/CD consistency
+        sanitized_results.sort(key=lambda x: x.get("file_path", ""))
+
         report = {
             "metadata": {
                 "tool": "Yamlr",

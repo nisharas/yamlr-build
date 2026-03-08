@@ -11,6 +11,10 @@ def post_pr_comment(reports: list) -> None:
     if not token:
         return
 
+    from yamlr.core.bridge import YamlrBridge
+    if YamlrBridge.is_offline_mode():
+        return
+
     event_path = os.environ.get("GITHUB_EVENT_PATH")
     if not event_path or not os.path.exists(event_path):
         return
@@ -72,8 +76,12 @@ def post_pr_comment(reports: list) -> None:
     req.add_header("Accept", "application/vnd.github.v3+json")
     req.add_header("Content-Type", "application/json")
 
+    # [Security] Validate scheme to prevent SSRF or unauthorized file access
+    if not url.startswith("https://"):
+        return
+
     try:
-        with urllib.request.urlopen(req) as response:
+        with urllib.request.urlopen(req) as response: # nosec B310
             pass # Successfully posted comment
     except Exception as e:
         print(f"Failed to post PR comment: {e}")

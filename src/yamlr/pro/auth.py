@@ -26,13 +26,13 @@ logger = logging.getLogger("yamlr.pro.auth")
 class AuthManager:
     """Manages Enterprise Authentication state."""
 
-    def __init__(self, app_name: str = "Yamlr"):
+    def __init__(self, app_name: str = "Yamlr", config_dir: Optional[Path] = None):
         """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
+        Why: Allows environment isolation (e.g., during tests).
+        What: Initializes the AuthManager with a specific storage directory.
         """
         self.app_name = app_name
-        self.config_dir = Path.home() / f".{app_name.lower()}"
+        self.config_dir = config_dir or (Path.home() / f".{app_name.lower()}")
         self.creds_file = self.config_dir / "credentials"
         self._token_cache = None
 

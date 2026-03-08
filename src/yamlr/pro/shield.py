@@ -76,11 +76,13 @@ class ShieldEngine:
             for vol in volumes:
                 if "hostPath" in vol:
                     findings.append(AnalysisResult(
-                        rule_id="SHD-001",
-                        severity="high",
+                        analyzer_name="YamlrShield",
+                        severity="ERROR",
                         message=f"Shadow Risk: hostPath mount detected ({vol.get('name')}) granting node access.",
-                        path=f"spec.volumes.[name={vol.get('name')}].hostPath",
-                        category="Security Policy Violation"
+                        resource_name=doc.get("metadata", {}).get("name", "unknown"),
+                        resource_kind=kind,
+                        file_path="unknown",
+                        rule_id="SHD-001"
                     ))
         
         return findings

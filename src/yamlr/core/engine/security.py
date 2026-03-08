@@ -26,14 +26,20 @@ def validate_absolute_paths(docs: List[Dict[str, Any]], allowed_host_paths: List
             # Specific check for hostPath in volumes
             if "hostPath" in node and isinstance(node["hostPath"], dict):
                 hp = node["hostPath"].get("path")
-                if hp and hp.startswith("/"):
+                if hp:
+                    import os
+                    # [Fix] Resolve and normalize path to prevent traversal bypass
+                    # Since we don't have the "host" root, abspath is the best local proxy 
+                    # for normalization of '..' relative segments.
+                    normalized_path = os.path.abspath(hp)
+                    
                     # Check if it starts with any allowed path
                     if not any(
-                        hp.startswith(allowed)
+                        normalized_path.startswith(allowed)
                         for allowed in allowed_host_paths
                     ):
                         errors.append(
-                            f"Unsafe hostPath at {path_context}/hostPath: {hp}"
+                            f"Unsafe hostPath at {path_context}/hostPath: {hp} (Normalized: {normalized_path})"
                         )
 
             for k, v in node.items():
