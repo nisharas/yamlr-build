@@ -21,6 +21,7 @@ pip-download-cache/
 .pytest_cache/
 .coverage
 .coverage.*
+.*_cache/
 .cache
 nosetests.xml
 coverage.xml
@@ -43,7 +44,6 @@ dist_debug/
 dist_final_debug/
 dist_standalone/
 dist_test/
-scanner_full_recovery.py.txt
 
 # Build outputs
 *.spec
@@ -66,10 +66,6 @@ verifier_output.txt
 simulation_report.json
 out.txt
 debug_log.txt
-pro_ver.txt
-oss_ver.txt
-final_pro.txt
-final_oss.txt
 
 # Virtual environments
 .venv
@@ -131,18 +127,8 @@ Thumbs.db:encryptable
 .recover-dirstatus.db
 
 # PyInstaller
-#  - These files are usually created by PyInstaller with --onefile
 PyInstaller/
 PyInstaller__main__.py
-build/
-dist/
-*.spec
-
-# PyInstaller generated files
-*.manifest
-*.exe.manifest
-*.app
-VENV/
 
 # pyenv
 .python-version
@@ -153,25 +139,15 @@ VENV/
 # JetBrains IDEs
 .idea/
 
-# Ignore self-referential files
-.gitignore
-.dockerignore
-.readme.md
-.yamlrc
-.yamlr.yaml
-.aider*
-.claudeignore
-.agentignore
-
-# Ignore all Markdown files
+# Ignore all Markdown files except core documentation
 *.md
-
 !CONTRIBUTING.md
 !DOWNLOADS.md
 !COMPETITIVE_ANALYSIS.md
 !USER_GUIDE.md
 !AI_SAFETY_STRATEGY.md
 !OUTREACH_TEMPLATES.md
+!README.md
 
 # Debug / Temp
 debug_backup.py
@@ -181,18 +157,24 @@ legacy_monolith/
 tmp/
 .tmp/
 bandit_*.json
+scripts/debug/
+*.json
+*.txt
+*.log
 
 # Project-specific
-catalog/k8sv1distilled.json  # Regenerate
+catalog/k8sv1distilled.json
 testworkspace/catalog.json
-
 .agent/
-
-# Old Codebase
 old_codebase/
-
-# Next.js Website (Moved to own repo)
 website/
 docs/man/
 k8s-issues-dataset/
 dummy_receipts/
+
+.continue/
+.vscode/
+
+tooling/
+tools/
+hack/

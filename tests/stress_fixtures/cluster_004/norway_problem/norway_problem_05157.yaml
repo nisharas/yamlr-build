@@ -1,9 +1,0 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: norway-i3240
-data:
-  NO: Norway
-  ON: Ontario
-  OFF: Offline
-  YES: Affirmative

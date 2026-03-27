@@ -1,7 +1,0 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: fused-dash-i1032
-  labels:
-    app: test
-    tier: backend

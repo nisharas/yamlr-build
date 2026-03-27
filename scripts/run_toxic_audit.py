@@ -5,8 +5,9 @@ import json
 from pathlib import Path
 
 def run_batch_heal():
-    corpus_dir = Path("tests/corpus/toxic")
-    output_dir = Path("tests/toxic_results")
+    root_dir = Path(__file__).parent.parent.resolve()
+    corpus_dir = root_dir / "tests/corpus/toxic"
+    output_dir = root_dir / "tests/toxic_results"
     output_dir.mkdir(parents=True, exist_ok=True)
     
     env = os.environ.copy()

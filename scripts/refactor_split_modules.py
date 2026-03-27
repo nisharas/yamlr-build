@@ -1,8 +1,11 @@
 import os
+from pathlib import Path
 
-batch_file = 'd:/yamlr/src/yamlr/ui/formatter_batch.py'
-summary_file = 'd:/yamlr/src/yamlr/ui/formatter_summary.py'
-formatter_file = 'd:/yamlr/src/yamlr/ui/formatter.py'
+# Use project-relative paths
+ROOT = Path(__file__).resolve().parent.parent
+batch_file = str(ROOT / 'src/yamlr/ui/formatter_batch.py')
+summary_file = str(ROOT / 'src/yamlr/ui/formatter_summary.py')
+formatter_file = str(ROOT / 'src/yamlr/ui/formatter.py')
 
 # Split formatter_batch.py
 with open(batch_file, 'r', encoding='utf-8') as f:
@@ -62,8 +65,8 @@ class SummaryMixin:
             f.write(fmt)
 
 # Split entrypoints/base.py
-base_file = 'd:/yamlr/src/yamlr/core/entrypoints/base.py'
-display_file = 'd:/yamlr/src/yamlr/core/entrypoints/display.py'
+base_file = str(ROOT / 'src/yamlr/core/entrypoints/base.py')
+display_file = str(ROOT / 'src/yamlr/core/entrypoints/display.py')
 
 with open(base_file, 'r', encoding='utf-8') as f:
     blines = f.readlines()
@@ -95,7 +98,7 @@ from .base import get_console, CORE_VERSION, CATALOG_VERSION
     with open(display_file, 'w', encoding='utf-8') as f:
         f.write(d_content)
 
-    for root, _, files in os.walk('d:/yamlr/src/yamlr/cli/commands'):
+    for root, _, files in os.walk(str(ROOT / 'src/yamlr/cli/commands')):
         for file in files:
             if file.endswith('.py'):
                 path = os.path.join(root, file)

@@ -1,59 +1,148 @@
-name: 'Yamlr Surgeon'
-description: 'Autonomous Manifest Repair (Professional Version)'
-author: 'Yamlr'
-
+name: Yamlr Surgeon
+description: Autonomous Manifest Repair (Professional Version)
+author: Yamlr
 inputs:
   path:
-    description: 'Path to heal (file or directory)'
+    description: Path to heal (file or directory)
     required: false
-    default: '.'
+    default: .
   push:
-    description: 'Automatically push repairs to the branch'
+    description: Automatically push repairs to the branch
     required: false
     default: 'true'
   token:
-    description: 'GitHub token for pushing repairs'
+    description: GitHub token for pushing repairs
     required: false
     default: ${{ github.token }}
   kube-version:
-    description: 'Target Kubernetes version'
+    description: Target Kubernetes version
     required: false
   harden:
-    description: 'Apply security hardening'
+    description: Apply security hardening
     required: false
     default: 'false'
   enforce-limits:
-    description: 'Auto-inject missing CPU/Memory limits'
+    description: Auto-inject missing CPU/Memory limits
     required: false
     default: 'false'
   enforce-probes:
-    description: 'Auto-inject missing probes'
+    description: Auto-inject missing probes
     required: false
     default: 'false'
   fix-refs:
-    description: 'Cross-Resource Auto-Fix'
+    description: Cross-Resource Auto-Fix
     required: false
     default: 'false'
   fix-tags:
-    description: 'Auto-remediate :latest tags'
+    description: Auto-remediate :latest tags
     required: false
     default: 'false'
   extra-args:
-    description: 'Universal passthrough for any current or future Yamlr CLI flags (e.g., "--unsafe --adapters-dir ./x")'
+    description: Universal passthrough for any current or future Yamlr CLI flags (e.g.,
+      "--unsafe --adapters-dir ./x")
     required: false
     default: ''
-
+  k8s-version:
+    description: Target K8s version (e.g., 1.28, v1.31)
+    required: false
+  max-depth:
+    description: 'Limit directory recursion depth (default: 10)'
+    required: false
+  ext:
+    description: 'Extensions to process (default: .yaml,.yml)'
+    required: false
+  concurrency:
+    description: Parallel worker count (defaults to CPU core count)
+    required: false
+  identity-mode:
+    description: 'Identity detection style: ''infer'' (default) or ''strict'''
+    required: false
+  strict:
+    description: Treat all schema warnings as errors
+    required: false
+    default: 'false'
+  compact:
+    description: Minify output (2-space indent, no extra whitespace)
+    required: false
+    default: 'false'
+  cpu-limit:
+    description: Standard CPU request/limit for auto-injection (e.g. 500m)
+    required: false
+  mem-limit:
+    description: Standard Memory request/limit for auto-injection (e.g. 512Mi)
+    required: false
+  namespace:
+    description: Default namespace for generated resources
+    required: false
+  health-threshold:
+    description: Custom health score penalty threshold (0-100)
+    required: false
+  enforce-namespace:
+    description: Inject default namespace for resources missing one.
+    required: false
+    default: 'false'
+  fail-on:
+    description: 'CI/CD GATE: Exit with code 1 if specified severity is found'
+    required: false
+  check-deprecations:
+    description: Explicitly audit for and record deprecated Kubernetes APIs
+    required: false
+    default: 'false'
+  opa-bundle:
+    description: Path or URL to OPA bundle (Supports Gatekeeper Templates)
+    required: false
+  kyverno-report:
+    description: '[PRO] Path to Kyverno PolicyReport JSON for Auto-Fix ingestion'
+    required: false
+  output:
+    description: Output format (text, json, or sarif)
+    required: false
+  stub-refs:
+    description: 'Generate missing resources. Default: Safe kinds only. Use --stub-refs=Kind
+      for filter.'
+    required: false
+  unsafe:
+    description: Allow healing of sensitive resources. Use --unsafe or --unsafe=Secret.
+    required: false
+  evidence-dir:
+    description: '[PRO] Generate DNA-signed cryptographic receipts for compliance
+      audits in the specified directory.'
+    required: false
+  adapters-dir:
+    description: '[PRO] Directory containing custom Python/Shell remediation adapters
+      for compliance violations.'
+    required: false
 runs:
-  using: 'docker'
-  image: 'Dockerfile'
+  using: docker
+  image: Dockerfile
   env:
     INPUT_PATH: ${{ inputs.path }}
     INPUT_PUSH: ${{ inputs.push }}
     GITHUB_TOKEN: ${{ inputs.token }}
-    INPUT_KUBE_VERSION: ${{ inputs.kube-version }}
+    INPUT_KUBE_VERSION: ${{ inputs.k8s-version }}
     INPUT_HARDEN: ${{ inputs.harden }}
     INPUT_ENFORCE_LIMITS: ${{ inputs.enforce-limits }}
     INPUT_ENFORCE_PROBES: ${{ inputs.enforce-probes }}
     INPUT_FIX_REFS: ${{ inputs.fix-refs }}
     INPUT_FIX_TAGS: ${{ inputs.fix-tags }}
     INPUT_EXTRA_ARGS: ${{ inputs.extra-args }}
+    INPUT_MAX_DEPTH: ${{ inputs.max-depth }}
+    INPUT_EXT: ${{ inputs.ext }}
+    INPUT_CONCURRENCY: ${{ inputs.concurrency }}
+    INPUT_IDENTITY_MODE: ${{ inputs.identity-mode }}
+    INPUT_STRICT: ${{ inputs.strict }}
+    INPUT_COMPACT: ${{ inputs.compact }}
+    INPUT_CPU_LIMIT: ${{ inputs.cpu-limit }}
+    INPUT_MEM_LIMIT: ${{ inputs.mem-limit }}
+    INPUT_NAMESPACE: ${{ inputs.namespace }}
+    INPUT_HEALTH_THRESHOLD: ${{ inputs.health-threshold }}
+    INPUT_ENFORCE_NAMESPACE: ${{ inputs.enforce-namespace }}
+    INPUT_FAIL_ON: ${{ inputs.fail-on }}
+    INPUT_CHECK_DEPRECATIONS: ${{ inputs.check-deprecations }}
+    INPUT_OPA_BUNDLE: ${{ inputs.opa-bundle }}
+    INPUT_KYVERNO_REPORT: ${{ inputs.kyverno-report }}
+    INPUT_OUTPUT: ${{ inputs.output }}
+    INPUT_STUB_REFS: ${{ inputs.stub-refs }}
+    INPUT_UNSAFE: ${{ inputs.unsafe }}
+    INPUT_EVIDENCE_DIR: ${{ inputs.evidence-dir }}
+    INPUT_ADAPTERS_DIR: ${{ inputs.adapters-dir }}

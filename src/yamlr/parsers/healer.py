@@ -6,29 +6,31 @@ Contains heuristic and structural repair logic for raw YAML lines.
 Extracted from YamlrLexer to comply with the Single Responsibility Principle.
 """
 
+from __future__ import annotations
 import logging
-import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
-from yamlr.models import Shard
+from yamlr.models import Shard, K8S_CORE_KEYS
 
 logger = logging.getLogger("yamlr.healer")
+__all__ = ['LexicalHealer']
+
 
 class LexicalHealer:
     """
     Handles heuristic and context-aware repairs for YAML manifests.
+    
+    Note: TableContinuationHeuristic remains outside the main heuristic pipeline 
+    as it requires access to the full Shard sequence for context-aware 
+    lookbehind, which exceeds the line-by-line scope of other heuristics.
     """
 
-    SAFE_FUSED_KEYS = {
-        "kind", "apiVersion", "metadata", "spec", "status", "selector",
-        "template", "resources", "containers", "volumes", "labels",
-        "annotations", "data", "ports", "env", "image"
-    }
+    SAFE_FUSED_KEYS = K8S_CORE_KEYS
 
     def __init__(self):
-        """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
+        """Initializes the lexical healer with a suite of heuristics.
+        
+        Why: To enable automated, line-level structural repairs of malformed YAML manifests.
         """
         self.stats: Dict[str, int] = {
             "flush_left_lists_fixed": 0,
@@ -38,8 +40,6 @@ class LexicalHealer:
             "floating_list_items_fixed": 0,
             "double_dash_normalized": 0,
         }
-        self._last_list_parent_indent: Optional[int] = None
-        self._consecutive_list_fixes: int = 0
         self._implicit_array_stack: List[Tuple[int, str]] = []  # [(indent, key)]
         self._implicit_array_item_active: bool = False
         self.heuristics: List[Any] = []
@@ -47,126 +47,56 @@ class LexicalHealer:
 
     def _init_heuristics(self):
         """Initializes the heuristic strategy pipeline."""
+        from .heuristics.boolean_guard import BooleanGuardHeuristic
+        from .heuristics.flow_sanitizer import FlowStyleHeuristic
         from .heuristics.indentation import (SnapToGridHeuristic,
                                              TabExpansionHeuristic)
         from .heuristics.punctuation import (MagicColonHeuristic,
                                              QuoteBalancingHeuristic,
                                              SpacingHeuristic)
+        from .heuristics.sequence import FragmentedSequenceHeuristic
+        from .heuristics.list_indentation import ListIndentationHeuristic
+        from .heuristics.keywords import KeywordFusionHeuristic, MissingColonHeuristic
+        from .heuristics.template_safety import TemplateSafetyHeuristic
+        from .heuristics.legacy import LegacyMarkerHeuristic
 
         self.heuristics = [
+            TemplateSafetyHeuristic(),
             TabExpansionHeuristic(),
+            ListIndentationHeuristic(),
             SnapToGridHeuristic(),
+            FragmentedSequenceHeuristic(),
+            KeywordFusionHeuristic(),
+            MissingColonHeuristic(),
             MagicColonHeuristic(),
             SpacingHeuristic(),
             QuoteBalancingHeuristic(),
+            BooleanGuardHeuristic(),
+            FlowStyleHeuristic(),
+            LegacyMarkerHeuristic(),
         ]
 
     def reset_state(self):
         """Resets state for a new document."""
-        self._last_list_parent_indent = None
-        self._consecutive_list_fixes = 0
         self._implicit_array_stack.clear()
         self._implicit_array_item_active = False
         for k in self.stats:
             self.stats[k] = 0
 
-    def heal_fused_keywords(self, line: str) -> str:
-        """Fixes: 'kindService' -> 'kind: Service', etc."""
-        stripped = line.strip()
-        if not stripped or ":" in line or "[" in line or "{" in line:
-            return line
-
-        for key_candidate in self.SAFE_FUSED_KEYS:
-            if stripped.startswith(key_candidate) and len(stripped) > len(key_candidate):
-                suffix = stripped[len(key_candidate):]
-                if suffix[0].isupper() or suffix[0].isdigit() or (key_candidate == "apiVersion" and suffix.lower().startswith("v")):
-                    prefix_indent = len(line) - len(line.lstrip())
-                    self.stats["spacing_fixes"] += 1
-                    return (" " * prefix_indent) + f"{key_candidate}: {suffix}"
-        return line
-
-    def heal_double_dash(self, line: str) -> str:
-        """Fixes: '- - key: val' -> '- key: val' and fragmented '--' markers."""
-        stripped = line.lstrip()
-        if stripped.startswith("- -"):
-            indent = len(line) - len(stripped)
-            self.stats["double_dash_normalized"] += 1
-            return (" " * indent) + "- " + stripped[3:].lstrip()
-        
-        # [HEAL-1.2] Fragmentation: '--' or '-- ' at the start (common in legacy Helm)
-        if stripped.startswith("--") and not stripped.startswith("---"):
-            indent = len(line) - len(stripped)
-            self.stats["double_dash_normalized"] += 1
-            return (" " * indent) + "- " + stripped[2:].lstrip()
-            
-        return line
-
-    def heal_missing_colon(self, line: str, next_line: Optional[str]) -> str:
-        """Heals missing colon for parent keys based on next line indentation."""
-        stripped = line.strip()
-        if not stripped or ":" in stripped or "[" in stripped or "{" in stripped:
-            return line
-
-        if next_line:
-            cur_indent = len(line) - len(line.lstrip())
-            next_indent = len(next_line) - len(next_line.lstrip())
-            # [HEAL-1.3] Aggressive Parent Detection
-            # If next line is significantly deeper, assume this is a map parent
-            if next_indent > cur_indent and next_line.strip():
-                self.stats["spacing_fixes"] += 1
-                return line.rstrip() + ":"
-        return line
-
-    def fix_flush_left_lists(self, shards: List[Shard], working_line: str) -> str:
-        """Fixes list items that are flush-left but belong to a parent key."""
-        if not shards:
-            return working_line
-
-        # [ROBUSTNESS FIX] Walk back to find the last structural shard
-        # (ignoring comments and empty lines) to determine true parent indentation.
-        last_structural_shard = None
-        for i in range(len(shards) - 1, -1, -1):
-            s = shards[i]
-            if s.key or s.value or s.is_list_item:
-                 last_structural_shard = s
-                 break
-        
-        if not last_structural_shard:
-            self._last_list_parent_indent = None
-            self._consecutive_list_fixes = 0
-            return working_line
-
-        last_shard = last_structural_shard
-
-        stripped = working_line.lstrip()
-        current_indent = len(working_line) - len(stripped)
-        if not stripped.startswith("-"):
-            return working_line
-
-        if current_indent > 0:
-            expected_indent = last_shard.indent + 2
-            if current_indent != expected_indent:
-                working_line = (" " * expected_indent) + stripped
-                self.stats["nested_lists_normalized"] += 1
-            return working_line
-
-        parent_indent = last_shard.indent
-        expected_indent = parent_indent + 2
-        if self._last_list_parent_indent == parent_indent:
-            self._consecutive_list_fixes += 1
-        else:
-            self._last_list_parent_indent = parent_indent
-            self._consecutive_list_fixes = 1
-
-        self.stats["flush_left_lists_fixed"] += 1
-        return (" " * expected_indent) + stripped
-
-    def repair_line(self, line: str, in_block: bool) -> str:
-        """Applies the main heuristic pipeline to a single line."""
-        context = {"stats": self.stats, "in_block": in_block}
+    def repair_line(self, line: str, in_block: bool, shards: List[Shard] = None, next_line: str = None) -> Tuple[str, List[str]]:
+        """Applies the main heuristic pipeline to a single line.
+        Returns: (repaired_line, list_of_intent_tags)
+        """
+        context = {
+            "stats": self.stats, 
+            "in_block": in_block,
+            "shards": shards or [],
+            "next_line": next_line,
+            "pending_tags": []
+        }
         for heuristic in self.heuristics:
             line = heuristic.apply(line, context)
-        return line
+        return line, context["pending_tags"]
 
     def normalize_indentation(self, shards: List[Shard]) -> List[Shard]:
         """Phase 2: Context-aware indentation normalization."""
@@ -185,36 +115,49 @@ class LexicalHealer:
                 i += 1
                 continue
 
+            if shard.is_list_item or shard.raw_line.lstrip().startswith("-"):
+                group, next_idx = self._normalize_list_group(shards, i, context_stack)
+                normalized_shards.extend(group)
+                i = next_idx
+                continue
+                
             if shard.key and ":" in shard.raw_line:
-                while context_stack and context_stack[-1][1] >= shard.indent:
-                    context_stack.pop()
-                if not shard.value:
-                    context_stack.append((shard.key, shard.indent))
+                self._update_context_stack(context_stack, shard)
                 normalized_shards.append(shard)
                 i += 1
-                continue
-
-            if shard.is_list_item or shard.raw_line.lstrip().startswith("-"):
-                expected_indent = context_stack[-1][1] + 2 if context_stack else 0
-                if shard.indent != expected_indent:
-                    shard.indent = expected_indent
-                    shard.raw_line = (" " * expected_indent) + shard.raw_line.lstrip()
-                    self.stats["nested_lists_normalized"] += 1
-
-                j = i + 1
-                while j < len(shards):
-                    ns = shards[j]
-                    if ns.is_doc_boundary or not (ns.is_list_item or ns.raw_line.lstrip().startswith("-")):
-                        break
-                    if ns.indent != expected_indent:
-                        ns.indent = expected_indent
-                        ns.raw_line = (" " * expected_indent) + ns.raw_line.lstrip()
-                        self.stats["nested_lists_normalized"] += 1
-                    j += 1
-                normalized_shards.extend(shards[i:j])
-                i = j
                 continue
 
             normalized_shards.append(shard)
             i += 1
         return normalized_shards
+
+    def _update_context_stack(self, stack: List[Tuple[str, int]], shard: Shard) -> None:
+        """Updates the indentation context stack based on the current key."""
+        while stack and stack[-1][1] >= shard.indent:
+            stack.pop()
+        if not shard.value:
+            stack.append((shard.key, shard.indent))
+
+    def _normalize_list_group(self, shards: List[Shard], start_idx: int, stack: List[Tuple[str, int]]) -> Tuple[List[Shard], int]:
+        """Normalizes an entire group of list items to the same indentation."""
+        expected_indent = stack[-1][1] + 2 if stack else 0
+        with open("d:\\yamlr\\healer_debug.log", "a") as f:
+            f.write(f"DEBUG: normalize start_idx={start_idx} stack_len={len(stack)} expected={expected_indent}\n")
+            if stack: f.write(f"DEBUG: stack_top={stack[-1]}\n")
+        group = []
+        i = start_idx
+        
+        while i < len(shards):
+            shard = shards[i]
+            if shard.is_doc_boundary or not (shard.is_list_item or shard.raw_line.lstrip().startswith("-")):
+                break
+                
+            if shard.indent != expected_indent:
+                shard.indent = expected_indent
+                shard.raw_line = (" " * expected_indent) + shard.raw_line.lstrip()
+                self.stats["nested_lists_normalized"] += 1
+            
+            group.append(shard)
+            i += 1
+            
+        return group, i

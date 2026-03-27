@@ -1,0 +1,16 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ConfigManagementPlugin
+metadata:
+  name: yamlr
+spec:
+  version: v1.0
+  generate:
+    # We run yamlr heal on the current directory. 
+    # --quiet suppresses all headers/banners.
+    # --output text ensures pure YAML is returned to Argo.
+    # --yes-all ensures we don't block on confirmation.
+    command: ["yamlr"]
+    args: ["heal", ".", "--quiet", "--output", "text", "--yes-all"]
+  discover:
+    find:
+      glob: "**/*.{yaml,yml}"

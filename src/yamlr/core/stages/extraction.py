@@ -8,29 +8,39 @@ Author: Nishar A Sunkesala / Yamlr Team
 Date: 2026-02-13
 """
 
-import logging
-from typing import List, Dict, Any, Optional
+from __future__ import annotations
 
-from yamlr.core.stages.base import PipelineStage
+import logging
+from typing import TYPE_CHECKING, List
+
+if TYPE_CHECKING:
+    from yamlr.parsers.lexer import YamlrLexer
+    from yamlr.parsers.shadow import ShadowEngine
 from yamlr.core.context import HealContext
-from yamlr.models import ManifestIdentity, Shard
+from yamlr.core.stages.base import PipelineStage
+from yamlr.core.stages.boundaries import MutationScope
+from yamlr.models import HealAction, Shard
 
 logger = logging.getLogger("yamlr.pipeline.stages.extraction")
+from yamlr.core.stages.identity import IdentityStage as StageThreeIdentityExtraction
+
+__all__ = ['StageZeroReset', 'StageOneLexicalRepair', 'StageTwoLayoutCapture', 'StageThreeIdentityExtraction']
+
 
 class StageZeroReset(PipelineStage):
     """Stage 0: Internal pipeline state reset."""
-    def __init__(self, shadow: Any):
+    def __init__(self, name: str, shadow: "ShadowEngine"):
+        """Initializes the reset stage with the shadow engine.
+        
+        Why: To ensure a clean state before each healing pipeline execution.
         """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
-        """
-        super().__init__("Stage 0: Reset")
+        super().__init__(name)
         self.shadow = shadow
 
     def run(self, context: HealContext):
-        """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
+        """Resets the internal shadow engine state.
+        
+        Why: To prevent state leakage between independent healing runs.
         """
         self.shadow.reset()
         context.audit_log.append("Stage 0: Internal pipeline state reset")
@@ -38,18 +48,16 @@ class StageZeroReset(PipelineStage):
 
 class StageOneLexicalRepair(PipelineStage):
     """Stage 1: Lexical repair and sharding."""
-    def __init__(self, lexer: Any):
+    def __init__(self, name: str, lexer: "YamlrLexer"):
+        """Initializes the lexical repair stage.
         """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
-        """
-        super().__init__("Stage 1: Lexical Repair")
+        super().__init__(name)
         self.lexer = lexer
 
     def run(self, context: HealContext):
-        """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
+        """Executes lexical repair and shards the raw input text.
+        
+        Why: To transform messy raw YAML into manageable, repairable fragments.
         """
         try:
             shards: List[Shard] = self.lexer.shard(context.raw_text)
@@ -59,7 +67,15 @@ class StageOneLexicalRepair(PipelineStage):
             lexer_repairs = self.lexer.get_repair_audit_log()
             if lexer_repairs:
                 context.audit_log.append("Stage 1: Lexer Healing Summary:")
-                context.audit_log.extend([f"  → {entry}" for entry in lexer_repairs])
+                for entry in lexer_repairs:
+                    context.prescribe(HealAction(
+                        stage="Lexer",
+                        action_type="repair",
+                        target="lexical",
+                        description=entry,
+                        severity="INFO",
+                        scope=MutationScope.STRUCTURAL
+                    ))
             else:
                 context.audit_log.append("Stage 1: No lexical repairs needed (clean YAML)")
 
@@ -71,78 +87,29 @@ class StageOneLexicalRepair(PipelineStage):
                 }
             }
         except Exception as e:
+            import traceback
             logger.error(f"Lexer critical failure: {e}")
-            return {"success": False, "error": e}
+            logger.error(traceback.format_exc())
+            return {"success": False, "error": str(e)}
 
 class StageTwoLayoutCapture(PipelineStage):
     """Stage 2: Layout and comment capture."""
-    def __init__(self, shadow: Any):
+    def __init__(self, name: str, shadow: "ShadowEngine"):
+        """Initializes the layout capture stage with the shadow engine.
         """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
-        """
-        super().__init__("Stage 2: Layout Capture")
+        super().__init__(name)
         self.shadow = shadow
 
     def run(self, context: HealContext):
-        """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
+        """Captures layout and comment metadata from the raw text.
+        
+        Why: To ensure that healing remains comment-preserving and deterministic.
         """
         try:
             self.shadow.capture(context.raw_text, context.shards)
             self.shadow.apply(context.shards)
             context.audit_log.append("Stage 2: Layout and comment metadata generated")
             return {"success": True}
-        except Exception as e:
+        except (AttributeError, KeyError, IndexError, ValueError) as e:
             context.audit_log.append(f"Stage 2: Warning - Layout preservation limited: {e}")
             return {"success": True, "warning": str(e)}
-
-class StageThreeIdentityExtraction(PipelineStage):
-    """Stage 3: Extract Kubernetes resource identities."""
-    def __init__(self, lexer: Any, scanner: Any, identity_mode: str, file_path: str):
-        """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
-        """
-        super().__init__("Stage 3: Identity Extraction")
-        self.lexer = lexer
-        self.scanner = scanner
-        self.identity_mode = identity_mode
-        self.file_path = file_path
-
-    def run(self, context: HealContext):
-        """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
-        """
-        try:
-            lexer_metadata = self.lexer.prepare_for_scanner(context.shards)
-            self.scanner.set_lexer_context(lexer_metadata)
-
-            context.identities = self.scanner.scan_shards(
-                context.shards, mode=self.identity_mode
-            )
-
-            for slog in self.scanner.scan_logs:
-                context.audit_log.append(f"Stage 3 Audit: {slog}")
-
-            if not context.identities:
-                context.audit_log.append("Stage 3: No valid K8s identity found")
-                return {"success": False, "skipped": True}
-
-            primary = context.identities[0]
-            context.audit_log.append(
-                f"Stage 3: Identified {primary.api_version}/{primary.kind}"
-            )
-
-            for ident in context.identities:
-                ident.file_path = self.file_path
-
-            return {
-                "success": True,
-                "kind": primary.kind,
-                "api_version": primary.api_version,
-            }
-        except Exception as e:
-            return {"success": False, "error": e}

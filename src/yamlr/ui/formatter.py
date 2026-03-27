@@ -15,9 +15,13 @@ Date: 2026-01-26
 Version: 1.1.0 (Modular Decomposition)
 """
 
-from typing import Any, Dict, List
+from __future__ import annotations
+from typing import Any, Dict, List, Union, TYPE_CHECKING
 from rich.panel import Panel
 from rich.table import Table
+
+if TYPE_CHECKING:
+    from yamlr.models import HealFileResult
 
 from yamlr.ui.formatter_report import ReportMixin, get_score_emoji
 from yamlr.ui.formatter_batch import BatchMixin
@@ -60,7 +64,7 @@ class YamlrFormatter(ReportMixin, BatchMixin, SummaryMixin, BenchMixin):
         )
         console.print(panel)
 
-    def _render_deprecation_summary(self, reports: List[Any]):
+    def _render_deprecation_summary(self, reports: List[Union[Dict[str, Any], HealFileResult]]):
         """Renders an aggregate table of API deprecations found in the batch."""
         deprecations = {}
 

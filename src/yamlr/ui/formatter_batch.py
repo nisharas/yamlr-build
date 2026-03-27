@@ -13,15 +13,19 @@ Author: Nishar A Sunkesala / Yamlr Team
 Date: 2026-02-17
 """
 
-from typing import Any, Dict, List, Optional
+from __future__ import annotations
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
+if TYPE_CHECKING:
+    from yamlr.models import HealFileResult
 
-from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
 from yamlr.cli.commands.base import get_console
 
 console = get_console()
+__all__ = ['BatchMixin']
+
 
 
 class BatchMixin:
@@ -50,7 +54,7 @@ class BatchMixin:
     # -------------------------------------------------------------------------
 
     def print_final_table(
-        self, reports: List[Dict[str, Any]], summary_only: bool = False, telemetry_data: Optional[Dict[str, Any]] = None, **kwargs
+        self, reports: List[HealFileResult], summary_only: bool = False, telemetry_data: Optional[Dict[str, Any]] = None, **kwargs
     ):
         """
         Summary table with multi-resource expansion.
@@ -82,7 +86,11 @@ class BatchMixin:
         self._print_detailed_table(reports)
 
     def _get_icon(self, icon: str) -> str:
-        """Returns ASCII fallback for emojis if plain mode is active."""
+        """Returns ASCII fallback for emojis if plain mode is active.
+        
+        Why: Ensures terminal compatibility and accessibility for users 
+             with no-color or basic TTY environments.
+        """
         if not getattr(console, "_yamlr_plain", False):
             return icon
         
@@ -93,8 +101,12 @@ class BatchMixin:
         }
         return mapping.get(icon, icon)
 
-    def _print_detailed_table(self, reports: List[Dict[str, Any]]):
-        """Renders detailed table with per-file and per-resource rows."""
+    def _print_detailed_table(self, reports: List[HealFileResult]):
+        """Renders detailed table with per-file and per-resource rows.
+        
+        Why: Provides the 'Surgical Precision' view, allowing users to trace 
+             exactly what was found and healed in each manifest.
+        """
         table = Table(
             title="\n[bold magenta]━━━ Yamlr Healing Summary ━━━[/bold magenta]",
             show_header=True,
@@ -127,8 +139,15 @@ class BatchMixin:
             has_warnings = any("Warning" in log or "WARN" in log for log in logs)
             if status == "UNCHANGED" and has_warnings:
                 status = "WARN"
-            score = r.get("health_score", 0)
-            proc_time = r.get("processing_time_seconds", 0)
+            try:
+                score = int(r.get("dna_integrity_score", 0))
+            except (TypeError, ValueError):
+                score = 0
+                
+            try:
+                proc_time = float(r.get("processing_time_seconds", 0))
+            except (TypeError, ValueError):
+                proc_time = 0.0
             file_path = r.get("file_path", "Unknown")
 
             # Handle errors
@@ -195,8 +214,13 @@ class BatchMixin:
                 kind = identity.get("kind", "Unknown")
                 name = identity.get("name", "unnamed")
 
+                try:
+                    score_val = int(score)
+                except (TypeError, ValueError):
+                    score_val = 0
+                    
                 score_style = (
-                    "green" if score >= 80 else "yellow" if score >= 50 else "red"
+                    "green" if score_val >= 80 else "yellow" if score_val >= 50 else "red"
                 )
 
                 if status == "HEALED":

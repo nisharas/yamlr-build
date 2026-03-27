@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: aws-svc-72
+  namespace: us-east-1
+spec:
+  selector:
+    app: aws-svc-72
+  ports:
+  - port: 80
+    targetPort: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: aws-svc-72-ingress
+  namespace: us-east-1
+spec:
+  rules:
+  - http:
+      paths:
+      - path: /api/72
+        pathType: Prefix
+        backend:
+          service:
+            name: aws-svc-72
+            port:
+              number: 80

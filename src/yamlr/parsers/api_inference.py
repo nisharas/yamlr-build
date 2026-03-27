@@ -3,10 +3,13 @@ API version inference for Kubernetes resources.
 Extracted from scanner.py to reduce complexity and improve maintainability.
 """
 
+from __future__ import annotations
 import logging
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
+__all__ = ['APIVersionInferrer']
+
 
 
 class APIVersionInferrer:
@@ -20,12 +23,11 @@ class APIVersionInferrer:
 
     This is primarily used in Pro mode for intelligent manifest repair.
     """
-
     def __init__(
         self,
-        catalog: Dict[Any, Any],
-        crd_catalog: Optional[Dict[Any, Any]] = None,
-        plugin_catalogs: Optional[List[Dict[Any, Any]]] = None,
+        catalog: Dict[Tuple[str, str], Any],
+        crd_catalog: Optional[Dict[Tuple[str, str], Any]] = None,
+        plugin_catalogs: Optional[List[Dict[Tuple[str, str], Any]]] = None,
     ):
         """
         Initialize inferrer with K8s API catalogs.
@@ -78,135 +80,45 @@ class APIVersionInferrer:
     def infer_from_catalog(self, kind: str) -> Optional[str]:
         """
         Searches all catalogs for this kind and returns its apiVersion.
-
-        Searches in order:
-        1. Primary K8s catalog
-        2. CRD catalog (if present)
-        3. Plugin catalogs (if present)
-
-        Args:
-            kind: Kind name to search for
-
-        Returns:
-            apiVersion from catalog or None
         """
-        # Check primary K8s catalog
-        for key in self.catalog.keys():
+        # Search priority: K8s -> CRD -> Plugins
+        api = self._search_catalog_for_kind(self.catalog, kind)
+        if api:
+            return api
+
+        if self.crd_catalog:
+            api = self._search_catalog_for_kind(self.crd_catalog, kind)
+            if api:
+                return api
+
+        for plugin_catalog in self.plugin_catalogs:
+            api = self._search_catalog_for_kind(plugin_catalog, kind)
+            if api:
+                return api
+
+        return None
+
+    def _search_catalog_for_kind(self, catalog: Dict[Tuple[str, str], Any], kind: str) -> Optional[str]:
+        """Helper to search a single catalog dictionary for a kind."""
+        if not isinstance(catalog, dict):
+            return None
+            
+        for key in catalog.keys():
             if isinstance(key, tuple) and len(key) == 2:
                 api_version, catalog_kind = key
                 if catalog_kind == kind:
                     return api_version
-
-        # Check CRD catalog if present
-        if self.crd_catalog:
-            for key in self.crd_catalog.keys():
-                if isinstance(key, tuple) and len(key) == 2:
-                    api_version, catalog_kind = key
-                    if catalog_kind == kind:
-                        return api_version
-
-        # Check plugin catalogs if present
-        for plugin_catalog in self.plugin_catalogs:
-            if isinstance(plugin_catalog, dict):
-                for key in plugin_catalog.keys():
-                    if isinstance(key, tuple) and len(key) == 2:
-                        api_version, catalog_kind = key
-                        if catalog_kind == kind:
-                            return api_version
-
         return None
 
     def infer_from_heuristics(self, kind: str) -> Optional[str]:
         """
-        Uses hardcoded heuristics for common Kubernetes kinds.
-
-        This is a fallback when catalog lookup fails.
+        Uses centralized heuristics for common Kubernetes kinds.
         Based on stable K8s API versions as of K8s 1.31+ (2026).
-
-        Args:
-            kind: Kind name
-
-        Returns:
-            Inferred apiVersion or None
         """
-        # Core v1 resources
-        core_v1_kinds = {
-            "Pod",
-            "Service",
-            "ConfigMap",
-            "Secret",
-            "PersistentVolume",
-            "PersistentVolumeClaim",
-            "Namespace",
-            "Node",
-            "ServiceAccount",
-            "Endpoints",
-            "Event",
-            "LimitRange",
-            "ResourceQuota",
-            "ReplicationController",
-        }
-        if kind in core_v1_kinds:
-            return "v1"
+        from yamlr.models import RESOURCE_CATALOG
+        
+        # Centralized Catalog Check (Source of Truth)
+        if kind in RESOURCE_CATALOG:
+            return RESOURCE_CATALOG[kind]
 
-        # apps/v1 resources
-        apps_v1_kinds = {"Deployment", "StatefulSet", "DaemonSet", "ReplicaSet"}
-        if kind in apps_v1_kinds:
-            return "apps/v1"
-
-        # batch resources
-        if kind == "Job":
-            return "batch/v1"
-        if kind == "CronJob":
-            return "batch/v1"  # v1 stable since K8s 1.21+
-
-        # networking.k8s.io resources
-        if kind == "Ingress":
-            return "networking.k8s.io/v1"
-        if kind == "NetworkPolicy":
-            return "networking.k8s.io/v1"
-        if kind == "IngressClass":
-            return "networking.k8s.io/v1"
-
-        # rbac.authorization.k8s.io resources
-        rbac_kinds = {"Role", "RoleBinding", "ClusterRole", "ClusterRoleBinding"}
-        if kind in rbac_kinds:
-            return "rbac.authorization.k8s.io/v1"
-
-        # autoscaling resources
-        if kind == "HorizontalPodAutoscaler":
-            return "autoscaling/v2"  # v2 is stable
-
-        # policy resources
-        if kind == "PodDisruptionBudget":
-            return "policy/v1"
-        if kind == "PodSecurityPolicy":
-            return "policy/v1beta1"  # Deprecated but still exists
-
-        # storage.k8s.io resources
-        storage_kinds = {"StorageClass", "VolumeAttachment", "CSIDriver", "CSINode"}
-        if kind in storage_kinds:
-            return "storage.k8s.io/v1"
-
-        # admissionregistration.k8s.io resources
-        admission_kinds = {
-            "ValidatingWebhookConfiguration",
-            "MutatingWebhookConfiguration",
-        }
-        if kind in admission_kinds:
-            return "admissionregistration.k8s.io/v1"
-
-        # apiextensions.k8s.io resources
-        if kind == "CustomResourceDefinition":
-            return "apiextensions.k8s.io/v1"
-
-        # certificates.k8s.io resources
-        if kind == "CertificateSigningRequest":
-            return "certificates.k8s.io/v1"
-
-        # coordination.k8s.io resources
-        if kind == "Lease":
-            return "coordination.k8s.io/v1"
-
-        # Unknown kind
         return None

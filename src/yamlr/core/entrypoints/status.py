@@ -3,20 +3,22 @@ STATUS COMMAND - The SRE Dashboard
 ----------------------------------
 Shows system health, backup usage, and catalog status.
 """
+from __future__ import annotations
 import os
-import time
 import json
 from pathlib import Path
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
-from rich.console import Group
 from rich.markup import escape
 from rich import box
+BOLD_WHITE = "bold white"
+BOLD_YELLOW = "bold yellow"
+DIM_NA = "[dim]N/A[/dim]"
 
 from yamlr.core.catalog_manager import CatalogManager
-from yamlr.core.config import ConfigManager
-from yamlr.pro.shield import ShieldEngine
+
+__all__ = ["handle_status_command"]
 
 def get_bench_metrics(workspace: Path) -> dict:
     """Calculates scientific HAS metrics from local benchmark data."""
@@ -51,7 +53,7 @@ def get_bench_metrics(workspace: Path) -> dict:
             metrics["schema_has"] = (sch_sum / count) * 100
             metrics["semantic_has"] = (sem_sum / count) * 100
             metrics["total_files"] = count
-    except Exception:
+    except (json.JSONDecodeError, OSError, IOError):
         pass
     return metrics
 
@@ -63,7 +65,7 @@ def get_dir_size(path: Path) -> int:
             for f in path.rglob('*'):
                 if f.is_file():
                     total += f.stat().st_size
-    except Exception:
+    except OSError:
         pass
     return total
 
@@ -76,190 +78,141 @@ def format_size(bytes: int) -> str:
     return f"{bytes:.1f} TB"
 
 def handle_status_command(args, engine, console):
-    """
-    Displays the Yamlr SRE Dashboard.
-    """
+    """Displays the Yamlr SRE Dashboard."""
+    # [Zero-Blindspot] Stability Gate
+    from yamlr.core.entrypoints.base import verify_stability_consent
+    if not verify_stability_consent(args.kube_version, args):
+        return 1
+
     workspace = engine.workspace
     target_version = engine.cluster_version
     app_name = engine.app_name
+    
+    # 1. Data Collection
+    from yamlr.core.license_manager import LicenseManager
+    from yamlr.core.pro.usage_limiter import UsageLimiter
+    
+    status_pro, _ = LicenseManager.check_pro_status()
+    caps = LicenseManager.resolve_capabilities()
+    remaining = UsageLimiter.get_remaining_quota()
+    
     state_dir = workspace / f".{app_name}"
     backup_dir = state_dir / "backups"
-    
-    # 1. Backup Stats
     backup_size = get_dir_size(backup_dir)
-    backup_count = 0
-    if backup_dir.exists():
-        backup_count = sum(1 for _ in backup_dir.rglob('*') if _.is_file())
+    backup_count = sum(1 for _ in backup_dir.rglob('*') if _.is_file()) if backup_dir.exists() else 0
     
-    # 2. Catalog Health
     cm = CatalogManager()
     catalog_path = cm.resolve_catalog(target_version, auto_fetch=False)
     catalog_exists = os.path.exists(catalog_path)
-    catalog_mtime = "N/A"
-    if catalog_exists:
-        catalog_mtime = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(os.path.getmtime(catalog_path)))
     
-    # 3. Config Health
-    config = ConfigManager(workspace, app_name=app_name)
     has_local_config = (workspace / ".yamlr.yaml").exists() or (workspace / ".yamlr.yml").exists()
-    
-    # 4. Scientific HAS (Shield Phase 1)
     has_metrics = get_bench_metrics(workspace)
-    
-    # Render Dashboard
-    output_fmt = getattr(args, 'output', 'text')
-    
-    dashboard_data = {
-        "workspace": str(workspace),
-        "config": {
-            "has_local_config": has_local_config,
-            "status": "Healthy" if has_local_config else "Missing"
-        },
-        "backups": {
-            "size_bytes": backup_size,
-            "count": backup_count
-        },
-        "catalog": {
-            "target_version": str(target_version),
-            "resolved_path": str(catalog_path),
-            "healthy": catalog_exists,
-            "last_refreshed": str(catalog_mtime)
-        }
-    }
 
-    if output_fmt == "json":
-        print(json.dumps(dashboard_data, indent=2))
+    # 2. JSON Output
+    if getattr(args, 'output', 'text') == "json":
+        stats = engine.telemetry.get_stats() if hasattr(engine, 'telemetry') and engine.telemetry else {}
+        dashboard_data = {
+            "workspace": str(workspace),
+            "engine_tier": "Enterprise" if status_pro.is_usable() else "Standard",
+            "pro_activation_status": status_pro.value,
+            "capabilities": [k.replace("can_", "") for k, v in caps.__dict__.items() if v and k.startswith("can_")],
+            "quota": {
+                "remaining": remaining,
+                "is_unlimited": remaining == 999999
+            },
+            "performance": {
+                "peak_fps": stats.get("peak_throughput_fps", 0.0),
+                "avg_latency_ms": stats.get("avg_latency_ms", 0.0),
+                "total_heals": stats.get("total_heals", 0),
+                "time_saved_hours": round(stats.get("total_time_saved_minutes", 0) / 60.0, 2)
+            },
+            "system": {
+                "backup_size_bytes": backup_size,
+                "backup_count": backup_count,
+                "catalog_version": str(target_version),
+                "has_local_config": has_local_config
+            }
+        }
+        console.print_json(data=dashboard_data)
         return 0
 
-    # Render Dashboard Text
-    console.print()
+    # 3. Text UI Render
+    _render_header(console)
+    _render_top_row(console, workspace, has_local_config, backup_size, backup_count, target_version, catalog_exists, engine)
+    _render_quota_and_pro(console, status_pro, caps, remaining)
+    _render_health_benchmarks(console, has_metrics)
+    _render_onboarding_and_actions(console, workspace, has_local_config, backup_count, backup_size)
+    return 0
+
+def _render_header(console):
     title = Text("Yamlr System Reliability Engineering (SRE) Dashboard", style="bold cyan", justify="center")
     console.print(Panel(title, border_style="cyan", box=box.ROUNDED if not getattr(console, "_yamlr_plain", False) else box.ASCII))
     console.print()
-    
-    # 2. Top Row: Workspace vs Engine
+
+def _render_top_row(console, workspace, has_local, b_size, b_count, version, cat_exists, engine):
     w_table = Table(show_header=False, box=None, padding=(0, 2))
-    w_table.add_column(style="bold white")
+    w_table.add_column(style=BOLD_WHITE)
     w_table.add_column()
     w_table.add_row("Workspace", f"[cyan]{escape(str(workspace))}[/cyan]")
-    w_table.add_row("Config State", "[green]Loaded (.yamlr.yaml)[/green]" if has_local_config else "[yellow]Default (no overrides)[/yellow]")
-    w_table.add_row("Backup Vault", f"{format_size(backup_size)} ({backup_count} files)")
-    if catalog_exists:
-        w_table.add_row("Catalog", f"{escape(str(target_version))} [green](Healthy)[/green]")
-    else:
-        w_table.add_row("Catalog", f"{escape(str(target_version))} [red](Run catalog update)[/red]")
-
+    w_table.add_row("Config State", "[green]Loaded[/green]" if has_local else "[yellow]Default[/yellow]")
+    w_table.add_row("Backup Vault", f"{format_size(b_size)} ({b_count} files)")
+    w_table.add_row("Catalog", f"{version} [green](Healthy)[/green]" if cat_exists else f"{version} [red](Update Required)[/red]")
     w_panel = Panel(w_table, title="[bold cyan]🌍 Workspace Health[/bold cyan]", border_style="cyan", padding=(1, 2))
 
     e_table = Table(show_header=False, box=None, padding=(0, 2))
-    e_table.add_column(style="bold white")
+    e_table.add_column(style=BOLD_WHITE)
     e_table.add_column()
-    e_table.add_row("Detection Rate", "[magenta]100% (Truth-in-Healing)[/magenta]")
-    
     if hasattr(engine, 'telemetry') and engine.telemetry:
-        tel_data = engine.telemetry.get_stats()
-        fixed = tel_data.get("total_fixed_issues", 0)
-        saved_mins = tel_data.get("total_time_saved_minutes", 0)
-        
-        if saved_mins >= 60:
-            saved_str = f"{saved_mins / 60.0:.1f} hours"
-        else:
-            saved_str = f"{int(saved_mins)} mins"
-            
-        max_risk = tel_data.get("max_risk", "N/A")
-        risk_style = "bold red" if max_risk == "HIGH" else "bold yellow" if max_risk == "MEDIUM" else "green"
-        
+        stats = engine.telemetry.get_stats()
+        fixed = stats.get("total_fixed_issues", 0)
+        saved = stats.get("total_time_saved_minutes", 0)
+        fps = stats.get("peak_throughput_fps", 0.0)
         e_table.add_row("Issues Healed", f"[green]{fixed:,}[/green]")
-        e_table.add_row("Time Saved", f"[green]⏱️ Est. {saved_str}[/green]")
-        e_table.add_row("Peak Risk", f"[{risk_style}]{max_risk}[/{risk_style}]")
+        e_table.add_row("Time Saved", f"[green]{saved / 60.0:.1f} hours[/green]")
+        e_table.add_row("Peak Speed", f"[magenta]{fps:.1f} files/s[/magenta]")
     else:
-        e_table.add_row("Issues Healed", "[dim]N/A[/dim]")
-        e_table.add_row("Time Saved", "[dim]N/A[/dim]")
-        e_table.add_row("Peak Risk", "[dim]N/A[/dim]")
-
+        e_table.add_row("Telemetry", DIM_NA)
     e_panel = Panel(e_table, title="[bold magenta]⚡ Engine Telemetry[/bold magenta]", border_style="magenta", padding=(1, 2))
 
-    grid1 = Table.grid(expand=True)
-    grid1.add_column(ratio=1)
-    grid1.add_column(ratio=1)
-    grid1.add_row(w_panel, e_panel)
-    console.print(grid1)
-    console.print()
+    grid = Table.grid(expand=True)
+    grid.add_column(ratio=1); grid.add_column(ratio=1)
+    grid.add_row(w_panel, e_panel)
+    console.print(grid)
 
-    # 3. Middle Row: Scientific HAS
-    h_table = Table(show_header=True, box=box.SIMPLE_HEAD if not getattr(console, "_yamlr_plain", False) else box.ASCII, header_style="bold yellow", expand=True)
-    h_table.add_column("Sub-System", style="white")
-    h_table.add_column("Score (HAS)", justify="right")
-    h_table.add_column("Status", justify="right")
+def _render_quota_and_pro(console, status_pro, caps, remaining):
+    q_table = Table(show_header=False, box=None, padding=(0, 2))
+    q_table.add_column(style=BOLD_WHITE)
+    q_table.add_column()
     
-    if has_metrics["total_files"] > 0:
-        def get_stat(score):
-            if score >= 90: return "[green]Flawless[/green]"
-            if score >= 70: return "[yellow]Warning[/yellow]"
-            return "[red]Critical[/red]"
-            
-        h_table.add_row("Lexical Shadow Integrity", f"{has_metrics['lexical_has']:.1f}%", get_stat(has_metrics['lexical_has']))
-        h_table.add_row("K8s Schema Compliance", f"{has_metrics['schema_has']:.1f}%", get_stat(has_metrics['schema_has']))
-        h_table.add_row("Logical Referentiality", f"{has_metrics['semantic_has']:.1f}%", get_stat(has_metrics['semantic_has']))
-        
-        h_panel = Panel(h_table, title="[bold yellow]🔬 Scientific HAS Benchmarks[/bold yellow]", border_style="yellow", padding=(1, 2))
-        
-        shield = ShieldEngine()
-        trust_score = shield.calculate_trust_score(
-            f"{has_metrics['lexical_has']}%",
-            f"{has_metrics['schema_has']}%",
-            f"{has_metrics['semantic_has']}%"
-        )
-        t_style = "bold green" if trust_score > 80 else "bold yellow" if trust_score > 50 else "bold red"
-        
-        from rich.align import Align
-        trust_panel = Panel(
-            Align.center(f"\n[{t_style}]{trust_score:.1f}%[/{t_style}]\n\n[dim]Based on {has_metrics['total_files']:,} samples[/dim]"), 
-            title=f"[{t_style}]🛡️ Trust Vitality[/{t_style}]", border_style=t_style.replace("bold ", ""), padding=(1, 2)
-        )
-        
-        grid2 = Table.grid(expand=True)
-        grid2.add_column(ratio=3)
-        grid2.add_column(ratio=1)
-        grid2.add_row(h_panel, trust_panel)
-        console.print(grid2)
-        console.print()
+    q_table.add_row("Pro Status", f"[bold green]{status_pro.name}[/bold green]" if status_pro.is_usable() else f"[yellow]{status_pro.name}[/yellow]")
+    if remaining != 999999:
+        q_table.add_row("Daily Quota", f"[bold cyan]{remaining}[/bold cyan] heals remaining today")
     else:
-        h_table.add_row("Run [dim]yamlr benchmark[/dim]", "to establish", "baseline targets")
-        console.print(Panel(h_table, title="[bold yellow]🔬 Scientific HAS Benchmarks[/bold yellow]", border_style="yellow", padding=(1, 2)))
-        console.print()
-
-    # 4. Onboarding Checklist
-    checklist = {
-        "Project Initialized": has_local_config,
-        "First Scan Complete": backup_count > 0,
-        "Shell Autocomplete": "yamlr" in os.environ.get("PATH", "") and (Path.home() / ".bashrc").exists(),
-        "Demo Explored": (workspace / "yamlr-demo").exists(),
-    }
-    
-    b_table = Table(show_header=False, box=None, padding=(0, 4))
-    b_table.add_column(style="bold white")
-    b_table.add_column()
-    
-    for item, done in checklist.items():
-        status_icon = "[green]✅ Done[/green]" if done else "[red]⭕ Pending[/red]"
-        b_table.add_row(item, status_icon)
-    
-    b_panel = Panel(b_table, title="[bold blue]🚀 Onboarding Checklist[/bold blue]", border_style="blue", padding=(1, 2))
-    console.print(b_panel)
-    
-    # 5. Next Best Action
-    if backup_size > 100 * 1024 * 1024:
-        console.print("\n[yellow]⚠️  Notice:[/yellow] Backup directory is growing large. Consider running cleanup.")
+        q_table.add_row("Daily Quota", "[bold green]Unlimited[/bold green] (Pro Active)")
         
-    if not all(checklist.values()):
-        pending = [k for k, v in checklist.items() if not v]
-        if "Project Initialized" in pending:
-            console.print("\n[bold magenta]🚀 Next Step:[/bold magenta] Run [cyan bold]yamlr init[/cyan bold] to lock in your project standards.")
-        elif "Demo Explored" in pending:
-            console.print("\n[bold magenta]🚀 Next Step:[/bold magenta] Try [cyan bold]yamlr demo[/cyan bold] to safely explore interactive healing.")
-        elif "Shell Autocomplete" in pending:
-            console.print("\n[bold magenta]🚀 Next Step:[/bold magenta] Run [cyan bold]yamlr completion bash --install[/cyan bold] to finish setup.")
+    active_caps = [k.replace("can_", "").replace("_", " ").title() for k, v in caps.__dict__.items() if v and k.startswith("can_")]
+    q_table.add_row("Capabilities", ", ".join(active_caps[:3]) + ("..." if len(active_caps) > 3 else ""))
     
-    console.print("")
-    return 0
+    q_panel = Panel(q_table, title=f"[{BOLD_YELLOW}]💎 License & Quota[/{BOLD_YELLOW}]", border_style="yellow", padding=(1, 2))
+    console.print(q_panel)
+
+def _render_health_benchmarks(console, has_metrics):
+    if has_metrics["total_files"] == 0: return
+    h_table = Table(show_header=True, box=box.SIMPLE_HEAD, header_style=BOLD_YELLOW, expand=True)
+    h_table.add_column("Sub-System"); h_table.add_column("Score", justify="right")
+    h_table.add_row("Lexical Integrity", f"{has_metrics['lexical_has']:.1f}%")
+    h_table.add_row("Schema Compliance", f"{has_metrics['schema_has']:.1f}%")
+    h_table.add_row("Logical Referentiality", f"{has_metrics['semantic_has']:.1f}%")
+    console.print(Panel(h_table, title=f"[{BOLD_YELLOW}]🔬 Health Benchmarks[/{BOLD_YELLOW}]", border_style="yellow"))
+
+def _render_onboarding_and_actions(console, workspace, has_local, b_count, b_size):
+    checklist = {"Config Loaded": has_local, "First Scan": b_count > 0, "Demo Explored": (workspace / "yamlr-demo").exists()}
+    b_table = Table(show_header=False, box=None, padding=(0, 4))
+    for item, done in checklist.items():
+        b_table.add_row(item, "[green]✅[/green]" if done else "[red]⭕[/red]")
+    console.print(Panel(b_table, title="[bold blue]🚀 Onboarding[/bold blue]", border_style="blue"))
+    
+    if b_size > 100 * 1024 * 1024:
+        console.print("\n[yellow]⚠️  Notice:[/yellow] Backup vault is large (>100MB).")
+    if not has_local:
+        console.print("\n[bold magenta]Next Step:[/bold magenta] Run [cyan bold]yamlr init[/cyan bold]")

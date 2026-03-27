@@ -6,12 +6,17 @@ Extracts:
 - volumes[].persistentVolumeClaim.claimName
 """
 
+from __future__ import annotations
 from typing import List
 
 from yamlr.models import ManifestIdentity, Shard
+__all__ = ['VolumeExtractor']
 
 
-class VolumeExtractor:
+
+from .base_extractor import BaseMetadataExtractor
+
+class VolumeExtractor(BaseMetadataExtractor):
     """Extracts PVC references from Pod specs."""
 
     @staticmethod
@@ -25,15 +30,13 @@ class VolumeExtractor:
         """
         Extract PVC name if in volume reference context.
 
-        Note: We don't require 'volumes' in path because it may be
-        replaced by list item keys during iteration.
-
         Returns:
             bool: True if extraction was performed
         """
-        if key == "claimName" and "persistentVolumeClaim" in path_keys:
-            if val and val not in identity.volume_refs:
-                identity.volume_refs.append(val)
-            return True
+        if not shard.is_flow_style and key != "claimName":
+            return False
+
+        if "persistentVolumeClaim" in path_keys:
+            return VolumeExtractor._apply_list_extraction(shard, key, val, identity, "volume_refs")
 
         return False

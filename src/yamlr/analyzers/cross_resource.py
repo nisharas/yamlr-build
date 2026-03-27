@@ -8,18 +8,27 @@ Author: Nishar A Sunkesala / Yamlr Team
 Date: 2026-02-13
 """
 
+from __future__ import annotations
+
 import logging
-from typing import List
+from typing import TYPE_CHECKING, List, Optional
+
+if TYPE_CHECKING:
+    from yamlr.core.resource_graph import ResourceGraph
 
 from yamlr.analyzers.base import AnalysisResult, BaseAnalyzer
+from yamlr.analyzers.detectors.config import detect_broken_refs, detect_orphan_configs
+from yamlr.analyzers.detectors.storage import CrossDomainDetectors, detect_broken_volumes
+from yamlr.analyzers.detectors.traffic import detect_ghost_services
+from yamlr.analyzers.network_logic import NetworkDetectors
 from yamlr.analyzers.registry import register_analyzer
 from yamlr.analyzers.rules import Rules
 from yamlr.core.bridge import YamlrBridge
 from yamlr.models import ManifestIdentity
-from yamlr.analyzers.detectors import CrossResourceDetectors
-from yamlr.analyzers.network_logic import NetworkDetectors
 
 logger = logging.getLogger("yamlr.analyzer.cross_resource")
+__all__ = ['CrossResourceAnalyzer']
+
 
 @register_analyzer
 class CrossResourceAnalyzer(BaseAnalyzer):
@@ -28,9 +37,9 @@ class CrossResourceAnalyzer(BaseAnalyzer):
     """
 
     def __init__(self, pro_mode: bool = False):
-        """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
+        """Initializes the cross-resource analyzer.
+        
+        Why: Sets the licensing mode to determine which detection layers to activate.
         """
         self.pro_mode = pro_mode or YamlrBridge.is_pro_enabled()
 
@@ -40,40 +49,77 @@ class CrossResourceAnalyzer(BaseAnalyzer):
     @property
     def analyzer_type(self) -> str: return "batch"
 
-    def analyze(self, identities: List[ManifestIdentity]) -> List[AnalysisResult]:
+    def analyze(self, identities: List[ManifestIdentity], graph: Optional["ResourceGraph"] = None) -> List[AnalysisResult]:
         """Performs comprehensive cross-resource analysis."""
         results: List[AnalysisResult] = []
+        
 
         # 1. Categorize Identities
         services = [i for i in identities if i.kind == "Service"]
-        workloads = [i for i in identities if i.kind in ("Deployment", "StatefulSet", "DaemonSet", "Pod")]
+        workloads = [i for i in identities if i.kind in ("Deployment", "StatefulSet", "DaemonSet", "Job", "CronJob", "Pod")]
         configs = [i for i in identities if i.kind in ("ConfigMap", "Secret")]
-        pvcs = [i for i in identities if i.kind == "PersistentVolumeClaim"]
         ingresses = [i for i in identities if i.kind == "Ingress"]
+        pvs = [i for i in identities if i.kind == "PersistentVolume"]
+        pvcs = [i for i in identities if i.kind == "PersistentVolumeClaim"]
+        netpols = [i for i in identities if i.kind == "NetworkPolicy"]
+        cloud_resources = [i for i in identities if i.api_version and i.api_version.startswith("terraform")]
 
         # 2. Execute Detection Layers
-        ghosts = CrossResourceDetectors.detect_ghost_services(services, workloads, self.pro_mode)
-        orphans = CrossResourceDetectors.detect_orphan_configs(configs, workloads)
-        broken_refs = CrossResourceDetectors.detect_broken_refs(workloads, configs)
-        broken_vols = CrossResourceDetectors.detect_broken_volumes(workloads, pvcs)
+        ghosts = detect_ghost_services(services, workloads, self.pro_mode, graph=graph)
+        orphans = detect_orphan_configs(configs, workloads)
+        broken_refs = detect_broken_refs(workloads + configs, graph=graph)
+        broken_vols = detect_broken_volumes(workloads, pvcs)
         port_mismatches = NetworkDetectors.validate_service_ports(services, workloads)
         ingress_issues = NetworkDetectors.validate_ingress_backends(ingresses, services)
+        netpol_ghosts = NetworkDetectors.validate_network_policies(netpols, workloads)
+        cloud_refs = CrossDomainDetectors.detect_broken_cloud_refs(pvs, cloud_resources)
+        credential_links = CrossDomainDetectors.detect_broken_credential_links(configs, cloud_resources)
 
         # 3. Consolidate Results
         self._map_ghosts(ghosts, results)
         self._map_ports(port_mismatches, results)
         self._map_ingress(ingress_issues, results)
+        self._map_network_policies(netpol_ghosts, results)
         self._map_orphans(orphans, results)
         self._map_volumes(broken_vols, results)
         self._map_broken_refs(broken_refs, results)
+        self._map_cloud_refs(cloud_refs, results)
+        self._map_credential_links(credential_links, results)
 
         return results
 
+    def _map_cloud_refs(self, findings, results):
+        """Maps broken cloud storage references."""
+        for f in findings:
+            results.append(AnalysisResult(
+                analyzer_name=self.name,
+                severity="ERROR",
+                message=f"Broken Cloud Link: volume-id '{f['volume_id']}' not found in Terraform.",
+                resource_name=f["name"],
+                resource_kind="PersistentVolume",
+                file_path=f.get("file_path", "unknown"),
+                suggestion="Update the PersistentVolume to match the current Terraform volume-id or ARN.",
+                rationale="PersistentVolumes must map to existing Cloud storage identifiers for successful mounting.",
+                rule_id=Rules.CLOUD_BROKEN
+            ))
+
+    def _map_credential_links(self, findings, results):
+        """Maps broken cloud credential links."""
+        for f in findings:
+            results.append(AnalysisResult(
+                analyzer_name=self.name,
+                severity="WARNING",
+                message=f"Possible Orphan Secret: No matching Database resource found in Terraform for '{f['name']}'.",
+                resource_name=f["name"],
+                resource_kind="Secret",
+                file_path=f.get("file_path", "unknown"),
+                suggestion="Verify if this Secret is still required or if the referenced Database was renamed/removed.",
+                rationale="Secrets that appear to hold Cloud credentials but have no corresponding Cloud resource may be outdated.",
+                rule_id=Rules.CLOUD_BROKEN
+            ))
+
     def _map_ghosts(self, findings, results):
-        """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
-        """
+        """Maps Service ghosts (no matching Pods)."""
         for f in findings:
             results.append(AnalysisResult(
                 analyzer_name=self.name,
@@ -83,15 +129,15 @@ class CrossResourceAnalyzer(BaseAnalyzer):
                 resource_kind="Service",
                 file_path=f.get("file_path", "unknown"),
                 suggestion=f.get("hint"),
-                rationale="Services without matching Pods are 'Ghosts' and cause traffic to blackhole.",
+                rationale="Services without matching Pods are 'Ghosts'. They exist in the API but have no backend to receive traffic.",
+                external_url="https://kubernetes.io/docs/concepts/services-networking/service/",
+                impact_description="Traffic routed to this Service will have no destination, leading to 'No endpoints available' errors for clients.",
+                risk_level="MEDIUM",
                 rule_id=Rules.GHOST_SERVICE
             ))
 
     def _map_ports(self, findings, results):
-        """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
-        """
+        """Maps Service/Pod port mismatches."""
         for f in findings:
             results.append(AnalysisResult(
                 analyzer_name=self.name,
@@ -101,14 +147,17 @@ class CrossResourceAnalyzer(BaseAnalyzer):
                 resource_kind="Service",
                 file_path=f.get("file_path", "unknown"),
                 suggestion=f["fix"],
-                rationale="Mismatched port names/numbers prevent Services from routing to container processes.",
+                rationale="A Service targetPort must match a containerPort in the Pod. If they mismatch, the Kube-Proxy cannot route traffic to the container process.",
+                external_url="https://kubernetes.io/docs/concepts/services-networking/service/#multi-port-services",
+                impact_description="Traffic will reach the Node but fail to reach the Application. This results in 503 Service Unavailable or Connection Refused errors.",
+                risk_level="HIGH",
                 rule_id=Rules.PORT_MISMATCH
             ))
 
     def _map_ingress(self, findings, results):
-        """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
+        """Maps Ingress backend violations to analysis results.
+        
+        Why: To provide actionable remediation for broken external access points.
         """
         for f in findings:
             results.append(AnalysisResult(
@@ -120,13 +169,14 @@ class CrossResourceAnalyzer(BaseAnalyzer):
                 file_path=f.get("file_path", "unknown"),
                 suggestion=f["fix"],
                 rationale="Ingress backends must point to valid Service names and ports for external access.",
+                external_url="https://kubernetes.io/docs/concepts/services-networking/ingress/",
                 rule_id=Rules.INGRESS_BROKEN
             ))
 
     def _map_orphans(self, findings, results):
-        """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
+        """Maps orphan ConfigMaps and Secrets to analysis results.
+        
+        Why: To highlight unused security-sensitive resources for cleanup.
         """
         for f in findings:
             results.append(AnalysisResult(
@@ -142,9 +192,9 @@ class CrossResourceAnalyzer(BaseAnalyzer):
             ))
 
     def _map_volumes(self, findings, results):
-        """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
+        """Maps broken Volume/PVC references to analysis results.
+        
+        Why: To prevent Pod mount failures and crash loops.
         """
         for f in findings:
             results.append(AnalysisResult(
@@ -160,10 +210,7 @@ class CrossResourceAnalyzer(BaseAnalyzer):
             ))
 
     def _map_broken_refs(self, findings, results):
-        """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
-        """
+        """Maps broken ConfigMap/Secret references."""
         for f in findings:
             results.append(AnalysisResult(
                 analyzer_name=self.name,
@@ -173,8 +220,29 @@ class CrossResourceAnalyzer(BaseAnalyzer):
                 resource_kind=f["resource_kind"],
                 file_path=f.get("file_path", "unknown"),
                 suggestion=f.get("suggestion"),
-                rationale="Broken ConfigMap/Secret references prevent Pods from obtaining required environment variables or files.",
+                rationale="Kubernetes requires all referenced ConfigMaps and Secrets to exist before a Pod can start. If they are missing, the Pod remains in 'CreateContainerConfigError' or 'CrashLoopBackOff'.",
+                external_url="https://kubernetes.io/docs/concepts/configuration/secret/",
+                impact_description="The dependent workload will fail to start. This blocks deployments and can cause downtime if the missing resource is critical for application bootstrap.",
+                risk_level="HIGH",
                 rule_id=Rules.BROKEN_REFERENCE
+            ))
+
+    def _map_network_policies(self, findings, results):
+        """Maps Ghost NetworkPolicies (matching zero workloads)."""
+        for f in findings:
+            results.append(AnalysisResult(
+                analyzer_name=self.name,
+                severity="WARNING",
+                message=f["message"],
+                resource_name=f["name"],
+                resource_kind="NetworkPolicy",
+                file_path=f.get("file_path", "unknown"),
+                suggestion=f.get("hint"),
+                rationale="NetworkPolicies that match zero workloads are effectively dead code, but they can cause unexpected 'Silent Drop' behavior if a workload is later added without the correct labels.",
+                external_url="https://kubernetes.io/docs/concepts/services-networking/network-policies/",
+                impact_description="The policy provides no protection for any existing workloads. If the intention was to secure a specific app, that app remains unprotected.",
+                risk_level="MEDIUM",
+                rule_id=Rules.GHOST_NETWORK_POLICY
             ))
 
 # Backward compatibility alias

@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-543
+  labels:
+    app: ms-543
+    dependency: ms-544
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-543
+  template:
+    metadata:
+      labels:
+        app: ms-543
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-544

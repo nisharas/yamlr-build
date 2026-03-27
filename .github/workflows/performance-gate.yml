@@ -1,0 +1,32 @@
+name: Performance Budget Gate
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  check-latency:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install rich
+          # Note: We don't install yamlr here because we run from source for the budget gate
+          # to ensure the engineering-level latency is tracked correctly.
+
+      - name: Run Performance Gate
+        env:
+          PYTHONPATH: src
+          PYTHONUTF8: 1
+          YAMLR_QUIET: true
+        run: python scripts/performance_gate.py

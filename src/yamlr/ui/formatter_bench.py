@@ -5,14 +5,16 @@ Yamlr BENCHMARK MIXIN
 Renders scientific benchmark reports with Multi-dimensional HAS tracking.
 """
 
+from __future__ import annotations
 from rich.table import Table
 from rich.panel import Panel
-from rich.console import Console
 from typing import Dict, Any
 
 from yamlr.cli.commands.base import get_console
 
 console = get_console()
+__all__ = ['BenchMixin']
+
 
 class BenchMixin:
     """
@@ -20,22 +22,24 @@ class BenchMixin:
     """
     
     def print_header(self, text: str):
-        """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
+        """Prints a bold header.
+        
+        Why: Maintains visual hierarchy in benchmark reports.
         """
         console.print(f"\n[bold cyan]{text}[/bold cyan]")
 
     def print_info(self, text: str):
-        """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
+        """Prints dimmed information text.
+        
+        Why: Provides non-critical context without distracting from core HAS metrics.
         """
         console.print(f"[dim]{text}[/dim]")
 
     def print_benchmark_report(self, report: Dict[str, Any]):
-        """
-        Renders the scientific assessment dashboard.
+        """Renders the scientific assessment dashboard.
+        
+        Why: Primary visualization for enterprise-grade performance validation, 
+             enabling proof of 'Healing Accuracy Score' (HAS) at scale.
         """
         # 1. Overall HAS Panel
         overall_has = report.get("overall_has", 0.0)

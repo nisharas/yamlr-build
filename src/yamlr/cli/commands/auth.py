@@ -3,27 +3,25 @@ Yamlr CLI: Auth Command Handler
 ------------------------------
 Handles 'yamlr auth' subcommands: login, logout, status.
 """
+from __future__ import annotations
+__all__ = ['handle_auth_command']
+
 
 
 def handle_auth_command(args, console):
-    """
-    Executes authentication workflows.
-    """
+    """Manages Yamlr Enterprise (Pro) authentication."""
     try:
         from yamlr.pro.auth import auth_device
     except ImportError:
         console.print(
             "[bold red]Error:[/bold red] Authentication features are not available in this build."
         )
-        console.print("Please upgrade to Yamlr Enterprise.")
+        console.print("Please upgrade to Yamlr Enterprise (Pro).")
         return 1
 
     action = getattr(args, "auth_action", "status") or "status"
 
     if action == "login":
-        console.print("[bold cyan]🔐 Yamlr Enterprise Login[/bold cyan]")
-        console.print("Initiating device authentication flow...")
-
         if auth_device.login():
             console.print(
                 "\n[bold green]Success![/bold green] You are now authenticated."

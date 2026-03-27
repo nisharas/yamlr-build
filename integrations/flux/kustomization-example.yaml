@@ -1,0 +1,59 @@
+# Flux Kustomization with Yamlr Remediation
+# ----------------------------------------
+# This example shows how to use Yamlr to auto-heal Flux-managed manifests
+# using a post-render remediation pattern.
+
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: podinfo
+  namespace: flux-system
+spec:
+  interval: 5m
+  path: "./kustomize"
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: podinfo
+  # Flux doesn't have a native post-render for Kustomization yet, 
+  # so we use a sidecar pattern or a specialized "YamlrKustomization"
+  # if we were to build a controller.
+  #
+  # For existing Flux, the 'Supplier of Truth' strategy recommends 
+  # using Yamlr as a CI gate OR using the CLI in a Custom Task.
+  
+  # STRATEGY A: Post-Render (for HelmRelease)
+  # This is the most native way to integrate today.
+  
+---
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: podinfo
+  namespace: default
+spec:
+  interval: 5m
+  chart:
+    spec:
+      chart: podinfo
+      version: ">=5.0.0"
+      sourceRef:
+        kind: HelmRepository
+        name: podinfo
+        namespace: flux-system
+  # THE Remediator
+  postRenderers:
+    - kustomize:
+        patches:
+          - patch: |
+              # This patch doesn't actually change anything, it's just to 
+              # trigger the post-renderer script if configured in the controller.
+              apiVersion: apps/v1
+              kind: Deployment
+              metadata:
+                name: podinfo
+              spec:
+                template:
+                  metadata:
+                    annotations:
+                      yamlr.dev/healed: "true"

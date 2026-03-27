@@ -1,0 +1,57 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: app-a
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: app-a
+  labels:
+    app: backend
+    app.kubernetes.io/name: my-app
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+      - name: main
+        image: nginx:latest # Violation: latest tag (HYGIENE)
+        securityContext:
+          privileged: true # Violation: privileged (SECURITY)
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-svc
+  namespace: app-a
+spec:
+  selector:
+    app: backend
+  ports:
+  - port: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: backend-ingress
+  namespace: app-a
+spec:
+  rules:
+  - host: app-a.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: backend-svc
+            port:
+              number: 80

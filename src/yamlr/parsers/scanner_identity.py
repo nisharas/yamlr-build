@@ -14,12 +14,15 @@ Author: Nishar A Sunkesala / Yamlr Team
 Date: 2026-02-17
 """
 
+from __future__ import annotations
 import logging
-from typing import Any, Dict, List, Optional, Tuple
+from typing import List
 
 from yamlr.models import ManifestIdentity
 
 logger = logging.getLogger("yamlr.scanner")
+__all__ = ['IdentityMixin']
+
 
 
 class IdentityMixin:
@@ -53,8 +56,9 @@ class IdentityMixin:
 
         # Only store if we found at least a hint of identity.
         if self._current_identity.kind or self._current_identity.api_version:
-            self._current_identity.doc_index = self._doc_index
+            # Stage 3: Audit captured Identity DNA
             self.identities.append(self._current_identity)
+            logger.debug(f"[SCANNER] Flushed {self._current_identity.api_version}/{self._current_identity.kind}")
 
         # Volatile Reset: Prepare for the next potential manifest.
         self._current_identity = ManifestIdentity()
@@ -142,7 +146,10 @@ class IdentityMixin:
         performs a manual UAT review of the manifest. This prevents
         accidental application of the wrong resource type to the cluster.
         """
-        msg = f"Doc {self._doc_index}: IDENTITY_COLLISION! Multiple '{key}' markers at indent {depth}."
+        # [ROUND-10] Enhanced debug: log all candidate values to reveal why they collided
+        instances = self._sovereign_candidates.get(key, [])
+        vals = [f"'{i[1]}'@L{i[2]}" for i in instances if i[0] == depth]
+        msg = f"Doc {self._doc_index}: IDENTITY_COLLISION! Multiple '{key}' markers at indent {depth}: {', '.join(vals)}"
         logger.error(msg)
         self.scan_logs.append(msg)
 

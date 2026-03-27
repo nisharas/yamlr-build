@@ -43,7 +43,8 @@ spec:
 """
 
 def generate():
-    corpus_dir = Path("tests/corpus/toxic")
+    root_dir = Path(__file__).parent.parent.resolve()
+    corpus_dir = root_dir / "tests/corpus/toxic"
     corpus_dir.mkdir(parents=True, exist_ok=True)
     
     lines = BASE_YAML.strip().split("\n")

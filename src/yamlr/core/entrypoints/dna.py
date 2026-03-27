@@ -6,6 +6,7 @@ Calculates or verifies the SHA-256 Semantic DNA of a manifest.
 Used for mathematical trust and drift detection.
 """
 
+from __future__ import annotations
 import sys
 import logging
 from pathlib import Path
@@ -13,6 +14,8 @@ from yamlr.core.context import HealContext
 from yamlr.core.license_manager import LicenseManager
 
 logger = logging.getLogger("yamlr.core.entrypoints.dna")
+__all__ = ['handle_dna_command']
+
 
 def handle_dna_command(args, engine, console):
     """
@@ -32,11 +35,13 @@ def handle_dna_command(args, engine, console):
 
     try:
         status, _ = LicenseManager.check_pro_status()
-        if not status.is_usable():
+        capabilities = LicenseManager.resolve_capabilities()
+        
+        if not status.is_usable() or not capabilities.can_verify_dna:
             LicenseManager.notify_pro_required("Semantic DNA Pipeline")
             return 1
             
-        from yamlr.pro.shield import calculate_semantic_dna
+        from yamlr.core.dna_utils import calculate_semantic_dna
 
         # Load and Reconstruction logic (Simplified for DNA)
         with open(file_path, 'r', encoding='utf-8') as f:
@@ -67,7 +72,7 @@ def handle_dna_command(args, engine, console):
                 console.print(f"[green]✅ DNA Verified: {current_dna}[/green]")
                 return 0
             else:
-                console.print(f"[red]❌ DNA Mismatch![/red]")
+                console.print("[red]❌ DNA Mismatch![/red]")
                 console.print(f"  Expected: {args.expected_hash}")
                 console.print(f"  Actual:   {current_dna}")
                 return 1
@@ -75,11 +80,11 @@ def handle_dna_command(args, engine, console):
         # Mode: Generate
         if getattr(args, "output", "text") == "json":
             import json
-            print(json.dumps({"path": str(file_path), "dna": current_dna}, indent=2))
+            sys.stdout.write(json.dumps({"path": str(file_path), "dna": current_dna}, indent=2) + "\n")
         else:
-            console.print(f"\n[bold cyan]🧬 Semantic DNA (SHA-256):[/bold cyan]")
+            console.print("\n[bold cyan]🧬 Semantic DNA (SHA-256):[/bold cyan]")
             console.print(f"[bold white]{current_dna}[/bold white]")
-            console.print(f"[dim]Generated from stabilized semantic structure (ignores formatting/comments).[/dim]\n")
+            console.print("[dim]Generated from stabilized semantic structure (ignores formatting/comments).[/dim]\n")
         
         return 0
 

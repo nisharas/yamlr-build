@@ -2,29 +2,31 @@
 """
 Yamlr LICENSE MANAGER
 ---------------------
-Handles validation and notifications for Yamlr Enterprise licenses.
+Handles validation and notifications for Yamlr Enterprise (Pro) licenses.
 
 Author: Nishar A Sunkesala / Yamlr Team
 Date: 2026-02-13
 """
 
+from __future__ import annotations
 import importlib.util
 import logging
-import os
-import sys
 from enum import Enum
 from pathlib import Path
-from typing import Dict, Optional, Tuple, Any
-from rich.console import Console
-from rich.panel import Panel
+from typing import Tuple, Any
+from yamlr.core.entrypoints.base import get_console
 
 logger = logging.getLogger("yamlr.license")
-console = Console()
+ERR_NOT_INSTALLED = "Yamlr Pro extension not found."
+
+__all__ = ["ProStatus", "LicenseManager"]
 
 class ProStatus(Enum):
-    """
-    Why: Internal documentation policy compliance.
-    What: Auto-generated summary.
+    """Enumeration of possible Pro license states.
+
+    Why: To provide a deterministic way to handle license transitions
+         and UI notifications throughout the engine, ensuring 
+         graceful degradation when Pro features are unavailable.
     """
     NOT_INSTALLED = "not_installed"
     VALID = "valid"
@@ -36,21 +38,23 @@ class ProStatus(Enum):
     INSTALLATION_CORRUPT = "corrupt"
 
     def is_usable(self) -> bool:
-        """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
+        """Checks if the current status permits feature execution.
+
+        Why: To centralize the 'Go/No-Go' logic for Pro features, including
+             allowing execution during intermittent network failures for reliability.
         """
         return self in {ProStatus.VALID, ProStatus.TRIAL_ACTIVE, ProStatus.NETWORK_ERROR}
 
     def requires_user_action(self) -> bool:
-        """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
+        """Checks if the user needs to manually resolve a license issue.
+
+        Why: To drive UI logic that determines when to show modal alerts 
+             vs. subtle background notifications.
         """
         return self in {ProStatus.TRIAL_EXPIRED, ProStatus.LICENSE_EXPIRED, ProStatus.LICENSE_INVALID}
 
 class LicenseManager:
-    """Manages the state and UI for Yamlr Enterprise licensing."""
+    """Manages the state and UI for Yamlr Enterprise (Pro) licensing."""
 
     @staticmethod
     def check_pro_status() -> Tuple[ProStatus, str]:
@@ -59,12 +63,12 @@ class LicenseManager:
             # Tier 1: Installation Check
             pro_spec = importlib.util.find_spec("yamlr.pro")
             if pro_spec is None:
-                return ProStatus.NOT_INSTALLED, "Yamlr Enterprise not installed."
+                return ProStatus.NOT_INSTALLED, ERR_NOT_INSTALLED
 
             # [Hardening] Verify it's not just a ghost directory
             pro_path = Path(pro_spec.origin).parent if pro_spec.origin else None
             if pro_path and not (pro_path / "license.py").exists() and not (pro_path / "__init__.py").exists():
-                 return ProStatus.NOT_INSTALLED, "Yamlr Enterprise not installed."
+                 return ProStatus.NOT_INSTALLED, ERR_NOT_INSTALLED
 
             # Tier 2: Module Integrity
             try:
@@ -72,7 +76,7 @@ class LicenseManager:
                 if not hasattr(pro_license, "validate"):
                     return ProStatus.INSTALLATION_CORRUPT, "Yamlr installation incomplete."
             except ImportError:
-                return ProStatus.NOT_INSTALLED, "Yamlr Enterprise not installed."
+                return ProStatus.NOT_INSTALLED, ERR_NOT_INSTALLED
 
             # Tier 3: License Validation
             is_valid, reason = pro_license.validate()
@@ -87,41 +91,66 @@ class LicenseManager:
             if "network" in reason_lower or "offline" in reason_lower: return ProStatus.NETWORK_ERROR, reason
             return ProStatus.LICENSE_INVALID, reason
 
-        except Exception as e:
+        except (ImportError, AttributeError, OSError) as e:
             logger.debug(f"Pro detection failsafe: {e}")
             return ProStatus.NOT_INSTALLED, "OSS Mode"
 
     @staticmethod
+    def resolve_capabilities() -> Any:
+        """Resolves the set of active capabilities based on license status."""
+        from yamlr.models import PipelineCapabilities
+        status, _ = LicenseManager.check_pro_status()
+        is_usable = status.is_usable()
+        
+        return PipelineCapabilities(
+            can_heal_cross_resource=is_usable,
+            can_use_sovereign_sorting=is_usable,
+            can_use_rust_acceleration=True, # Available to all
+            can_generate_evidence=is_usable,
+            can_verify_dna=is_usable,
+            can_run_mcp=is_usable,
+            can_auto_detect_version=is_usable,
+            has_unlimited_quota=is_usable
+        )
+
+    @staticmethod
     def notify_pro_required(feature_name: str):
+        """Displays a panel explaining that a feature requires Pro.
+
+        Why: To provide a high-conversion, non-intrusive path for users 
+             to discover and upgrade to Yamlr Enterprise (Pro).
         """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
-        """
+        from rich.panel import Panel
         message = [
-            f"[bold yellow]✨ {feature_name} is a Pro Feature[/bold yellow]",
-            "", "This feature requires the [bold]Yamlr Enterprise[/bold] extension.", "",
+            "[bold yellow]Yamlr Pro Required[/bold yellow]",
+            f"[yellow]✨ {feature_name} is a Pro Feature[/yellow]",
+            "", "This feature requires the [bold]Yamlr Enterprise (Pro)[/bold] extension.", "",
             "Visit [cyan]https://yamlr.dev[/cyan] to:",
             "  • Start a 30-day free trial", "  • View enterprise pricing", "  • Request a demo", "",
             "[dim]Yamlr OSS continues to provide core healing features.[/dim]",
         ]
-        console.print(Panel("\n".join(message), border_style="yellow", expand=False, padding=(1, 2)))
+        get_console().print(Panel("\n".join(message), border_style="yellow", expand=False, padding=(1, 2)))
 
     @staticmethod
     def notify_status(status: ProStatus, message: str):
+        """Notifies the user about their current Pro license status.
+
+        Why: To maintain transparency about license health and ensure 
+             users are aware of upcoming renewals or expirations.
         """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
-        """
+        from rich.panel import Panel
         if status == ProStatus.TRIAL_ACTIVE:
-            console.print(f"[yellow]ℹ️  {message}[/yellow]", style="dim")
+            get_console().print(f"[yellow]ℹ️  {message}[/yellow]", style="dim")
         elif status.requires_user_action():
-            console.print(Panel(f"[bold red]License Issue[/bold red]\n\n{message}", border_style="red", expand=False))
+            get_console().print(Panel(f"[bold red]License Issue[/bold red]\n\n{message}", border_style="red", expand=False))
 
     @staticmethod
     def notify_quota_exceeded(message: str):
         """Displays a specific panel when the healing quota is reached."""
-        console.print("")
-        console.print(Panel(
+        from rich.panel import Panel
+        con = get_console()
+        con.print("")
+        con.print(Panel(
             f"[bold red]Free Tier Healing Limit Reached[/bold red]\n\n{message}\n\n"
             "Yamlr provides unlimited read-only `scan` auditing for free forever.\n"
             "However, [bold cyan]remediation and fixing[/bold cyan] require a Pro tier license.\n\n"
@@ -139,95 +168,34 @@ class LicenseManager:
         return base_dir / "quota.json"
 
     @staticmethod
+    def _get_quota_signature(usage: int, date_str: str) -> str:
+        """Derives a machine-specific signature for the quota file.
+        
+        Why: To prevent simple manual tampering with the local quota file 
+             in the Free tier (monetization integrity).
+        """
+        import platform
+        import hashlib
+        import uuid
+        machine_id = str(uuid.getnode())
+        node = platform.node()
+        data = f"{usage}:{date_str}:{machine_id}:{node}"
+        return hashlib.sha256(data.encode()).hexdigest()
+
+    @staticmethod
     def is_healing_allowed(files_requested: int) -> Tuple[bool, int, str]:
-        """
-        Only checks if healing is permitted based on current quota.
-        Does NOT record usage.
-        """
-        import json
-        from datetime import date
-        
-        status, _ = LicenseManager.check_pro_status()
-        if status.is_usable():
-            return True, -1, ""  # Pro users have no limits
-
-        FREE_DAILY_LIMIT = 5
-        
-        if files_requested > FREE_DAILY_LIMIT:
-             return False, 0, f"Batch healing is limited to {FREE_DAILY_LIMIT} files per run on the Free tier."
-
-        quota_path = LicenseManager.get_quota_path()
-        today_str = date.today().isoformat()
-        
-        current_usage = 0
-        last_date = ""
-        
-        if quota_path.exists():
-            try:
-                with open(quota_path, 'r') as f:
-                    data = json.load(f)
-                    last_date = data.get("date", "")
-                    current_usage = data.get("usage", 0)
-            except Exception:
-                pass
-
-        if last_date != today_str:
-            current_usage = 0  # Reset for a new day
-
-        if current_usage + files_requested > FREE_DAILY_LIMIT:
-            remaining = max(0, FREE_DAILY_LIMIT - current_usage)
-            return False, remaining, f"Daily free healing limit reached ({FREE_DAILY_LIMIT} files/day). You have {remaining} file(s) remaining today."
-
-        return True, FREE_DAILY_LIMIT - current_usage, ""
+        """Delegates to UsageLimiter for free-tier check."""
+        from yamlr.core.pro.usage_limiter import UsageLimiter
+        return UsageLimiter.is_healing_allowed(files_requested)
 
     @staticmethod
     def record_healing_usage(files_count: int):
-        """
-        Persists the usage of the free tier quota.
-        Only call this if is_healing_allowed was True and healing succeeded.
-        """
-        import json
-        from datetime import date
-        
-        status, _ = LicenseManager.check_pro_status()
-        if status.is_usable():
-             return
-
-        quota_path = LicenseManager.get_quota_path()
-        today_str = date.today().isoformat()
-        
-        current_usage = 0
-        last_date = ""
-        
-        if quota_path.exists():
-            try:
-                with open(quota_path, 'r') as f:
-                    data = json.load(f)
-                    last_date = data.get("date", "")
-                    current_usage = data.get("usage", 0)
-            except Exception:
-                pass
-
-        if last_date != today_str:
-            current_usage = 0
-
-        new_usage = current_usage + files_count
-        try:
-             with open(quota_path, 'w') as f:
-                  json.dump({"date": today_str, "usage": new_usage}, f)
-        except Exception as e:
-             logger.warning(f"Failed to update quota file: {e}")
+        """Delegates to UsageLimiter."""
+        from yamlr.core.pro.usage_limiter import UsageLimiter
+        UsageLimiter.record_healing_usage(files_count)
 
     @staticmethod
     def check_healing_quota(files_requested: int) -> Tuple[bool, int, str]:
-        """
-        Legacy wrapper that checks and records in one go.
-        Used by batch_heal to maintain backward compatibility.
-        """
-        allowed, remaining, msg = LicenseManager.is_healing_allowed(files_requested)
-        if allowed:
-            LicenseManager.record_healing_usage(files_requested)
-            # Recalculate remaining after recording
-            new_remaining = remaining - files_requested if remaining != -1 else -1
-            return True, new_remaining, ""
-        return False, remaining, msg
+        """Legacy wrapper for batch_heal."""
+        from yamlr.core.pro.usage_limiter import UsageLimiter
+        return UsageLimiter.check_healing_quota(files_requested)

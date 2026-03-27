@@ -1,6 +1,8 @@
+from __future__ import annotations
 import os
-import sys
 from pathlib import Path
+__all__ = ['handle_evidence_command']
+
 
 def handle_evidence_command(args, console) -> int:
     """
@@ -11,7 +13,7 @@ def handle_evidence_command(args, console) -> int:
 
     # Pro-Gate the command
     if YamlrBridge.get_identity() != "PRO":
-        console.print("[bold red]❌ The 'evidence' aggregation command requires Yamlr Enterprise.[/bold red]")
+        console.print("[bold red]❌ The 'evidence' aggregation command requires Yamlr Enterprise (Pro).[/bold red]")
         console.print("Visit [cyan]https://yamlr.dev/pro[/cyan] to upgrade your license.")
         return 1
 
@@ -26,7 +28,7 @@ def handle_evidence_command(args, console) -> int:
     try:
         from yamlr.pro.compliance.aggregator import EvidenceAggregator
     except ImportError:
-         console.print("[bold red]❌ Yamlr Enterprise compliance module missing or corrupted.[/bold red]")
+         console.print("[bold red]❌ Yamlr Enterprise (Pro) compliance module missing or corrupted.[/bold red]")
          return 1
 
     console.print(f"[cyan]🔍 Scanning cryptographic DNA receipts in {evidence_dir}...[/cyan]")
@@ -67,7 +69,7 @@ def handle_evidence_command(args, console) -> int:
             console.print(f"[bold red]❌ Unsupported format:[/bold red] {output_format}")
             return 1
             
-        console.print(f"\n[bold green]✅ Auditor-Ready Export Complete![/bold green]")
+        console.print("\n[bold green]✅ Auditor-Ready Export Complete![/bold green]")
         console.print(f"📄 Report saved to: [cyan]{output_file}[/cyan]")
         
     except ImportError as e:

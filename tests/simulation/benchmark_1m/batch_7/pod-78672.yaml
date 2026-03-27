@@ -1,0 +1,9 @@
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-78672
+spec:
+  containers:
+  - name: app
+    image: nginx

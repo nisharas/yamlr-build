@@ -3,6 +3,7 @@ MANUAL COMMAND - Local Documentation Viewer
 -------------------------------------------
 Renders the full USER_GUIDE.md or specific command manuals directly in the terminal.
 """
+from __future__ import annotations
 import os
 import glob
 from rich.markdown import Markdown
@@ -10,6 +11,8 @@ from rich.table import Table
 from yamlr.core.entrypoints.display import print_custom_header
 from yamlr.core.entrypoints.base import get_console
 from yamlr.core.bridge import YamlrBridge
+__all__ = ['handle_manual_command', 'print_toc']
+
 
 def handle_manual_command(args):
     """
@@ -45,6 +48,9 @@ def handle_manual_command(args):
     # 2. Topic Handling
     target_file = None
     if topic:
+        # Normalize topic name (dashes to underscores) for file matching
+        topic = topic.replace("-", "_")
+        
         # Special Case: config -> CONFIGURATION.md
         if topic == "config":
             config_guide = os.path.join(docs_root, "CONFIGURATION.md")
@@ -99,26 +105,33 @@ def print_toc(console, cli_docs_dir):
 
     table = Table(title="Available Manual Topics", box=None, show_header=True, header_style="bold magenta")
     table.add_column("Topic", style="cyan")
+    table.add_column("Tier", style="dim white")
     table.add_column("Command", style="green")
+
+    # [EPIC-13] Strategic Tiering: Define Pro/Executive commands
+    PRO_COMMANDS = {"secure", "dna", "evidence", "roi", "stats", "audit", "migrate", "graph", "idp_export", "pulse", "mcp"}
 
     # Get all yamlr_*.md files
     files = glob.glob(os.path.join(cli_docs_dir, "yamlr_*.md"))
     topics = []
     for f in sorted(files):
         name = os.path.basename(f).replace("yamlr_", "").replace(".md", "")
-        # Filter out internal/meta files if any
         if name not in ["manual"]: # manual.md is meta
             topics.append(name)
             
-    # Add manual topics that are not in the cli directory
     if "config" not in topics:
         topics.append("config")
     
-    topics.sort()
+    # Tiered Sorting: Free first, then Pro
+    sorted_topics = sorted(
+        topics,
+        key=lambda x: (x in PRO_COMMANDS, x)
+    )
 
     # Grid layout for the TOC
-    for t in topics:
-        table.add_row(t, f"yamlr manual {t}")
+    for t in sorted_topics:
+        tier = "[PRO]" if t in PRO_COMMANDS else "Free"
+        table.add_row(t, tier, f"yamlr manual {t}")
 
     console.print(table)
     console.print("[dim italic]Run 'yamlr manual <topic>' to view the full specification.[/dim italic]\n")

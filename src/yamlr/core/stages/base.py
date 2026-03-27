@@ -9,9 +9,15 @@ Author: Nishar A Sunkesala / Yamlr Team
 Date: 2026-02-13
 """
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
+
 from yamlr.core.context import HealContext
+
+__all__ = ['PipelineStage']
+
 
 class PipelineStage(ABC):
     """
@@ -19,14 +25,14 @@ class PipelineStage(ABC):
     """
 
     def __init__(self, name: str):
-        """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
+        """Initializes the pipeline stage with a descriptive name.
+        
+        Why: To provide clear audit logs and execution path tracking.
         """
         self.name = name
 
     @abstractmethod
-    def run(self, context: HealContext) -> Any:
+    def run(self, context: HealContext) -> Dict[str, Any]:
         """
         Executes the stage logic on the given context.
         

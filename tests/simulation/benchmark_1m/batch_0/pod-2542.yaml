@@ -1,0 +1,9 @@
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-2542
+spec:
+  containers:
+  - name: app
+    image: nginx

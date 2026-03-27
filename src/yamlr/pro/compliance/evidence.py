@@ -5,6 +5,7 @@ Generates DNA-signed JSON receipts for every auto-healed file.
 Ensures cryptographic proof of what Yamlr altered for SOC2/HIPAA compliance pipelines.
 """
 
+from __future__ import annotations
 import os
 import time
 import json
@@ -12,6 +13,8 @@ import hmac
 import hashlib
 from pathlib import Path
 from typing import Dict, Any, List
+__all__ = ['EvidenceEngine']
+
 
 class EvidenceEngine:
     """
@@ -103,5 +106,5 @@ class EvidenceEngine:
             payload_str = json.dumps(payload, separators=(',', ':'), sort_keys=True)
             actual_signature = self._sign_payload(payload_str)
             return hmac.compare_digest(expected_signature, actual_signature)
-        except Exception:
+        except (json.JSONDecodeError, KeyError, AttributeError):
             return False

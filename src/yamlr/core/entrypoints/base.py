@@ -5,27 +5,35 @@ Common logic used across multiple CLI commands.
 (Moved to Core for Public Safety)
 """
 
+from __future__ import annotations
 import platform
 import sys
 import os
+from pathlib import Path
 
-from rich.console import Console, Group
-from rich.panel import Panel
-from rich.table import Table
-from rich.align import Align
-from rich import box
-from rich.text import Text
-
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Union
-
-from yamlr.core.bridge import YamlrBridge
-from yamlr.core.context import HealContext
+# Selective imports for typing only
+from typing import Any, List, Optional, TYPE_CHECKING
+if TYPE_CHECKING:
+    pass
 
 # Global UI Controller
 _console = None
 
-def get_console(plain: bool = False):
+from yamlr.core.entrypoints.cli_options import CliOptions, extract_cli_options
+from yamlr.core.k8s_versions import MATRIX
+
+__all__ = [
+    "get_console", 
+    "set_console",
+    "add_standard_flags", 
+    "CliOptions", 
+    "extract_cli_options", 
+    "validate_required_arg", 
+    "normalize_paths",
+    "verify_stability_consent"
+]
+
+def get_console(plain: bool = False, target_file: Optional[Any] = None):
     """
     Returns a configured Rich console.
     
@@ -34,15 +42,32 @@ def get_console(plain: bool = False):
     """
     global _console
     
+    # [Supplier Pivot] GitOps Stdout Protection
+    # If in quiet mode, Argo CD, or explicit clinical mode, we MUST use stderr 
+    # for UI to keep stdout pure for YAML
+    force_stderr = (
+        "--clinical" in sys.argv or
+        os.getenv("YAMLR_QUIET") == "true" or 
+        os.getenv("ARGOCD_APP_NAME") is not None or 
+        os.getenv("IS_ARGOCD") == "1" or
+        os.getenv("IS_GITOPS") == "1"
+    )
+    if target_file is None:
+        target_file = sys.stderr if force_stderr else sys.stdout
+    
     # If explicitly requested plain, or if we haven't initialized yet
     if plain or _console is None:
+        from rich.console import Console
         from rich import box
         
         # Check environment for NO_COLOR
         no_color = os.getenv("NO_COLOR") is not None
         
         # If redirected to a file, we should be conservative
-        is_terminal = sys.stdout.isatty()
+        try:
+            is_terminal = target_file.isatty()
+        except (AttributeError, ValueError):
+            is_terminal = False
         
         # Determine box style
         box_style = box.ASCII if plain or not is_terminal else box.ROUNDED
@@ -58,6 +83,7 @@ def get_console(plain: bool = False):
             force_terminal=is_terminal and not plain,
             legacy_windows=False,
             highlight=False,
+            file=target_file,
             color_system=None if plain or no_color else "auto",
             safe_box=plain or not is_terminal
         )
@@ -65,12 +91,17 @@ def get_console(plain: bool = False):
         # Attach box style preference to the console object for mixins to use
         new_console._yamlr_box = box_style
         new_console._yamlr_plain = plain or not is_terminal
+        _console = new_console
         
-        if plain or _console is None:
-            _console = new_console
-            _console._yamlr_quiet = False  # Set later by main.py if arg is present
-            
     return _console
+
+
+def set_console(console: Optional[Any]):
+    """
+    Overrides the global console instance. Useful for testing.
+    """
+    global _console
+    _console = console
 
 
 if platform.system() == "Windows":
@@ -81,14 +112,19 @@ if platform.system() == "Windows":
         if not isinstance(sys.stdout, io.TextIOWrapper) or sys.stdout.encoding.lower() != "utf-8":
             sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", line_buffering=True)
             sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", line_buffering=True)
-    except Exception:
+    except (ImportError, OSError, IOError):
         pass # Fallback to default if wrapping fails
 
 formatter = None  # Lazy loaded to avoid circular imports if needed
 
 # Constants
-CORE_VERSION = "0.1.0-stable"
-CATALOG_VERSION = "k8s-01.31-distilled"
+CATALOG_VERSION = f"k8s-{MATRIX.default_recommended}-distilled"
+
+def __getattr__(name):
+    if name == "CORE_VERSION":
+        from scripts.version_helper import get_version
+        return f"{get_version()}-stable"
+    raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
 
 
 
@@ -101,13 +137,27 @@ def add_standard_flags(sub):
         default=None,
         metavar="VERSION",
         dest="kube_version",
-        help="Target K8s version (e.g., 1.28, v1.31)",
+        help=f"Target K8s version (e.g., 1.28, v{MATRIX.default_recommended})",
     )
     sub.add_argument(
         "path", nargs="*", metavar="TARGET", help="File(s) or directory(s) to process (supports globbing)"
     )
+    sub.add_argument(
+        "--yes", "-y", action="store_true", help="Auto-approve Stability Gate for experimental K8s versions"
+    )
     sub.add_argument("--max-depth", type=int, default=10, help="Limit directory recursion depth (default: 10)")
     sub.add_argument("--ext", default=".yaml,.yml", help="Extensions to process (default: .yaml,.yml)")
+    sub.add_argument(
+        "--log-format",
+        choices=["text", "json"],
+        default="text",
+        help="Structured logging format for SIEM/SRE integration",
+    )
+    sub.add_argument(
+        "--unrestricted",
+        action="store_true",
+        help="Bypass security interlocks (DANGEROUS: use with caution)",
+    )
     sub.add_argument("-h", "--help", action="store_true")
     sub.add_argument(
         "-s",
@@ -126,6 +176,9 @@ def add_standard_flags(sub):
     )
     sub.add_argument(
         "-p", "--plain", action="store_true", help="ASCII-only output (no colors/emojis)"
+    )
+    sub.add_argument(
+        "--clinical", action="store_true", help="[SUPPLIER PIVOT] Force absolutely silent stdout by redirecting UI to stderr"
     )
     sub.add_argument(
         "--identity-mode",
@@ -218,125 +271,53 @@ def add_standard_flags(sub):
         action="store_true",
         help="Explicitly audit for and record deprecated Kubernetes APIs",
     )
-
-
-@dataclass(slots=True)
-class CliOptions:
-    """
-    Standard container for all common CLI options.
-
-    Why: To provide a type-safe, centralized structure for handling flags
-         across scan, heal, and check commands.
-    """
-    targets: List[str] = field(default_factory=list)
-    kube_version: Optional[str] = None
-    max_depth: int = 10
-    extensions: List[str] = field(default_factory=list)
-    concurrency: Optional[int] = None
-    strict: bool = False
-    compact: bool = False
-    identity_mode: str = "infer"
-    summary_only: bool = False
-    verbose: bool = False
-    cpu_limit: str = "500m"
-    mem_limit: str = "512Mi"
-    namespace: str = "default"
-    health_threshold: int = 70
-    enforce_limits: bool = False
-    enforce_probes: bool = False
-    enforce_namespace: bool = False
-    fix_tags: bool = False
-    harden: bool = False
-    fix_refs: bool = False
-    stream_to: Optional[str] = None
-    fail_on: Optional[str] = None
-    check_deprecations: bool = False
-    is_pro: bool = False
-    fast: bool = False
-    plain: bool = False
-    pro_preview: bool = False
-    evidence_dir: Optional[str] = None
-    adapters_dir: Optional[str] = None
-    risk_threshold: Optional[str] = None
-
-
-def extract_cli_options(args, is_pro: bool, console=None) -> CliOptions:
-    """
-    Extracts and normalizes flags from argparse namespace into a CliOptions object.
-
-    Why: To centralize Pro-license gating and flag normalization, ensuring
-         consistent behavior and reducing code duplication in command handlers.
-    """
-    if console is None:
-        console = get_console()
-
-    # 1. Extraction
-    options = CliOptions(
-        targets=args.path if hasattr(args, "path") else [],
-        kube_version=getattr(args, "kube_version", None),
-        max_depth=getattr(args, "max_depth", 10),
-        extensions=[e.strip() for e in getattr(args, "ext", ".yaml,.yml").split(",")],
-        concurrency=getattr(args, "concurrency", None),
-        strict=getattr(args, "strict", False),
-        compact=getattr(args, "compact", False),
-        identity_mode=getattr(args, "identity_mode", "infer"),
-        summary_only=getattr(args, "summary_only", False),
-        verbose=getattr(args, "verbose", False),
-        cpu_limit=getattr(args, "cpu_limit", "500m"),
-        mem_limit=getattr(args, "mem_limit", "512Mi"),
-        namespace=getattr(args, "namespace", "default"),
-        health_threshold=getattr(args, "health_threshold", 70),
-        enforce_limits=getattr(args, "enforce_limits", False),
-        enforce_probes=getattr(args, "enforce_probes", False),
-        enforce_namespace=getattr(args, "enforce_namespace", False),
-        fix_tags=getattr(args, "fix_tags", False),
-        harden=getattr(args, "harden", False),
-        fix_refs=getattr(args, "fix_refs", False),
-        stream_to=getattr(args, "stream_to", None),
-        fail_on=getattr(args, "fail_on", None),
-        check_deprecations=getattr(args, "check_deprecations", False),
-        is_pro=is_pro,
-        fast=getattr(args, "fast", False),
-        plain=getattr(args, "plain", False),
-        pro_preview=getattr(args, "pro_preview", False),
-        evidence_dir=getattr(args, "evidence_dir", None),
-        adapters_dir=getattr(args, "adapters_dir", None),
-        risk_threshold=getattr(args, "risk_threshold", None)
+    sub.add_argument(
+        "--fast",
+        action="store_true",
+        help="[ACCELERATION] Enable lightning-fast scanning via native Rust extension (Pro)",
+    )
+    sub.add_argument(
+        "--sovereign",
+        action="store_true",
+        help="[AESTHETICS] Enable high-fidelity sovereign export with schema-aware sorting (Pro)",
+    )
+    sub.add_argument(
+        "--experimental-rust",
+        "--rust",
+        action="store_true",
+        dest="use_rust",
+        help="[HYBRID] Enable high-performance Rust scanner (experimental)",
+    )
+    sub.add_argument(
+        "--baseline",
+        metavar="PATH",
+        help="Path to baseline file (default: .yamlr-baseline.json). Skips findings already in baseline.",
+    )
+    sub.add_argument(
+        "--pro-preview",
+        action="store_true",
+        help="[SIMULATE] Preview Enterprise-tier fixes in Community edition",
+    )
+    sub.add_argument(
+        "--export",
+        type=str,
+        default=None,
+        metavar="FORMAT:PATH",
+        help="[INTERACTIVE] Export report to external format (e.g. html:report.html, pdf:audit.pdf)",
+    )
+    sub.add_argument(
+        "--timing",
+        action="store_true",
+        help="[PERFORMANCE] Show surgical execution timings and performance breakdown",
+    )
+    sub.add_argument(
+        "--timing-file",
+        type=str,
+        default=None,
+        metavar="FILE",
+        help="[PERFORMANCE] Save performance profiling data to a JSON file",
     )
 
-    # 2. Pro License Gating
-    # If unlicensed, show upgrade panel and zero out Pro features for graceful degradation.
-    # [PRO-12-06] Bypass zero-out if pro-preview is active to allow demo diff generation.
-    pro_flags = {
-        "harden": options.harden,
-        "enforce_limits": options.enforce_limits,
-        "enforce_probes": options.enforce_probes,
-        "fix_tags": options.fix_tags,
-        "enforce_namespace": options.enforce_namespace,
-        "check_deprecations": options.check_deprecations,
-        "fix_refs": options.fix_refs,
-    }
-    
-    active_pro = [k for k, v in pro_flags.items() if v]
-    if active_pro and not is_pro and not options.pro_preview:
-        flag_names = ", ".join(f"--{f.replace('_', '-')}" for f in active_pro)
-        YamlrBridge.notify_pro_required(f"Flags: {flag_names}")
-        console.print(
-            "[dim]Continuing with OSS features only. "
-            "Pro flags have been disabled for this run.[/dim]\n"
-        )
-        # Disable the flags in the options object
-        options.harden = False
-        options.enforce_limits = False
-        options.enforce_probes = False
-        options.fix_tags = False
-        options.enforce_namespace = False
-        options.check_deprecations = False
-        options.fix_refs = False
-        options.evidence_dir = None
-        options.adapters_dir = None
-
-    return options
 
 
 def validate_required_arg(value, arg_name: str, context: str, examples: list):
@@ -348,6 +329,7 @@ def validate_required_arg(value, arg_name: str, context: str, examples: list):
         return True
 
     from rich.align import Align
+    from rich.panel import Panel
     console = get_console()
 
     error_msg = f"[bold red]❌ Missing Required Argument: {arg_name}[/bold red]\n\n"
@@ -372,21 +354,140 @@ def validate_required_arg(value, arg_name: str, context: str, examples: list):
 
 def normalize_paths(raw_paths):
     """
-    Flattens separate path arguments or comma-separated lists into a clean list.
-    Handles both single strings (from argparse) and lists (from nargs="*").
+    Standardizes a list of paths (directories or files) or a single path.
+    Also enforces length limits to prevent DoS via extremely long arguments. [CRITICAL-3]
     """
+    MAX_PATH_LENGTH = 4096
     if not raw_paths:
         return []
 
-    if isinstance(raw_paths, str):
-        raw_paths = [raw_paths]
+    # Handle single path case
+    if isinstance(raw_paths, (str, Path)):
+        raw_paths = [str(raw_paths)]
 
     normalized = []
     for p in raw_paths:
-        for sub in p.split(","):
-            clean = sub.strip()
-            if clean:
-                normalized.append(clean)
+        ps = str(p).strip()
+        if len(ps) > MAX_PATH_LENGTH:
+            from yamlr.core.exceptions import YamlrSecurityError
+            raise YamlrSecurityError(
+                f"CLI argument too long: {len(ps)} bytes (Max: {MAX_PATH_LENGTH})",
+                remediation="Ensure path arguments are reasonably sized and do not contain excessive garbage."
+            )
+        normalized.append(ps)
     return normalized
 
+
+def handle_interactive_export(job_results: List[Any], export_str: str):
+    """Handles the --export FORMAT:PATH flag for interactive reporting.
+    
+    Why: To provide rich HTML/PDF reports for stakeholders and audits.
+    """
+    console = get_console()
+    # Support FORMAT:PATH where PATH might contain a drive colon (e.g. html:d:\report.html)
+    if ":" in export_str:
+        # Check if the first part is a known format
+        parts = export_str.split(":", 1)
+        potential_fmt = parts[0].lower()
+        if potential_fmt in ["html", "pdf", "sarif"]:
+            fmt = potential_fmt
+            path = parts[1]
+        else:
+            # Maybe it's just a path without a format? Or an unknown format.
+            # Default to HTML if it looks like a file path? 
+            # No, requirement is FORMAT:PATH.
+            console.print(f"[red]❌ Unknown export format: {potential_fmt}. Use html: path.html, pdf: path.pdf, or sarif: path.json[/red]")
+            return
+    else:
+        console.print(f"[red]❌ Invalid export format: {export_str}. Use FORMAT:PATH (e.g. html:report.html)[/red]")
+        return
+
+    # Ensure path is absolute for internal consistency
+    path = str(Path(path).absolute())
+    
+    # [DEBUG] Trace path resolution
+    console.print(f"[dim]DEBUG: Exporting to format={fmt}, path={path}[/dim]")
+    from yamlr.pro.exporter import Exporter
+    exporter = Exporter()
+    
+    # Convert results to pure dicts for exporter, ensuring we preserve DNA enriched metrics
+    serializable = []
+    for r in job_results:
+        # job_results can be list of HealFileResult or dicts
+        if hasattr(r, "to_dict"):
+            r_dict = r.to_dict()
+            # Ensure findings are also fully serialized
+            r_dict["findings"] = [f.to_dict() if hasattr(f, "to_dict") else f for f in getattr(r, "findings", [])]
+            serializable.append(r_dict)
+        elif hasattr(r, "__dict__"):
+            # Fallback for dataclasses without to_dict
+            serializable.append(vars(r))
+        elif isinstance(r, dict):
+             serializable.append(r)
+
+    success = False
+    if fmt == "html":
+        success = exporter.export_html(serializable, path)
+    elif fmt == "pdf":
+        success = exporter.export_pdf(serializable, path)
+    elif fmt == "sarif":
+        success = exporter.export_sarif(serializable, path)
+    else:
+        console.print(f"[red]❌ Unsupported export format: {fmt}[/red]")
+        return
+
+    if success:
+        console.print(f"[green]✅ Exported {fmt.upper()} report to: [cyan]{path}[/cyan][/green]")
+    else:
+        console.print(f"[red]❌ Failed to export {fmt.upper()} report to: {path}[/red]")
+
+
+def verify_stability_consent(version: str, args: Any) -> bool:
+    """Verifies user consent for using unstable or experimental K8s versions.
+    
+    Why: To prevent accidental usage of Alpha/Beta catalogs in production 
+         and ensure users are aware when they exit the 'Tested Range'.
+    """
+    from yamlr.core.k8s_versions import is_stable, is_supported, MATRIX
+    import sys
+    
+    if not version:
+        return True
+        
+    # If it's stable AND supported, no consent needed
+    if is_stable(version) and is_supported(version):
+        return True
+        
+    # If it's stable but NOT supported, we still proceed with best-effort 
+    # (The CatalogManager warning will handle this)
+    if is_stable(version):
+        return True
+        
+    # UNSTABLE VERSION detected (Alpha/Beta/RC)
+    console = get_console()
+    
+    # Check for implicit consent (-y / --yes)
+    if getattr(args, "yes", False) or getattr(args, "dry_run", False):
+        return True
+        
+    # Check for interactivity
+    if not sys.stdin.isatty():
+        console.print(f"[yellow]⚠️  Warning: K8s {version} is unstable and outside the tested range.[/yellow]")
+        console.print("[dim]Proceeding in non-interactive mode. Use --yes to suppress this warning.[/dim]")
+        return True
+        
+    # INTERACTIVE PROMPT
+    console.print("\n[bold yellow]🧪 EXPERIMENTAL VERSION DETECTED[/bold yellow]")
+    console.print(f"Kubernetes [cyan]{version}[/cyan] is an unstable release (Alpha/Beta/RC).")
+    console.print(f"Yamlr's tested range is [green]{MATRIX.min_supported}–{MATRIX.max_supported}[/green].")
+    
+    try:
+        response = input(f"\nDo you want to proceed with {version}? [y/N]: ").strip().lower()
+        if response == 'y':
+            return True
+    except EOFError:
+        return True
+        
+    console.print("[red]Aborted by user.[/red]")
+    return False
 

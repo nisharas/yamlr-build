@@ -15,115 +15,144 @@ Architecture:
 Author: Nishar A Sunkesala / Yamlr Team
 Date: 2026-02-28
 """
+from __future__ import annotations
 from rich.table import Table
 from rich.panel import Panel
+from yamlr.cli.constants import CommandTier, COMMAND_TIER_MAP
+__all__ = ['print_kubectl_help', 'print_subcommand_help']
+
+DIM_WHITE = "dim white"
 
 
-def print_kubectl_help(console, invoked_as: str):
+
+def print_kubectl_help(console, invoked_as: str, show_all: bool = False):
+    """Displays the main help menu in a tiered, journey-inspired format.
+    
+    Why: Minimizing cognitive load for new users while preserving 
+         power-user features behind a progressive disclosure gate (--all).
     """
-    Displays the main help menu in a 'kubectl' inspired format.
+    # Header - Minimalist
+    console.print(Panel(
+        f"[bold cyan]{invoked_as.lower()}[/bold cyan] — Kubernetes manifest safety & healing engine",
+        border_style="cyan",
+        expand=False
+    ))
 
-    Why: The main help screen is the first impression for new users.
-         It must clearly show all commands, global options, and
-         high-value capabilities in a scannable format.
-    """
-    console.print("\n[bold cyan]┌─ PRIMARY COMMANDS[/bold cyan]")
-    cmd_table = Table(show_header=False, box=None, padding=(0, 2, 0, 0))
-    cmd_table.add_column(style="bold green", width=14)
-    cmd_table.add_column(style="white")
+    # All commands with task-oriented descriptions
+    DESCRIPTIONS = {
+        "scan": "Check manifests for issues (read-only, safe default)",
+        "heal": "Preview and apply fixes (interactive by default)",
+        "check": "Fast syntax & schema validation (great for CI)",
+        "upgrade": "Migrate deprecated APIs to a target K8s version",
+        "status": "Show backups, receipts, and recent heal activity",
+        "doctor": "Check Yamlr installation, catalogs, and environment",
+        "rules": "List protections and rule IDs",
+        "explain": "Explain a specific rule or finding",
+        "secure": "Analyze & suggest security hardening (Pro)",
+        
+        # Advanced (Advanced help only)
+        "graph": "Visual Observability: Relational topology & blast-radius",
+        "stats": "Engineering Efficiency: Surgical impact & team mastery",
+        "roi": "Executive Portfolio: Financial impact & budget justification",
+        "dna": "Calculate/Verify Semantic SHA-256 DNA for provenance",
+        "pulse": "Founder Intelligence: Global rule efficacy & ROI telemetry",
+        "evidence": "Generate Auditor-Ready compliance reports (PDF/JSON)",
+        "mcp": "Model Context Protocol: Connect Yamlr to AI Agents (Pro)",
+        "baseline": "Snapshot current violations to ignore them in future scans",
+        "idp-export": "Platform Integration: Export safety truth [backstage|prometheus]",
+        "init": "Initialize a new project with .yamlr.yaml",
+        "restore": "Restore files from backups",
+        "diagnose": "Run deep-dive analysis with debug support bundles",
+        "auth": "Manage Yamlr Enterprise (Pro) authentication",
+        "version": "Display version info and license status",
+        "welcome": "Onboarding: Quick start & branding",
+        "completion": "Generate shell autocompletion scripts",
+        "catalog": "Manage Kubernetes schema definitions",
+        "manual": "Open command manuals or full user guide",
+        "demo": "Watch Yamlr heal a broken cluster (interactive simulation)",
+    }
 
-    # Core Logic
-    cmd_table.add_row("scan", "Audit manifests for issues (Read-Only, Local Analysis)")
-    cmd_table.add_row("check", "Fast syntax & schema validation (CI-ready)")
-    cmd_table.add_row("heal", "Propose repairs (Dry-run by default, no auto-write)")
-    cmd_table.add_row("secure", "Analyze & suggest security hardening (Pro)")
-    cmd_table.add_row("upgrade", "Migrate APIs to target version")
+    GROUPINGS = {
+        "scan": ["audit"],
+        "upgrade": ["migrate"],
+    }
+    ALIASES = ["audit", "migrate"]
 
-    # Aliases
-    cmd_table.add_row("audit", "Alias for 'scan' (Compliance focus)")
-    cmd_table.add_row("migrate", "Alias for 'upgrade' (Versioning focus)")
+    # Helper to add rows to tier tables
+    def add_tier(title, tier, color):
+        # We only show Non-PRIMARY tiers if show_all is true
+        if not show_all and tier == CommandTier.ADVANCED:
+            return
 
-    console.print(cmd_table)
+        console.print(f"\n[bold gold1]┌─ {title}[/bold gold1]")
+        table = Table(show_header=False, box=None, padding=(0, 2, 0, 0))
+        table.add_column(style=f"bold {color}", width=18)
+        table.add_column(style="italic grey70")
+        
+        found = False
+        for cmd, cmd_tier in COMMAND_TIER_MAP.items():
+            if cmd_tier == tier:
+                if cmd in ALIASES: continue
+                
+                display_cmd = cmd
+                if cmd in GROUPINGS:
+                    display_cmd = f"{cmd} / {' / '.join(GROUPINGS[cmd])}"
+                
+                desc = DESCRIPTIONS.get(cmd, "...")
+                table.add_row(display_cmd, desc)
+                found = True
+        
+        if found:
+            console.print(table)
 
-    console.print("\n[bold cyan]┌─ TOOLBOX[/bold cyan]")
-    tool_table = Table(show_header=False, box=None, padding=(0, 2, 0, 0))
-    tool_table.add_column(style="bold blue", width=14)
-    tool_table.add_column(style="white")
+    # Journey Tiers
+    add_tier("START HERE", CommandTier.PRIMARY, "green")
+    add_tier("WHEN YOU'RE READY", CommandTier.SECONDARY, "cyan")
+    
+    # Advanced Tier (Only shown with --all)
+    if show_all:
+        add_tier("ADVANCED & PLATFORM", CommandTier.ADVANCED, "magenta")
 
-    tool_table.add_row("init", "Initialize a new project with .yamlr.yaml")
-    tool_table.add_row("restore", "Restore files from backups")
-    tool_table.add_row("diagnose", "Run deep-dive analysis with debug logs")
-    tool_table.add_row("explain", "Get detail on a specific rule or rule ID")
-    tool_table.add_row("rules", "Dashboard of all available protections")
-    tool_table.add_row("status", "SRE Dashboard: System health & backups")
-    tool_table.add_row("stats", "ROI Dashboard: Cumulative project impact & mastery")
-    tool_table.add_row("dna", "Calculate/Verify Semantic SHA-256 DNA")
-    tool_table.add_row("evidence", "Generate Auditor-Ready PDF Compliance Reports")
-    tool_table.add_row("manual", "Read the complete User Guide offline")
-    tool_table.add_row("catalog", "Manage Kubernetes schema definitions")
-    tool_table.add_row("demo", "Magic Moment: Scaffold a learning environment")
-    tool_table.add_row("welcome", "Onboarding: Quick start & branding")
-    tool_table.add_row("completion", "Generate shell autocompletion scripts")
-    tool_table.add_row("version", "Display version info and license status")
-    tool_table.add_row("auth", "Manage yamlr enterprise authentication")
-
-    console.print(tool_table)
-
-    console.print("\n[bold cyan]┌─ GLOBAL OPTIONS & FILTERS[/bold cyan]")
+    # Global Options
+    console.print("\n[bold gold1]┌─ GLOBAL OPTIONS[/bold gold1]")
     opt_table = Table(show_header=False, box=None, padding=(0, 2, 0, 0))
     opt_table.add_column(style="yellow", width=24)
-    opt_table.add_column(style="dim white")
-    opt_table.add_row("-h, --help", "Display usage information")
-    opt_table.add_row("-v, --version", "Display version information")
+    opt_table.add_column(style="dim white" if getattr(console, "_yamlr_plain", False) else DIM_WHITE)
+    opt_table.add_row("-h, --help", "Show this help")
+    opt_table.add_row("--all", "Show all commands (advanced)")
     opt_table.add_row("--kube-version VERSION", "Target K8s version (e.g., 1.28, v1.31)")
-    opt_table.add_row("--k8s-version VERSION", "Alias for --kube-version")
-    opt_table.add_row("--catalog PATH", "Specify a custom K8s schema catalog (default: bundled)")
-    opt_table.add_row("--max-depth N", "Limit directory recursion depth (Default: 10)")
-    opt_table.add_row("--ext LIST", "Extensions to process (Default: .yaml,.yml)")
-    opt_table.add_row("--concurrency N", "Number of parallel worker processes (Default: CPU count)")
-    opt_table.add_row("-s, --summary-only", "Show aggregate stats (recommended for 100+ files)")
-    opt_table.add_row("--verbose", "Show full engine audit logs and execution stages")
-    opt_table.add_row("--fail-on CHOICE", "CI/CD Gate: Exit 1 if issues found (any, warning, error)")
-    opt_table.add_row("--stream-to FILE", "ULTRA-SCALE: Stream results to NDJSON (10k+ files)")
-    opt_table.add_row("-p, --plain", "ASCII-only output mode (Recommended for Log redirection)")
-    opt_table.add_row("-q, --quiet", "Minimal output for CI/CD pipelines (errors + exit code only)")
-    opt_table.add_row("--identity-mode MODE", "Identity detection style: 'infer' (default) or 'strict'")
+    opt_table.add_row("--output CHOICE", "Output format: text (default), json, sarif")
+    opt_table.add_row("--timing", "Show surgical execution timing breakdown")
+    opt_table.add_row("--timing-file FILE", "Save performance profile to JSON file")
+    opt_table.add_row("-q, --quiet", "Minimal output (CI/CD)")
+    opt_table.add_row("--verbose", "Detailed engine logs")
     console.print(opt_table)
 
-    console.print("\n[bold magenta]┌─ QUICK START[/bold magenta]")
+    # Quick Examples (Centered/Prominent)
+    console.print("\n[bold gold1]┌─ QUICK EXAMPLES[/bold gold1]")
     qs_table = Table(show_header=False, box=None, padding=(0, 2, 0, 0))
     qs_table.add_column(style="cyan", width=24)
-    qs_table.add_column(style="dim white")
-    qs_table.add_row("yamlr scan .", "Audit all YAML files in the current directory")
-    qs_table.add_row("yamlr heal <file>", "Interactive repair with visual diff preview")
-    qs_table.add_row("yamlr explain <id>", "Get detailed remediation for a rule violation")
+    qs_table.add_column(style="dim white" if getattr(console, "_yamlr_plain", False) else DIM_WHITE)
+    qs_table.add_row("yamlr scan .", "Audit all YAML files (no changes)")
+    qs_table.add_row("yamlr heal pod.yaml", "Preview a repair with visual diff")
+    qs_table.add_row("yamlr check .", "Fast syntax & schema validation")
+    qs_table.add_row("yamlr explain [id]", "Why this rule fired and how to fix it")
     console.print(qs_table)
 
-    tip_content = (
-        f"Use [cyan bold]{invoked_as} <command> --help[/cyan bold] for subcommand specific flags.\n"
-        "Documentation: [link=https://yamlr.dev]https://yamlr.dev[/link]"
+    # Trust Guarantee (One-liner)
+    console.print("\n[bold gold1]┌─ TRUST GUARANTEE[/bold gold1]")
+    console.print("Yamlr analyzes manifests locally and never sends your YAML to external servers.")
+
+    # Discovery Tips
+    tip_text = (
+        f"• Run [bold cyan]{invoked_as} <command> --help[/bold cyan] for subcommand flags.\n"
+        f"• Run [bold cyan]{invoked_as} --help --all[/bold cyan] to see all advanced commands.\n"
+        "• Docs: [link=https://yamlr.dev]https://yamlr.dev[/link]"
     )
-
-    capability_content = (
-        "✨ [bold green]Ghost Services:[/bold green] Detect dangling services with no Pods.\n"
-        "✨ [bold green]Cross-Resource:[/bold green] Find port mismatches, broken Ingress, and orphans.\n"
-        "✨ [bold green]Security Hardening:[/bold green] Enforce PSS Restricted baseline.\n"
-        "✨ [bold green]SARIF Reporting:[/bold green] Native GitHub Code Scanning integration."
-    )
-
-    console.print("\n[bold cyan]┌─ HIGH-VALUE CAPABILITIES[/bold cyan]")
-    console.print(Panel(capability_content, border_style="green", expand=False))
-
-    security_tip = (
-        "🔒 [bold green]Security & Privacy:[/bold green] Yamlr performs manifest analysis locally\n"
-        "and does not transmit your YAML to external servers."
-    )
-    console.print(Panel(security_tip, title="[bold green]🛡 TRUST GUARANTEE[/bold green]", border_style="green", expand=False))
-
-    console.print(Panel(tip_content, title="[bold magenta]💡 TIP[/bold magenta]", border_style="magenta", expand=False))
+    console.print(Panel(tip_text, title="[bold magenta]💡 TIP[/bold magenta]", border_style="magenta", expand=False))
 
 
-def print_subcommand_help(console, command: str, invoked_as: str):
+def print_subcommand_help(console, command: str, invoked_as: str, show_all: bool = False):
     """Dispatches to per-command help modules.
 
     Why: Replaced the monolithic 260-line elif chain that had 6
@@ -139,19 +168,22 @@ def print_subcommand_help(console, command: str, invoked_as: str):
     from yamlr.cli.help.help_utils import (
         help_catalog, help_version, help_explain, help_auth, help_init,
         help_restore, help_demo, help_welcome, help_completion,
-        help_status, help_rules, help_stats, help_manual,
+        help_status, help_rules, help_stats, help_roi, help_manual, help_mcp,
+    )
+    from yamlr.cli.help.help_observability import (
+        help_graph, help_idp_export, help_pulse,
     )
 
     # Dispatch table — deterministic, no duplicate elif entries
     dispatch = {
-        "scan": lambda: help_scan(console, invoked_as),
-        "check": lambda: help_check(console, invoked_as),
-        "audit": lambda: help_audit(console, invoked_as),
-        "heal": lambda: help_heal(console, invoked_as),
-        "diagnose": lambda: help_diagnose(console, invoked_as),
-        "secure": lambda: help_secure(console, invoked_as),
-        "upgrade": lambda: help_upgrade(console, "upgrade", invoked_as),
-        "migrate": lambda: help_upgrade(console, "migrate", invoked_as),
+        "scan": lambda: help_scan(console, invoked_as, show_all),
+        "check": lambda: help_check(console, invoked_as, show_all),
+        "audit": lambda: help_audit(console, invoked_as, show_all),
+        "heal": lambda: help_heal(console, invoked_as, show_all),
+        "diagnose": lambda: help_diagnose(console, invoked_as, show_all),
+        "secure": lambda: help_secure(console, invoked_as, show_all),
+        "upgrade": lambda: help_upgrade(console, "upgrade", invoked_as, show_all),
+        "migrate": lambda: help_upgrade(console, "migrate", invoked_as, show_all),
         "dna": lambda: help_dna(console, invoked_as),
         "evidence": lambda: help_evidence(console, invoked_as),
         "catalog": lambda: help_catalog(console, invoked_as),
@@ -166,7 +198,12 @@ def print_subcommand_help(console, command: str, invoked_as: str):
         "status": lambda: help_status(console, invoked_as),
         "rules": lambda: help_rules(console, invoked_as),
         "stats": lambda: help_stats(console, invoked_as),
+        "roi": lambda: help_roi(console, invoked_as),
+        "graph": lambda: help_graph(console, invoked_as),
+        "idp-export": lambda: help_idp_export(console, invoked_as),
+        "pulse": lambda: help_pulse(console, invoked_as),
         "manual": lambda: help_manual(console, invoked_as),
+        "mcp": lambda: help_mcp(console, invoked_as),
     }
 
     handler = dispatch.get(command)

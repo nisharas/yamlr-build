@@ -1,18 +1,23 @@
 #!/usr/bin/env python3
 """
-Registry Enforcement Analyzer
------------------------------
-Enforces that all container images match a list of trusted registries.
-Derived from Yamlr Codebase Audit (Feb 2026).
+Yamlr REGISTRY ENFORCEMENT
+--------------------------
+Strict validation of container image registries and tags.
+
+Why: Ensures that workloads only use approved registries and prevents 
+     the use of mutable or dangerous image tags in production.
 """
+
+from __future__ import annotations
 
 import logging
 from typing import Any, Dict, List, Optional
 
-from yamlr.analyzers.base import BaseAnalyzer, AnalysisResult
+from yamlr.analyzers.base import AnalysisResult, BaseAnalyzer
 from yamlr.analyzers.rules import Rules
 
 logger = logging.getLogger("yamlr.analyzers.registry_enforcement")
+__all__ = ['RegistryAnalyzer']
 
 class RegistryAnalyzer(BaseAnalyzer):
     """
@@ -22,23 +27,22 @@ class RegistryAnalyzer(BaseAnalyzer):
     @property
     def name(self) -> str:
         """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
+        Why: Identification for the analysis engine.
         """
         return "registry-enforcement"
 
     @property
     def analyzer_type(self) -> str:
         """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
+        Why: Categorizes this as a content-based analyzer.
         """
         return "content"
 
     def analyze(self, docs: List[Dict[str, Any]], **kwargs) -> List[AnalysisResult]:
         """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
+        Performs registry and tag stability analysis.
+
+        Why: Main entry point for image-based security auditing.
         """
         trusted = kwargs.get("trusted_registries") or []
         if not trusted:
@@ -57,10 +61,10 @@ class RegistryAnalyzer(BaseAnalyzer):
             if not pod_spec:
                 continue
 
-            containers = pod_spec.get("containers", []) or []
-            init_containers = pod_spec.get("initContainers", []) or []
+            containers = pod_spec.get("containers") or []
+            init_containers = pod_spec.get("initContainers") or []
 
-            for container in containers + init_containers:
+            for container in list(containers) + list(init_containers):
                 image = container.get("image", "")
                 if not image:
                     continue
@@ -82,7 +86,6 @@ class RegistryAnalyzer(BaseAnalyzer):
 
     def _is_trusted(self, image: str, trusted_list: List[str]) -> bool:
         """Checks if image matches any of the trusted registry prefixes."""
-        # Simple prefix match for now (e.g., 'gcr.io/my-project' matches 'gcr.io/my-project/nginx')
         for prefix in trusted_list:
             if image.startswith(prefix):
                 return True

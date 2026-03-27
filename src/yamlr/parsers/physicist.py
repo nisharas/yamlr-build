@@ -11,14 +11,15 @@ Author: Nishar A Sunkesala / Yamlr Team
 Date: 2026-02-13
 """
 
+from __future__ import annotations
 import logging
-from typing import Any, List, Optional, Tuple, Type
-from ruamel.yaml.comments import CommentedMap, CommentedSeq
+from typing import Any, List, Optional, Tuple, TYPE_CHECKING
+if TYPE_CHECKING:
+    pass
 
 logger = logging.getLogger("yamlr.parsers.physicist")
+__all__ = ['IndentationPhysicist']
 
-T_MAP = CommentedMap
-T_SEQ = CommentedSeq
 
 class IndentationPhysicist:
     """
@@ -26,76 +27,98 @@ class IndentationPhysicist:
     """
 
     def __init__(self):
+        """Initializes the indentation physicist.
+        
+        Why: To manage the stack-based state required for hierarchical YAML reconstruction.
         """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
-        """
-        # [(indent: int, container: Map/Seq, parent_key: str, dot_path: str, item_indent: Optional[int])]
-        self.stack = [(-1, T_MAP(), None, "", None)]
+        # ROOT starts empty; initial container is set via reset()
+        self.stack = []
+        self.detected_indents: List[int] = []
+        self._majority_indent: int = 2
 
-    def reset(self, root_container: T_MAP):
-        """Resets the stack for a new document."""
+    @property
+    def majority_indent(self) -> int:
+        """Returns the calculated dominant indentation step."""
+        return self._majority_indent
+
+    def track_indent(self, indent: int):
+        """Records an indentation level seen in the manifest."""
+        if indent > 0:
+            self.detected_indents.append(indent)
+
+    def calculate_majority_indent(self) -> int:
+        """
+        Derives the majority indentation step from collected data.
+        
+        Why: To support intelligent normalization during serialization.
+        """
+        if self.detected_indents:
+            # find the most frequent non-zero indentation step
+            diffs = [
+                self.detected_indents[i] - self.detected_indents[i - 1]
+                for i in range(1, len(self.detected_indents))
+                if self.detected_indents[i] > self.detected_indents[i - 1]
+            ]
+            if diffs:
+                self._majority_indent = max(set(diffs), key=diffs.count)
+            else:
+                self._majority_indent = (
+                    min(self.detected_indents) if self.detected_indents else 2
+                )
+        return self._majority_indent
+
+    def reset(self, root_container: Any):
+        """Resets the stack and physics state for a new document."""
         self.stack = [(-1, root_container, None, "", None)]
+        self.detected_indents = []
+        self._majority_indent = 2
 
-    def resolve_scope(self, shard_indent: int, is_list_item: bool, shard_key: Optional[str], schema_healer: Any):
+    def resolve_scope(self, shard_indent: int, is_list_item: bool, shard_key: Optional[str], schema_healer: Any, is_block: bool = False):
+        """Adjusts the current scope based on the indentation of the incoming shard.
+        
+        Why: To ensure that YAML nodes are parented correctly according to their indentation levels. 
+             Block scalar guards (is_block) prevent accidental scope popping within literal blocks.
         """
-        Pops deeper scopes from the stack until the correct parent for the current shard is found.
-        """
-        while True:
-            if len(self.stack) <= 1:
-                break
+        if is_block:
+            return  # Never pop scope while inside a block scalar shard stream
 
-            last_indent, last_cont, last_key, dot_path_top, item_indent = self.stack[-1]
+        while len(self.stack) > 1:
+            last_indent, last_cont, last_key, _, item_indent = self.stack[-1]
+            is_seq = hasattr(last_cont, "is_seq") and last_cont.is_seq
 
-            # If we are deeper, we are good (break)
             if shard_indent > last_indent:
                 break
 
-            # If same indent:
             if shard_indent == last_indent:
-                # Special case: List items at the same indent
-                if is_list_item:
-                    # 1. If the current sequence already has items at a deeper level,
-                    # then a same-indent shard MUST be a sibling of the sequence.
-                    if (
-                        isinstance(last_cont, T_SEQ)
-                        and item_indent is not None
-                        and shard_indent < item_indent
-                    ):
-                        self.stack.pop()
-                        continue
-
-                    # 2. If it's at the same level as a Map key, it's a sibling of the Map key.
-                    if isinstance(last_cont, T_MAP) and last_indent != -1:
-                        self.stack.pop()
-                        continue
-
-                    elif isinstance(last_cont, T_SEQ):
-                        break
-
-                # Sibling fields in a map inside a sequence
-                keep_sibling = None
-
-                # Case 1: Grandparent is a Seq (we are in an item map)
-                if len(self.stack) > 1 and isinstance(self.stack[-2][1], T_SEQ):
-                    keep_sibling = schema_healer.resolve_tri_state_ambiguity(
-                        self.stack, shard_key, shard_indent
-                    )
-
-                # Case 2: Stack top is a Seq (we are same indent as the Seq marker)
-                elif isinstance(self.stack[-1][1], T_SEQ) and not is_list_item:
-                    if schema_healer.is_valid_sibling(dot_path_top, shard_key):
-                        keep_sibling = True
-
-                if keep_sibling:
+                if self._should_keep_current_scope(is_seq, is_list_item, item_indent, shard_indent, last_cont, last_key, schema_healer, shard_key):
                     break
 
-            # If we are shallower (or same indent but not special case), pop
-            if len(self.stack) > 1:
-                self.stack.pop()
-                continue
-            else:
-                break
+            logger.debug("Physics popping scope %s", last_key)
+            self.stack.pop()
+
+    def _should_keep_current_scope(self, is_seq: bool, is_list: bool, item_indent: Optional[int], s_indent: int, last_cont: Any, last_key: Optional[str], schema_healer: Any, shard_key: Optional[str]) -> bool:
+        """Determines if the current stack top should be maintained for the existing shard."""
+        is_map = hasattr(last_cont, "is_map") and last_cont.is_map
+
+        # Standard YAML: A non-list-item at same indent as sequence marker is a sibling.
+        if is_seq and not is_list:
+            return False
+            
+        if is_list:
+            if is_seq:
+                if item_indent is not None and s_indent < item_indent:
+                    return False
+                return True
+            if is_map:
+                return False
+
+        # If we are in an anonymous map (sequence item) and a KV pair arrives at 
+        # the same indent, it belongs to this item (e.g. name/image in a container).
+        if is_map and not is_list and last_key is None:
+            return True
+             
+        # Default: yield to siblings
+        return False
 
     def get_context(self) -> Tuple[int, Any, Optional[str], str, Optional[int]]:
         """Returns the current parent context."""

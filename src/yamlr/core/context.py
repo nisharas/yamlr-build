@@ -18,14 +18,23 @@ Author: Nishar A Sunkesala / Yamlr Team
 Date: 2026-01-26
 """
 
+from __future__ import annotations
 import logging
-import os
+import re
 from dataclasses import dataclass, field
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Dict, TYPE_CHECKING
+if TYPE_CHECKING:
+    from yamlr.models import HealAction, ManifestIdentity, Shard
+    from yamlr.analyzers.base import AnalysisResult
+    from yamlr.core.resource_graph import ResourceGraph
 
-from yamlr.models import HealAction, ManifestIdentity, Shard
-
+from contextvars import ContextVar
 logger = logging.getLogger("yamlr.context")
+
+# [Hardening] Thread-safe session tracking for structured logging
+SESSION_ID_VAR: ContextVar[Optional[str]] = ContextVar("yamlr_session_id", default=None)
+
+__all__ = ["HealContext"]
 
 
 @dataclass
@@ -45,15 +54,49 @@ class HealContext:
     # 1. INPUT SOURCE
     # =========================================================================
     raw_text: str
+    file_path: Optional[str] = None
+    
+    # [Hardening] Unique session correlation ID for SRE traceability
+    session_id: str = field(default_factory=lambda: str(__import__("uuid").uuid4()))
+    
+    def __post_init__(self):
+        """Sets the thread-local session ID for structured logging."""
+        SESSION_ID_VAR.set(self.session_id)
     
     # [MODULAR] Primary data carrier for document objects (replaces reconstructed_docs)
-    docs: List[Any] = field(default_factory=list)
+    docs: List[Dict[str, Any]] = field(default_factory=list)
+    
+    # [SAFETY] Track Semantic DNA integrity throughout the pipeline
+    dna_integrity: Optional[str] = None
     
     # [MODULAR] Primary diagnostic carrier (replaces logic_logs)
     audit_log: List[str] = field(default_factory=list)
     
     # [MODULAR] Semantic findings collected during pipeline
-    findings: List[Any] = field(default_factory=list)
+    findings: List["AnalysisResult"] = field(default_factory=list)
+
+    # [TELEMETRY] Pipeline statistics tracker
+    from yamlr.models import PipelineStats
+    stats: PipelineStats = field(default_factory=PipelineStats)
+
+    # [PHASE-28] Optimized Execution: Cache findings per document index 
+    # to avoid redundant SchemaValidator calls in Stage Eight and Judgment.
+    doc_findings: Dict[int, List[Any]] = field(default_factory=dict)
+
+    # [FIX-AUDIT-14] Cached Container context
+    _container_cache: List[Dict[str, Any]] = field(default_factory=list, init=False)
+    
+    @property
+    def container_context(self) -> List[Dict[str, Any]]:
+        """
+        Provides a cached list of all containers (main and init) in the doc set.
+        Prevents redundant extraction across Analyzers and Healers.
+        """
+        if not self._container_cache and self.docs:
+            from yamlr.core.k8s_utils import extract_containers
+            for doc in self.docs:
+                self._container_cache.extend(extract_containers(doc))
+        return self._container_cache
 
     # [HEAL-6.2] Reconstruction Depth (Light, Medium, Heavy)
     depth: str = "Light"
@@ -66,10 +109,14 @@ class HealContext:
 
     # Reference to the Shadow engine used to capture layout (comments, gaps)
     # This allows Yamlr to preserve human formatting after surgery.
-    shadow_engine: Any = None
+    shadow_engine: Optional[Any] = None
 
-    # =========================================================================
-    # 3. IDENTITY STATE
+    # [OSS-1] Reference to the Indentation Physicist for layout normalization
+    physicist: Optional[Any] = None
+
+    # [PHASE-9] Global workspace context for Relational Surgery
+    workspace_identities: List["ManifestIdentity"] = field(default_factory=list)
+    config: Optional["HealConfig"] = None
     # =========================================================================
     # The detected primary K8s Kind and API for the current document
     kind: Optional[str] = None
@@ -83,23 +130,6 @@ class HealContext:
     # =========================================================================
     # List of HealAction objects (The 'Prescriptions' for the manifest)
     prescriptions: List[HealAction] = field(default_factory=list)
-
-    # List of reconstructed document objects (Alias for compatibility)
-    @property
-    def reconstructed_docs(self) -> List[Any]:
-        """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
-        """
-        return self.docs
-    
-    @reconstructed_docs.setter
-    def reconstructed_docs(self, value: List[Any]):
-        """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
-        """
-        self.docs = value
 
     # =========================================================================
     # 5. GLOBAL METADATA (ENHANCED: Cluster Version Management)
@@ -123,31 +153,28 @@ class HealContext:
     # Security whitelists (populated from engine/config)
     allowed_host_paths: List[str] = field(default_factory=list)
     trusted_registries: List[str] = field(default_factory=list)
+    strict_mode: bool = False
 
     # [EPIC-23] Safety Engine: Resource dependency graph
     # Built during pipeline after Stage 3 (Identity Extraction).
     # Consumed by analyzers for blast-radius and impact propagation.
-    resource_graph: Any = None
+    resource_graph: Optional["ResourceGraph"] = None
+
+    # [PHASE-28] Cross-Domain: HCL resource identities for parallel resolution.
+    hcl_identities: List[str] = field(default_factory=list)
+
+    # [ROUND-10] Schema Catalog for on-the-fly analyzer instantiation
+    catalog: Dict[str, Any] = field(default_factory=dict)
 
     # =========================================================================
     # 6. DIAGNOSTIC AUDIT TRAIL
     # =========================================================================
-    # Diagnostic audit trail (Alias for compatibility)
-    @property
-    def logic_logs(self) -> List[str]:
-        """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
-        """
-        return self.audit_log
     
-    @logic_logs.setter
-    def logic_logs(self, value: List[str]):
-        """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
-        """
-        self.audit_log = value
+    # [CLEANUP] Pruned legacy aliases: reconstructed_docs, logic_logs (Finding 28.11)
+
+    # =========================================================================
+    # CLUSTER VERSION DETECTION (OSS + Pro)
+    # =========================================================================
 
     # =========================================================================
     # CLUSTER VERSION DETECTION (OSS + Pro)
@@ -157,106 +184,19 @@ class HealContext:
     def _get_default_cluster_version() -> str:
         """
         Intelligently determines the target Kubernetes version.
-
-        Detection Priority (OSS + Pro):
-        ┌────────────────────────────────────────────────────────────┐
-        │ Priority 1: Explicit override (passed by engine/CLI)       │
-        │             - Handled by caller, not here                  │
-        │ Priority 2: Yamlr_KUBE_VERSION environment variable (OSS)  │
-        │ Priority 3: 💎 Auto-detect from kubectl (Pro)              │
-        │ Priority 4: 💎 Auto-detect from cluster API (Pro)          │
-        │ Priority 5: Default to v1.31 (latest stable)               │
-        └────────────────────────────────────────────────────────────┘
-
-        Returns:
-            str: Kubernetes version in format "v1.31" or "1.31"
-
-        Examples:
-            >>> os.environ['Yamlr_KUBE_VERSION'] = '1.28'
-            >>> HealContext._get_default_cluster_version()
-            'v1.28'
-
-            >>> # Pro mode with kubectl available
-            >>> HealContext._get_default_cluster_version()
-            'v1.28'  # Auto-detected from kubectl
+        Delegates to version_utils for performance.
         """
-
-        # =====================================================================
-        # PRIORITY 2: ENVIRONMENT VARIABLE (OSS)
-        # =====================================================================
-        env_version = os.getenv("Yamlr_KUBE_VERSION")
-        if env_version:
-            normalized = HealContext._normalize_version(env_version)
-            logger.debug(f"Using cluster version from Yamlr_KUBE_VERSION: {normalized}")
-            return normalized
-
-        # =====================================================================
-        # PRIORITY 3-4: AUTO-DETECTION (PRO - via Bridge)
-        # =====================================================================
-        # Try to load Pro detection module (graceful degradation)
-        try:
-            from yamlr.core.bridge import YamlrBridge
-
-            if YamlrBridge.is_pro_enabled():
-                # Try Pro auto-detection
-                pro_detection = YamlrBridge.get_pro_module("cluster_detection")
-                if pro_detection:
-                    # Try kubectl detection first (faster)
-                    detected = pro_detection.ClusterDetection.detect_from_kubectl()
-                    if detected:
-                        logger.info(
-                            f"💎 Pro: Auto-detected K8s {detected} from kubectl"
-                        )
-                        return detected
-
-                    # Try cluster API detection (requires cluster access)
-                    detected = pro_detection.ClusterDetection.detect_from_cluster()
-                    if detected:
-                        logger.info(
-                            f"💎 Pro: Auto-detected K8s {detected} from cluster API"
-                        )
-                        return detected
-        except ImportError:
-            # Bridge not available (shouldn't happen, but defensive)
-            pass
-        except Exception as e:
-            # Pro detection failed, fall back to default
-            logger.debug(f"Pro auto-detection failed (non-critical): {e}")
-
-        # =====================================================================
-        # PRIORITY 5: DEFAULT TO LATEST STABLE (OSS + Pro)
-        # =====================================================================
-        default_version = "v1.31"  # Latest stable as of 2026-01
-        logger.debug(f"Using default cluster version: {default_version}")
-        return default_version
+        from yamlr.core.engine.version_utils import get_default_cluster_version
+        return get_default_cluster_version()
 
     @staticmethod
     def _normalize_version(version: str) -> str:
         """
         Normalizes version string to consistent format.
-
-        Accepts:
-        - "1.28" → "v1.28"
-        - "v1.28" → "v1.28"
-        - "1.28.3" → "v1.28"
-
-        Args:
-            version: Raw version string
-
-        Returns:
-            str: Normalized version (e.g., "v1.28")
+        Delegates to version_utils.
         """
-        # Remove leading 'v' if present
-        clean = version.strip().lstrip("v")
-
-        # Extract major.minor (ignore patch)
-        parts = clean.split(".")
-        if len(parts) >= 2:
-            major, minor = parts[0], parts[1]
-            return f"v{major}.{minor}"
-
-        # Fallback: return as-is with 'v' prefix
-        return f"v{clean}" if not version.startswith("v") else version
+        from yamlr.core.engine.version_utils import normalize_version
+        return normalize_version(version)
 
     @staticmethod
     def set_cluster_version(version: str) -> str:
@@ -293,11 +233,13 @@ class HealContext:
 
         try:
             int(parts[0])  # Major must be integer
-            int(parts[1])  # Minor must be integer
-        except ValueError:
+            # Minor may have a suffix (e.g. 31-beta), so we strip non-digits for validation
+            minor_clean = re.split(r'[^0-9]', parts[1])[0]
+            int(minor_clean)
+        except (ValueError, IndexError):
             raise ValueError(
                 f"Invalid Kubernetes version: '{version}'. "
-                f"Major and minor versions must be numbers."
+                f"Major and minor versions must start with numbers."
             )
 
         return normalized
@@ -329,24 +271,40 @@ class HealContext:
     # PUBLIC API: SURGICAL OPERATIONS
     # =========================================================================
 
-    def prescribe(self, action: HealAction) -> None:
+    def prescribe(self, action: "HealAction") -> bool:
         """
-        Adds a surgical fix to the context.
-
-        Usage:
-            context.prescribe(HealAction(
-                stage="Lexer",
-                action_type="repair",
-                target="line 5",
-                description="Fixed flush-left list",
-                severity="INFO"
-            ))
-
-        Args:
-            action: The healing action to record
+        Adds a surgical fix to the context if allowed by boundaries.
+        
+        Returns True if the mutation was accepted, False if blocked by boundary.
         """
+        from yamlr.core.stages.boundaries import BoundaryEnforcer
+        # [BOUNDARY-ENFORCEMENT] check if this healer-action is allowed
+        # Note: We assume a 'default_permit' if none is assigned to the context yet
+        permit = getattr(self, "healer_permit", None)
+        if permit and not BoundaryEnforcer.validate_mutation(permit, action.scope, self):
+             return False
+
         self.prescriptions.append(action)
-        self.add_log(f"Surgery: {action.description} at {action.target}")
+        self.add_log(f"Surgery [{action.scope.value.upper()}]: {action.description} at {action.target}")
+        
+        # [PHASE-9] Propagate prescriptions as findings for reporting
+        from yamlr.analyzers.base import AnalysisResult
+        self.findings.append(AnalysisResult(
+            analyzer_name=action.stage,
+            severity=action.severity,
+            message=action.description,
+            resource_name=action.target,
+            resource_kind="Resource", # Broad for now
+            file_path=self.file_path,
+            rule_id=action.rule_id,
+            line_number=0, # Stage level fixes usually affect whole file context
+            rationale=action.rationale,
+            suggestion=action.suggestion
+        ))
+
+    def add_finding(self, finding: "AnalysisResult") -> None:
+        """Appends a diagnostic finding to the audit trail."""
+        self.findings.append(finding)
 
     def add_log(self, message: str) -> None:
         """
@@ -355,7 +313,7 @@ class HealContext:
         Args:
             message: Log message to record
         """
-        self.logic_logs.append(message)
+        self.audit_log.append(message)
 
     def get_summary(self) -> str:
         """

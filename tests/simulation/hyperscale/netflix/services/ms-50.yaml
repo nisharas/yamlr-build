@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-50
+  labels:
+    app: ms-50
+    dependency: ms-51
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-50
+  template:
+    metadata:
+      labels:
+        app: ms-50
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-51

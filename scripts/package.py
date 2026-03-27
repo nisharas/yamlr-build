@@ -1,3 +1,4 @@
+from __future__ import annotations
 #!/usr/bin/env python3
 """
 Yamlr Packaging Script
@@ -20,6 +21,7 @@ import platform
 import zipfile
 import tarfile
 from pathlib import Path
+from version_helper import get_version
 
 # Paths
 ROOT_DIR = Path(__file__).parent.parent.resolve()
@@ -59,6 +61,15 @@ def create_archive(base_name, items, format="zip"):
     print("   ✅ Archive created.")
     return archive_path
 
+def render_template(src: Path, dst: Path, vars: dict):
+    """Renders a template file by replacing @KEY@ with value."""
+    print(f"📄 [STEP] Rendering Template: {src.name} -> {dst.name}...")
+    text = src.read_text(encoding="utf-8")
+    for k, v in vars.items():
+        text = text.replace(f"@{k}@", str(v))
+    dst.write_text(text, encoding="utf-8")
+    print("   ✅ Done.")
+
 def main():
     parser = argparse.ArgumentParser(description="Yamlr Packager")
     parser.add_argument("--pro", action="store_true", help="Build Enterprise Edition")
@@ -91,8 +102,15 @@ def main():
     # Determine OS/Arch for naming
     os_name = platform.system().lower()
     machine = platform.machine().lower()
-    version = "v1.1" # In a real pipeline, fetch this dynamically
+    version = get_version()
     archive_name = f"{app_name}-{version}-{os_name}-{machine}"
+    
+    # 3.5 Render Manifest Templates
+    template_vars = {"VERSION": version}
+    for t_name in ["yamlr.nuspec", "yamlr.rb", "install.ps1", "install.sh"]:
+        t_src = SCRIPTS_DIR / f"{t_name}.in"
+        if t_src.exists():
+            render_template(t_src, DIST_DIR / t_name, template_vars)
 
     items_to_archive = [
         # (Source Path, Archive Path)

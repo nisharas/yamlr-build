@@ -8,12 +8,14 @@ Author: Nishar A Sunkesala / Yamlr Team
 Date: 2026-02-13
 """
 
-import hashlib
-import json
+from __future__ import annotations
+
 import logging
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List
 
 logger = logging.getLogger("yamlr.pipeline.utils")
+__all__ = ['diff_dicts', 'detect_manifest_changes']
+
 
 def diff_dicts(d1: Dict, d2: Dict, path: str = "") -> List[str]:
     """Recursively find changed keys."""
@@ -38,7 +40,7 @@ def detect_manifest_changes(before: List[Dict[str, Any]], after: List[Dict[str, 
     if len(before) != len(after):
         changes.append(f"Document count changed: {len(before)} → {len(after)}")
         return changes
-    for i, (doc_before, doc_after) in enumerate(zip(before, after)):
+    for i, (doc_before, doc_after) in enumerate(zip(before, after, strict=False)):
         changed_keys = diff_dicts(doc_before, doc_after)
         if changed_keys:
             doc_name = doc_after.get("metadata", {}).get("name", f"doc-{i}")

@@ -1,7 +1,10 @@
+from __future__ import annotations
 import logging
 from typing import Any, Optional, Dict
 
 logger = logging.getLogger("yamlr.parsers.coercer")
+__all__ = ['TypeCoercer']
+
 
 class TypeCoercer:
     """

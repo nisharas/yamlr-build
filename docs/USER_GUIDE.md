@@ -5,9 +5,13 @@
 
 Yamlr is a deterministic Kubernetes configuration safety engine based on a **"Detection is Free / Remediation is Paid"** architecture.
 
-### 🌗 The Guard and the Surgeon
-*   **Yamlr Guard:** Real-time diagnostics, semantic auditing, and risk analysis. Use this for 100% free, unlimited CI gating and IDE feedback.
-*   **Yamlr Surgeon:** Automated remediation and "Self-Healing" capabilities. Free users are gifted **5 automated repairs per day** to keep manifests healthy.
+### 🌗 The Yamlr Healing Engine
+Yamlr unifies its capabilities under the **Yamlr Healing Engine**, tailored for specific environments:
+*   **Audit Mode (Guard):** Real-time diagnostics, semantic auditing, and risk analysis. Use this for 100% free, unlimited CI gating and IDE feedback.
+*   **Healing Mode (Surgeon):** Automated remediation and "Self-Healing" capabilities. Free users are gifted **5 files per day** to keep manifests healthy.
+
+> [!IMPORTANT]
+> **Audit mode (`yamlr scan`) never modifies files. Active Healing (`yamlr heal`) only changes manifests when explicitly invoked and backed by backups/receipts/contracts.**
 
 Runs 100% locally. No data leaves your machine.
 
@@ -38,7 +42,21 @@ yamlr version
 
 ### 🆕 New User? 
 Run `yamlr welcome` for an interactive dashboard and guided tour of all capabilities.
-Run `yamlr manual` to read this entire guide directly in your terminal.
+Run `yamlr manual` to read this entire guide or specific command help (e.g., `yamlr manual scan`) directly in your terminal.
+
+---
+
+# 🏗️ Architectural Primitives (Industrial Strength)
+
+Yamlr is built on three first-class primitives that enable global reasoning:
+
+| Primitive | Role | Why It Matters |
+|:--|:--|:--|
+| **CatalogManager** | Dynamic Knowledge Base | Handles 150+ K8s resource types and their relational affinity. |
+| **RuleManager** | Policy Orchestration | Manages the "Trust Gate" — ensuring every fix is safe and explainable. |
+| **ResourceGraph** | Dependency Engine | Unlocks the "Blast Radius" feature by mapping complex cross-resource links. |
+
+For deep technical details on extending these primitives, see the [Developer Guide](DEV_GUIDE.md).
 
 ---
 
@@ -63,11 +81,44 @@ Nothing is modified in `scan` mode.
 
 Most tools validate structure.
 
-Yamlr validates system integrity.
+Yamlr validates system integrity using the **Yamlr Healing Engine** architecture:
+
+```text
+  [ Yamlr Healing Engine ]
+         |
+    +----+----+
+    |         |
+[ Guard ] [ Surgeon ]
+ (Audit)   (Heal)
+```
+
+## 🔥 Top “Magic Moments”
+
+Yamlr is testing a high-performance **Rust-based scanner** for repositories with 10,000+ manifests.
+*   **`--fast`** [Pro]: Explicitly trigger the premium 150 MB/s native Rust extension for maximum throughput.
+*   **`--experimental-rust`**: Enable the experimental hybrid Rust scanner for early feedback.
+*   **`--timing`**: Integrated performance auditing. Tracks "Bootstrap" (Imports/OS) overhead vs. command execution.
+
+## 🚀 100k+ Manifest Hyperscale Stability
+Yamlr v1.6 "Matrix Stability" introduces a **True Streaming** architecture designed for enterprise-scale repositories:
+*   **Constant RAM Usage**: Maintains ~60MB RAM usage even when processing 100,000+ manifests via the `--stream-to` NDJSON output.
+*   **Disk-Backed Index**: Global cross-resource analysis now uses a SQLite-backed `DiskIndex` to avoid memory exhaustion during relational resolution.
+*   **Zero-List Master Process**: For ultra-scale runs (>5000 files), the master process operates in a "Zero-List" mode, ensuring zero memory accumulation.
+
+## 🏎️ Engine Tiers (The Turbo Button)
+Yamlr offers three engine tiers via the `--engine` flag to balance safety and speed:
+*   **Python (Standard)**: High-fidelity healing with maximum comment preservation.
+*   **Native (Turbo)**: **150 MB/s** high-speed structural audit using the Rust extension. Ideal for rapid CI gating.
+*   **Rust (Experimental)**: Hybrid experimental path for ultra-fast discovery.
 
 ---
 
-## 🔥 Top “Magic Moments”
+### 0.5️⃣ Cross-Domain Safety (The Cloud Gap) 🌍
+
+Yamlr bridges the gap between your Kubernetes manifests and your cloud infrastructure. 
+It parses **Terraform (.tf)** files to ensure that your `PersistentVolumes` actually match your `aws_ebs_volume` and that your `Secrets` correctly link to your `aws_db_instance` credentials.
+
+---
 
 ### 1️⃣ Ghost Services
 
@@ -98,7 +149,7 @@ Yamlr detects and fixes.
 Upgrade cluster → manifests break.
 
 ```bash
-yamlr upgrade . --to 1.31
+yamlr upgrade . --to 1.31  # Also: yamlr migrate . --to 1.31
 ```
 
 Covers K8s 1.9 → 1.31. Automatically migrates deprecated APIs safely.
@@ -122,6 +173,37 @@ Shows visual diff before applying changes.
 Backups are automatically created.
 
 No silent rewrites.
+
+---
+
+### 6️⃣ Resource Topology & Blast Radius
+
+Visualize complex dependencies and audit the "Blast Radius" of a potential failure.
+
+```bash
+yamlr graph topo
+yamlr graph blast-radius --resource Deployment/my-app
+yamlr graph export --format mermaid
+```
+
+---
+
+# 🧬 Semantic DNA & Restoration
+
+Yamlr ensures 100% intent preservation through its **Semantic DNA Integrity** engine.
+
+### `yamlr dna`
+Verify configuration integrity in CI to ensure no unauthorized changes were made:
+```bash
+yamlr dna deployment.yaml
+yamlr dna deployment.yaml --hash <expected_hash> # Enforce immutability
+```
+
+### `yamlr restore`
+Instant rollback to previous configurations from the automatic backup vault:
+```bash
+yamlr restore <file_path> # Restore the specific file from its most recent backup
+```
 
 ---
 
@@ -166,6 +248,8 @@ Yamlr preserves:
 * Field ordering
 * Whitespace where possible
 
+Use **`--sovereign`** [Pro] for enterprise aesthetics, including schema-aware key sorting (apiVersion, kind, metadata at top) and comment grafting to preserve annotations during reformatting.
+
 Clean diffs. GitOps-friendly.
 
 ---
@@ -175,23 +259,32 @@ Clean diffs. GitOps-friendly.
 ## Read-Only Safety Analysis
 
 ```bash
-yamlr scan .
-yamlr check .
-yamlr audit .
-```
-
-### CI Gate Mode
-
-```bash
-yamlr scan . --fail-on error
-```
-
-Exit code 1 if violations found.
-Use `--risk-threshold` for safety-based gating:
-```bash
-yamlr scan . --risk-threshold high
-```
+yamlr scan .   # Also: yamlr audit .
+yamlr check .  # Strict validation
 Perfect for GitHub Actions / GitLab CI.
+
+### 🛡️ GitOps Guard (Regression Testing)
+
+Adopting Yamlr on a legacy repository can be noisy if you have hundreds of pre-existing violations. Use the **Baseline** command to snapshot existing issues and only block on **new** regressions.
+
+```bash
+# 1. Establish Baseline
+yamlr baseline . --output .yamlr-baseline.json
+
+# 2. Enforce in CI (Exit 1 only on NEW issues)
+yamlr scan . --baseline .yamlr-baseline.json --fail-on any
+```
+
+Yamlr calculates a stable SHA-256 fingerprint for every finding. If a finding is already in the baseline, it is ignored and won't trigger a non-zero exit code.
+
+### 🛡️ Auditor-Ready Evidence
+
+```bash
+yamlr heal . --evidence-dir ./audit-evidence
+yamlr evidence ./audit-evidence --format pdf
+```
+
+Generate mathematical proof of compliance. See [yamlr_evidence.md](cli/yamlr_evidence.md) for details.
 
 ---
 
@@ -206,18 +299,47 @@ Interactive by default.
 > [!NOTE]
 > **Free Tier Usage:** Automated healing is limited to **5 files per day** for free users. This allows you to experience the "magic" of Yamlr Surgeon on small tasks or tricky deployments. Scanning and auditing (`yamlr scan`) remain unlimited.
 
-### Fully Automatic Mode (Surgeon)
+### Advanced Surgeon Flags
+
+| Flag | Effect | Tier |
+|:--|:--|:--|
+| `--adapters-dir DIR` | Directory containing custom Python/Bash remediation scripts | 💎 Pro |
+| `--adapter-shadow-mode` | Record evidence receipts without modifying manifests | 💎 Pro |
+| `--allow-break-glass-adapters` | Explicitly authorize high-privilege adapters | 💎 Pro |
+| `--yes-all` | Auto-confirm all changes in batch mode | ✅ Free |
+| `--no-backup` | Skip backup creation (DANGEROUS) | ✅ Free |
+| `--dry-run` | Show diff without writing | ✅ Free |
+| `--fix-refs` | **Cross-Resource Auto-Fix** (selectors, ports, etc.) | 💎 Pro |
+| `--stub-refs` | Generate missing ConfigMaps/Secrets from schema | 💎 Pro |
+| `--harden` | Apply PSS hardening (privileged: false, etc.) | 💎 Pro |
+| `--enforce-limits` | Inject CPU/Memory requests & limits | 💎 Pro |
+| `--fix-tags` | Remediate mutable image tags (e.g. :latest) | ✅ Free |
+| `--enforce-probes` | Apply Liveness/Readiness probes | 💎 Pro |
+| `--check-deprecations`| Audit for deprecated K8s APIs | ✅ Free |
+| `--enforce-namespace` | Auto-inject namespace if missing | ✅ Free |
+| `--pro-preview` | Simulate Pro fixes in Free version | ✅ Free |
+| `--sovereign` | Enable high-fidelity sovereign export | 💎 Pro |
+| `--fast` | Lightning-fast Rust scanning | 💎 Pro |
+
+### 🛡️ MCP for AI Agents (Pro)
+
+Connect Yamlr to your AI assistant (Cursor, Claude, etc.) for surgical manifest analysis.
 
 ```bash
-yamlr heal . --yes-all
+# Start the MCP stdio server
+yamlr mcp
 ```
+
+Yamlr exposes `scan_manifest`, `heal_manifest`, and `why` tools to agents, ensuring AI suggestions are safe and deterministic.
+
+---
 
 ---
 
 ## Kubernetes Upgrade Migration
 
 ```bash
-yamlr upgrade . --to 1.31
+yamlr upgrade . --to 1.31  # Also: yamlr migrate . --to 1.31
 ```
 
 Covers K8s 1.9 through 1.31 (forward-looking to 1.32).
@@ -225,12 +347,21 @@ Forward-only safe migration.
 
 ---
 
-## 🔗 Cross-Resource Dependency Graph
+## 🔗 Cross-Domain ResourceGraph
 
-Yamlr builds a **ResourceGraph** of your manifests — 17 typed edge relationships:
+Yamlr builds a **ResourceGraph** of your manifests and cloud infrastructure — **26 typed edge relationships**:
 
+*   **OwnerReference:** (Deployment → RS → Pod). Crucial for "Auto-Cleanup" and "Blast Radius" mapping.
+*   **VolumeMount → Container:** Internal resource binding (finding which container is starving which PVC).
+*   **Service → EndpointSlice:** The literal traffic path that OPA often misses.
+*   **ResourceQuota → Namespace:** Mapping application appetite to cluster availability.
+*   **KMS → Secret:** Mapping the security chain for compliance audits (SOC2/FedRAMP).
+*   **VPA → Workload:** Vertical pod autoscaling dependencies.
+*   **Gateway → GatewayClass:** Full Gateway API depth.
 * Service → Pod (selector match)
 * Ingress → Service (backend)
+* PersistentVolume → Cloud Storage (EBS/S3)
+* Secret → Cloud Database (RDS/IAM)
 * ConfigMap/Secret → Pod (volume/env)
 * HPA → Deployment (scale target)
 * NetworkPolicy → Pod (isolation)
@@ -241,17 +372,31 @@ This enables **blast radius analysis** — knowing which resources are affected 
 
 ---
 
+# 🏗️ Architectural Primitives
+Yamlr is built on three core pillars that ensure its surgical precision and reliability:
+
+### 1. CatalogManager
+The **CatalogManager** is the brain of Yamlr's K8s awareness. it manages the lifecycle of Kubernetes OpenAPI schemas, ensuring that every scan is performed against the exact API definitions of your target cluster. It supports version switching from v1.9 to v1.35+.
+
+### 2. RuleManager
+The **RuleManager** orchestrates the 100+ diagnostic rules that power Yamlr's analysis. It handles rule discovery, severity weighting, and risk classification, allowing Yamlr to provide consistent, explainable feedback across all environments.
+
+### 3. ResourceGraph
+The **ResourceGraph** is the connective tissue of your infrastructure. Unlike simple linters that look at files in isolation, Yamlr builds a directed acyclic graph (DAG) of your entire repository, mapping hidden dependencies like service selectors to pod labels and ingress backends to service ports.
+
+---
+
 ## ⚡ Risk Classification (Safety Engine)
 
 Every finding is processed by the **Risk Classifier**, which uses heuristic scoring to categorize risks into one of **15 safety buckets**:
 
 * Traffic Routing Failure
-* Data Dependency Failure
-* API Deprecation Risk
-* Security Policy Violation
+* Data Dependency Risk
+* Resource Exhaustion Risk
+* Security Posture Weakness
 * Network Isolation Risk
 * Image Pull Failure Risk
-* And 9 more...
+* And 9 more (Version, RBAC, Scheduling, etc.)
 
 Each category has an impact scope (cluster/namespace) and risk level (HIGH/MEDIUM/LOW).
 
@@ -301,10 +446,11 @@ yamlr heal . --pro-preview
 
 # 📊 Project Health & ROI
 
-Yamlr tracks its impact locally.
+Yamlr tracks its impact locally and provides per-application safety scoring.
 
 ```bash
 yamlr stats
+yamlr stats --apps    # Detailed per-app safety report
 ```
 
 Shows:
@@ -312,27 +458,88 @@ Shows:
 * Fixes applied
 * Time saved
 * Detection coverage
-* Project health score
+* **App Safety Score** (0-100)
+* Top Risk Categories (Security, Availability, etc.)
 
 No telemetry leaves your machine.
 
 ---
 
+# 📈 Executive ROI & Safety Dashboards
+
+Yamlr provides high-level diagnostics for engineering leaders and founders to justify budgets and track ecosystem health.
+
+```bash
+yamlr roi              # Business Value: Engineering hours saved & project rank
+yamlr roi --badge      # Generate a Shields.io ROI badge for your README
+yamlr stats            # Local telemetry: Files healed & ROI summary
+yamlr stats --apps     # Detailed per-app safety report & blast-radius
+yamlr pulse            # Founder Intelligence: Aggregate rule efficacy & coverage
+```
+
+---
+
+# 📦 Diagnostic & Support
+
+### `yamlr diagnose`
+Deep-dive analysis with elevated verbosity for environment-specific debugging.
+```bash
+yamlr diagnose .
+yamlr diagnose . --output json  # Machine-readable debug output
+yamlr diagnose . --bundle       # [PRO] Export anonymized founder-ready support zip
+```
+
+The `--bundle` command creates a `yamlr-bundle-<timestamp>.zip` containing anonymized telemetry, configuration summaries, and environment data to help with strategic review.
+
+---
+
+# 🚀 IDP Integration & Exports
+
+Yamlr acts as a "Supplier of Truth" for your internal developer portals.
+
+```bash
+yamlr idp-export --format backstage
+yamlr idp-export --format prometheus
+```
+
+Supported formats:
+* **Backstage**: JSON component annotations.
+* **Prometheus**: OpenMetrics text for Grafana dashboards.
+* **JSON**: Raw internal safety spec.
+
+### `yamlr idp-export init`
+Generate opinionated integration templates for your IDP:
+```bash
+yamlr idp-export init --format backstage --output catalog-info.yaml
+yamlr idp-export init --format prometheus --output prometheus-scrape.yml
+```
+
+---
+
 # ⚙ Common Power Flags
 
-| Flag                         | Purpose                      |
-| ---------------------------- | ---------------------------- |
-| `--diff` / `--dry-run`       | Show changes without writing |
-| `--pro-preview`              | [Heal] Simulate PRO fixes safely |
-| `--fail-on {error,warning,any}` | CI/CD Gate: Exit 1 if issues found |
-| `--risk-threshold {high,medium,low}` | Exit 1 based on risk impact |
-| `--kube-version`             | Target K8s version (e.g. 1.31) |
-| `--strict`                   | [Check] Treat warnings as errors |
-| `--summary-only`             | Batch mode: show aggregate only |
-| `--quiet`                    | Minimal output for CI/CD     |
-| `--concurrency N`            | Parallel worker count        |
-| `--stream-to FILE`           | Ultra-scale: Stream to NDJSON |
-| `--identity-mode {infer,strict}` | Identity detection style |
+| Flag                         | Purpose                      | Tier |
+| ---------------------------- | ---------------------------- |:--|
+| `--diff` / `--dry-run`       | Show changes without writing | ✅ Free |
+| `--pro-preview`              | [Heal] Simulate PRO fixes safely | ✅ Free |
+| `--fail-on {error,warning,any}` | CI/CD Gate: Exit 1 if issues found | ✅ Free |
+| `--risk-threshold {high,medium,low}` | Exit 1 based on risk impact | ✅ Free |
+| `--kube-version`             | Target K8s version (e.g. 1.31) | ✅ Free |
+| `--strict`                   | [Check] Treat warnings as errors | ✅ Free |
+| `--summary-only`             | Batch mode: show aggregate only | ✅ Free |
+| `--quiet` / `--clinical`      | Minimal output for GitOps/CI | ✅ Free |
+| `--compact`                  | Minimal whitespace in output | ✅ Free |
+| `--concurrency N`            | Parallel worker count        | ✅ Free |
+| `--stream-to FILE`           | Ultra-scale: Stream to NDJSON | ✅ Free |
+| `--baseline FILE`            | Path to violation baseline | ✅ Free |
+| `--identity-mode {infer,strict}` | Identity detection style | ✅ Free |
+| `--experimental-rust`        | [Hybrid] Enable Rust scanner | ✅ Free |
+| `--timing`                   | [Performance] Show execution breakdown | ✅ Free |
+| `--timing-file FILE`          | [Performance] Save profile to JSON | ✅ Free |
+| `--adapters-dir DIR`         | [Pro] Custom remediation scripts | 💎 Pro |
+| `--receipt`                  | Generate DNA receipts | 💎 Pro |
+| `--sovereign`                | High-fidelity export | 💎 Pro |
+| `--fast`                     | Max-speed Rust scanning | 💎 Pro |
 
 ---
 
@@ -398,6 +605,8 @@ Yamlr uses a tiered model to support small teams while providing enterprise-grad
 | **Security Hardening** | Manual | **Automated (`--harden`)** |
 | **DNA Verification** | Manual | **Automated (`--hash`)** |
 | **Ecosystem Adapters** | N/A | **OPA & Kyverno** |
+| **Native Acceleration** | Partial | **Full (`--fast`)** |
+| **High-Fidelity Export** | Standard | **Sovereign (`--sovereign`)** |
 
 Upgrade:
 
@@ -430,7 +639,10 @@ yamlr catalog update --kube-version 1.32
 ## Compliance Evidence & Auto-Remediation (Pro)
 
 ```bash
-# Ingest Kyverno reports and apply Yamlr auto-fixes
+# Unified Remediation: Ingest OPA/Kyverno reports and apply Yamlr auto-fixes
+yamlr heal . --from-report policy-report.json
+
+# (Legacy) Ingest Kyverno reports specifically
 yamlr heal . --kyverno-report policy-report.json
 
 # Generate cryptographic DNA receipts
@@ -442,7 +654,9 @@ Aggregates cryptographic DNA receipts into auditor-ready PDF reports.
 ## SRE Dashboard (Health)
 
 ```bash
-yamlr status
+yamlr status                     # SRE dashboard view
+yamlr doctor --k8s-matrix        # Validate K8s catalog matrix integrity
+yamlr doctor --k8s-matrix-strict # Exit 1 if bundles are missing or stale (CI Gate)
 ```
 
 Displays the system health dashboard, including configuration status, catalog info, and backup usage.
@@ -451,6 +665,7 @@ Displays the system health dashboard, including configuration status, catalog in
 
 ```bash
 yamlr diagnose .
+yamlr diagnose . --bundle        # [PRO] Export anonymized founder-ready support zip
 ```
 
 Runs a deep audit with DEBUG logging. Use to trace engine decisions.
@@ -493,6 +708,31 @@ Ensure you are using:
 ```bash
 yamlr scan . --fail-on error
 ```
+
+---
+
+---
+
+# 🕵️ Security Model & Guarantees
+
+Yamlr is designed for "A+" security grade compliance. Our safety architecture prioritizes **Information Anonymity** and **Supply Chain Integrity**.
+
+### 1. Information Anonymity (Path Masking)
+To prevent accidental information disclosure in CI/CD logs or portable audit reports, Yamlr aggressively masks system-specific absolute paths:
+*   **`~`**: User home directory paths are redacted.
+*   **`[TMP]`**: System temporary directories are masked.
+*   **`.`**: Current Working Directory is localized to promote environment-neutral results.
+*   **Standard Roots**: Common sensitive Linux/K8s paths are audited but never leaked in raw form.
+
+### 2. Supply Chain & I/O Safety
+*   **YAML Bomb Protection**: Standard depth limits prevent "Billion Laughs" Denial of Service attacks during manifest parsing.
+*   **SSRF Mitigation**: Remote policy fetching (`--data http://...`) includes size limits and timeout gates to prevent internal network scanning.
+- **TOCTOU Hardening**: All file writes use atomic `fsync` + `rename` cycles within a protected, permissioned backup vault.
+*   **Memory Hygiene**: Sensitive environment variables like `Yamlr_LICENSE_KEY` are scrubbed from memory immediately after verification.
+
+### 3. Verification & Trust
+*   **Signatures**: Pro features utilize HMAC-SHA256 JWT validation with constant-time cryptographic comparisons.
+*   **Local-First**: 100% of analysis happens locally. No source code or manifest content is ever transmitted to Yamlr servers.
 
 ---
 

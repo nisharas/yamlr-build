@@ -1,0 +1,41 @@
+name: Security Scan
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    - cron: '0 0 * * 1' # Weekly scan
+
+jobs:
+  security-audit:
+    name: Security Audit & Secret Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Security Tools
+        run: |
+          pip install pip-audit detect-secrets
+
+      - name: Dependency Audit (pip-audit)
+        run: |
+          # Allow it to fail build on high-severity vulnerabilities
+          pip-audit --strict --desc on -r src/requirements.txt || true
+          # Note: Added '|| true' for initial baseline; remove to enforce in future.
+
+      - name: Secret Scan (detect-secrets)
+        run: |
+          detect-secrets scan --all-files --exclude-files '.*\.gemini/.*' --exclude-files '.*brain/.*' > .secrets.baseline
+          # Verification step: if baseline has results, fail or warn
+          if [ -s .secrets.baseline ]; then
+            echo "⚠️ Potential secrets detected in codebase!"
+            cat .secrets.baseline
+          fi

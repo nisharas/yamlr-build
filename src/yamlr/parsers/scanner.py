@@ -44,6 +44,7 @@ Date: 2026-02-17
 Version: 1.2.1 (Modular Decomposition)
 """
 
+from __future__ import annotations
 import logging
 from typing import List, Tuple, Optional, Any, Dict
 
@@ -61,6 +62,8 @@ logger = logging.getLogger("yamlr.scanner")
 # =============================================================================
 # THE IDENTITY ARCHEOLOGIST
 # =============================================================================
+__all__ = ['YamlrScanner']
+
 
 class YamlrScanner(IdentityMixin, HeuristicsMixin, ForensicsMixin):
     """
@@ -115,7 +118,7 @@ class YamlrScanner(IdentityMixin, HeuristicsMixin, ForensicsMixin):
                  catalog: Optional[Dict[Any, Any]] = None,
                  schema_type: str = "kubernetes",
                  app_name: str = "Yamlr",
-                 pro_brand: str = "Yamlr Enterprise",
+                 pro_brand: str = "Yamlr Enterprise (Pro)",
                  **schema_sources):
         """
         Initializes the scanner with schema catalog(s) and branding.
@@ -129,7 +132,7 @@ class YamlrScanner(IdentityMixin, HeuristicsMixin, ForensicsMixin):
             catalog: Primary schema catalog (K8s core + CRDs)
             schema_type: Schema format type ("kubernetes", "openapi", "mixed")
             app_name: Branding for CLI and log messages (default: "Yamlr")
-            pro_brand: Specific branding for Enterprise features (default: "Yamlr Enterprise")
+            pro_brand: Specific branding for Enterprise features (default: "Yamlr Enterprise (Pro)")
             **schema_sources: Additional schema catalogs for future expansion
                 - openapi_catalog: OpenAPI 3.0 schema definitions
                 - crd_catalog: Custom Resource Definition catalog
@@ -231,113 +234,152 @@ class YamlrScanner(IdentityMixin, HeuristicsMixin, ForensicsMixin):
             )
 
     # =========================================================================
+    def fast_scan(self, raw_yaml: str) -> List[ManifestIdentity]:
+        """
+        Ultra-fast identity extraction bypassing the Shard loop.
+        Uses the native Rust implementation if available, with a Python
+        safety check for identity collisions.
+        """
+        if self._has_identity_collision(raw_yaml):
+            logger.debug("Identity collision detected in raw YAML. Falling back to Python scanner for diagnostic precision.")
+            return self.scan_shards(self._get_shards_fallback(raw_yaml))
+
+        try:
+            try:
+                from yamlr_native import fast_scan
+            except ImportError:
+                from yamlr.native import fast_scan
+            raw_results = fast_scan(raw_yaml)
+            
+            identities = []
+            for res in raw_results:
+                identities.append(ManifestIdentity(
+                    kind=res.get("kind"),
+                    api_version=res.get("api_version"),
+                    name=res.get("name"),
+                    namespace=res.get("namespace"),
+                    was_repaired=False # Fast scan is discovery-only
+                ))
+            return identities
+        except (ImportError, Exception) as e:
+            logger.debug(f"Native fast_scan failed or unavailable: {e}. Falling back to Python.")
+            return self.scan_shards(self._get_shards_fallback(raw_yaml))
+
+    def _has_identity_collision(self, raw_yaml: str) -> bool:
+        """
+        Lightweight check for multiple root-level 'kind' or 'apiVersion' keys.
+        Supports multi-document manifests with low memory overhead.
+        """
+        import re
+        # Single-pass regex for document boundaries and identity markers at indent 0
+        pattern = re.compile(r'(?m)^(?:---$|kind\s*:|apiVersion\s*:)')
+        
+        has_kind = False
+        has_api = False
+        
+        for match in pattern.finditer(raw_yaml):
+            marker = match.group(0).strip()
+            
+            if marker == "---":
+                # Reset for next document
+                has_kind = False
+                has_api = False
+            elif marker.startswith("kind"):
+                if has_kind: return True
+                has_kind = True
+            elif marker.startswith("apiVersion"):
+                if has_api: return True
+                has_api = True
+                
+        return False
+
+    def _get_shards_fallback(self, raw_yaml: str) -> List[Shard]:
+        from yamlr.parsers.lexer import YamlrLexer
+        lexer = YamlrLexer()
+        return lexer.shard(raw_yaml)
+
     # PUBLIC API: SHARD SCANNING (STAGE 3)
     # =========================================================================
 
     def scan_shards(self, shards: List[Shard], mode: str = "infer") -> List[ManifestIdentity]:
         """
         [Stage 3] The Main Entry Point for Identity Archeology.
-
-        Logic Flow:
-        1. Initialization: Resets internal state for a fresh stream.
-        2. Root Detection: Determines the minimum indentation for the document.
-        3. Archeology Loop: Iterates through shards to mine identity markers.
-        4. Convergence: Flushes results and aligns drifted markers.
-        5. Filtering: Applies OSS/Pro logic based on the user's license.
-
-        Args:
-            shards: The flat stream of shards from Stage 1.
-            mode: "infer" (best effort healing) or "strict" (K8s compliance).
-
-        Returns:
-            List[ManifestIdentity]: A list of validated resource IDs found in the stream.
         """
-        # Step 1: State Reset (Forensic Cleanup)
         self._reset_state()
-
-        # Tracking dynamic minimum indentation to identify the doc's "logical root".
         min_indent = 999
 
-        # Step 2: The Archeology Loop
         for shard in shards:
-            # Check for Multi-Document Boundary (---)
             if shard.is_doc_boundary:
-                self._flush_current_identity()
+                self._flush_doc_state()
                 min_indent = 999
                 continue
 
-            # Skip Opaque Data: Block scalars (ConfigMap data, scripts, etc.)
-            if shard.is_block:
-                continue
+            if shard.is_block: continue
 
-            # Identify the Document Root: Find the shallowest key depth.
             if shard.key and shard.indent < min_indent:
                 min_indent = shard.indent
 
-            # Maintain Hierarchy Tracker: Update Indentation Physics.
             self._update_path_context(shard)
 
-            # Skip non-key shards.
             if not shard.key:
                 continue
 
-            # Normalize key and value (DNA Mining).
             key = shard.key.strip()
             val = self._clean_id(shard.value)
 
-            # [HEALER TIER 0] Fuzzy Typo Correction
-            if key not in self._known_structure_keys and not self._in_freeform_block:
-                suggestion = self.schema_manager.fuzzy_match(key)
-                if suggestion:
-                    shard.intent_tag = f"k8s.typo:{key}:{suggestion}"
-                    logger.debug(f"Stage 3 Typo Corrected: '{key}' → '{suggestion}' (line {shard.line_no})")
-                    key = suggestion
+            # Healer Tier 0: Typo Correction
+            key = self._check_and_fix_typo(shard, key)
 
-            # Step 3: Semantic Intent Tagging.
             self._tag_intent(shard, key)
-
-            # Step 4: Cross-Resource Metadata Extraction (Resource Graphing).
             self._extract_cross_resource_metadata(shard, key, val)
-
-            # Safety: We need a value to identify a resource.
-            if not val:
-                continue
-
-            # [PHASE 3B: SOVEREIGNTY TRACKING]
+            
+            # Sovereignty Tracking
             if key in self._sovereign_candidates:
                 self._sovereign_candidates[key].append((shard.indent, val, shard.line_no))
 
-            # Heuristic Branch A: Root-Level Identification.
+            # Identity Extraction logic
             is_root = (shard.indent == min_indent)
-            if is_root:
-                if key == "kind":
-                    self._current_identity.kind = val
-                    if not (shard.intent_tag and "typo" in shard.intent_tag):
-                        shard.intent_tag = "identity.kind"
-                elif key == "apiVersion":
-                    self._current_identity.api_version = val
-                    if not (shard.intent_tag and "typo" in shard.intent_tag):
-                        shard.intent_tag = "identity.api_version"
-                elif key == "name" and not self._current_identity.name:
-                    self._current_identity.name = val
-                    shard.intent_tag = "identity.name_recovered"
-                elif key == "namespace" and not self._current_identity.namespace:
-                    self._current_identity.namespace = val
-                    shard.intent_tag = "identity.namespace_recovered"
+            self._process_identity_marker(shard, key, val, is_root)
 
-            # Heuristic Branch B: Global Metadata Extraction.
-            if self._in_global_metadata and not shard.is_list_item:
-                if key == "name" and not self._current_identity.name:
-                    self._current_identity.name = val
-                    shard.intent_tag = "identity.name"
-                elif key == "namespace" and not self._current_identity.namespace:
-                    self._current_identity.namespace = val
-                    shard.intent_tag = "identity.namespace"
-
-        # Step 5: Final Document Convergence (Cleanup).
         self._flush_current_identity()
+        return self._finalize_scan(mode)
 
-        # Step 6: Licensing & Logic Gating.
+    def _flush_doc_state(self) -> None:
+        """Resets state for a new document boundary."""
+        self._flush_current_identity()
+        # Reset doc-specific markers if needed (implemented in IdentityMixin/HeuristicsMixin)
+
+    def _check_and_fix_typo(self, shard: Shard, key: str) -> str:
+        """Applies fuzzy typo correction to K8s keys."""
+        # [ROUND-10] Defensive: Skip fuzzy matching for very short keys to prevent accidental identity collisions (e.g. 'app' -> 'kind')
+        if len(key) < 4:
+            return key
+
+        if key not in self._known_structure_keys and not self._in_freeform_block:
+            suggestion = self.schema_manager.fuzzy_match(key, kind=self._current_identity.kind)
+            if suggestion:
+                shard.intent_tag = f"k8s.typo:{key}:{suggestion}"
+                logger.debug("Stage 3 Typo Corrected: '%s' → '%s' (line %d)", key, suggestion, shard.line_no)
+                return suggestion
+        return key
+
+    def _process_identity_marker(self, shard: Shard, key: str, val: str, is_root: bool) -> None:
+        """Identifies core K8s identity markers (kind, version, name)."""
+        if is_root:
+            if key == "kind":
+                self._current_identity.kind = val
+            elif key == "apiVersion":
+                self._current_identity.api_version = val
+            elif key == "name" and not self._current_identity.name:
+                self._current_identity.name = val
+
+        if self._in_global_metadata and not shard.is_list_item:
+            if key == "name" and not self._current_identity.name:
+                logger.debug(f"[SCANNER] Setting name to '{val}' for {self._current_identity.kind} (Line {shard.line_no})")
+                self._current_identity.name = val
+
+    def _finalize_scan(self, mode: str) -> List[ManifestIdentity]:
+        """Applies license-based filtering and audits."""
         if mode == "strict":
             valid_ids = self._filter_identities_oss()
         elif self.pro_mode:
@@ -345,12 +387,8 @@ class YamlrScanner(IdentityMixin, HeuristicsMixin, ForensicsMixin):
         else:
             valid_ids = self._filter_identities_oss()
 
-        # Step 7: Post-Scan Forensic Audit.
         self._log_scan_summary_verbose(valid_ids)
-
-        # Step 8: Early Deprecation Audit.
         self._audit_deprecations(valid_ids)
-
         return valid_ids
 
     # =========================================================================
@@ -371,10 +409,3 @@ class YamlrScanner(IdentityMixin, HeuristicsMixin, ForensicsMixin):
             self._sovereign_candidates[k] = []
 
 
-# =============================================================================
-# BACKWARD COMPATIBILITY & LIFECYCLE
-# =============================================================================
-
-# Chief Surgeon (pipeline.py) Compatibility:
-# High-fidelity alias for the namespaced YamlrScanner.
-KubeScanner = YamlrScanner

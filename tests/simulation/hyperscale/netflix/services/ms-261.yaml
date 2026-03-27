@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-261
+  labels:
+    app: ms-261
+    dependency: ms-262
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-261
+  template:
+    metadata:
+      labels:
+        app: ms-261
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-262

@@ -7,12 +7,17 @@ Extracts:
 - spec.rules[].http.paths[].backend.serviceName (Ingress v1beta1)
 """
 
+from __future__ import annotations
 from typing import List
 
 from yamlr.models import ManifestIdentity, Shard
+__all__ = ['IngressExtractor']
 
 
-class IngressExtractor:
+
+from .base_extractor import BaseMetadataExtractor
+
+class IngressExtractor(BaseMetadataExtractor):
     """Extracts Service references from Ingress resources."""
 
     @staticmethod
@@ -38,43 +43,32 @@ class IngressExtractor:
         # Check for start of a new path (backend context)
         if key == "path":
             # Start a new backend entry
+            if identity.ingress_backends is None: identity.ingress_backends = []
             identity.ingress_backends.append({})
             return False  # Continue processing val, we just wanted the signal
 
         # Check for service name reference
-        if key in ("name", "serviceName"):
-            # Must be in backend context
-            if "backend" in path_keys:
-                # v1: backend.service.name
-                # v1beta1: backend.serviceName
-                if "service" in path_keys or key == "serviceName":
-                    if val:
-                        if val not in identity.service_refs:
-                            identity.service_refs.append(val)
-
-                        # Populate backend dict
-                        if not identity.ingress_backends:
-                            identity.ingress_backends.append({})
-                        identity.ingress_backends[-1]["service"] = val
-                    return True
+        if key in ("name", "serviceName") and "backend" in path_keys:
+            # v1: backend.service.name / v1beta1: backend.serviceName
+            if "service" in path_keys or key == "serviceName":
+                IngressExtractor._apply_list_extraction(shard, key, val, identity, "service_refs")
+                
+                # Populate backend dict
+                if not identity.ingress_backends:
+                    identity.ingress_backends = [{}]
+                identity.ingress_backends[-1]["service"] = val
+                return True
 
         # Check for service port reference
-        if key in ("number", "servicePort"):
-            if "backend" in path_keys:
-                if (
-                    "port" in path_keys and "service" in path_keys
-                ) or key == "servicePort":
-                    if val:
-                        if not identity.ingress_backends:
-                            identity.ingress_backends.append({})
-                        identity.ingress_backends[-1]["port"] = str(val)
-                    return True
+        if key in ("number", "servicePort") and "backend" in path_keys:
+            if ("port" in path_keys and "service" in path_keys) or key == "servicePort":
+                if not identity.ingress_backends:
+                    identity.ingress_backends.append({})
+                identity.ingress_backends[-1]["port"] = str(val)
+                return True
 
         # Check for ingressClassName
         if key == "ingressClassName":
-            if val:
-                if val not in identity.ingress_class_refs:
-                    identity.ingress_class_refs.append(val)
-            return True
+            return IngressExtractor._apply_list_extraction(shard, key, val, identity, "ingress_class_refs")
 
         return False

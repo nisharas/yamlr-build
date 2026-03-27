@@ -1,0 +1,27 @@
+# Kustomize Patch for Argo CD Repo Server
+# Usage: kustomize edit add patch --path sidecar-patch.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: argocd-repo-server
+spec:
+  template:
+    spec:
+      containers:
+      - name: yamlr
+        image: yamlr/yamlr:latest
+        command: [/var/run/argocd/argocd-cmp-server]
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 999
+        volumeMounts:
+        - mountPath: /var/run/argocd
+          name: var-run-argocd
+        - mountPath: /home/argocd/cmp-server/plugins
+          name: plugins
+        - mountPath: /tmp
+          name: tmp
+      volumes:
+      - name: plugins
+        configMap:
+          name: yamlr-plugin-config # The plugin.yaml should be here

@@ -1,0 +1,25 @@
+# Yamlr Configuration File
+# Documentation: https://yamlr.dev/config
+
+kubernetes:
+  # Auto-detected from your environment at init time
+  version: "v1.31"
+
+rules:
+  # Minimum health score (0-100) to fail the pipeline
+  threshold: 80
+
+  # Ignore specific rules globally
+  # ignore:
+  #   - "rules/no-latest-tag"
+  #   - "rules/resource-limits"
+
+ignore:
+  # Paths to exclude from scanning (glob patterns)
+  files:
+    - "test/*"
+    - "vendor/**"
+
+output:
+  # Default output format (text, json, sarif)
+  format: text

@@ -4,13 +4,17 @@ Schema Analyzer - Validates API versions against K8s OpenAPI schemas
 Integrates SchemaValidator into the Yamlr pipeline.
 """
 
+from __future__ import annotations
+
 import logging
-from typing import List
+from typing import Any, Dict, List, Optional
 
 from yamlr.analyzers.base import AnalysisResult, BaseAnalyzer
 from yamlr.validators.schema_validator import SchemaValidator
 
 logger = logging.getLogger("yamlr.analyzers.schema")
+__all__ = ['SchemaAnalyzer']
+
 
 
 class SchemaAnalyzer(BaseAnalyzer):
@@ -21,15 +25,16 @@ class SchemaAnalyzer(BaseAnalyzer):
     in the target Kubernetes version.
     """
     
-    def __init__(self, k8s_version: str = "1.31"):
+    def __init__(self, catalog: Dict[str, Any], k8s_version: str = "1.31"):
         """
         Initialize schema analyzer.
         
         Args:
+            catalog: Distilled schema catalog
             k8s_version: Target Kubernetes version (e.g., "1.31")
         """
         super().__init__()
-        self.validator = SchemaValidator(k8s_version)
+        self.validator = SchemaValidator(catalog, k8s_version)
     
     @property
     def name(self) -> str:
@@ -64,9 +69,17 @@ class SchemaAnalyzer(BaseAnalyzer):
                 self.validator = SchemaValidator(target_version)
 
         for resource in resources:
+            # [ROUND-10] Defensive check: if resource is not dict-like, skip it
+            # Why: Malformed or string-only YAML documents can slip into the resource list
+            if not isinstance(resource, dict) and not hasattr(resource, "to_dict"):
+                continue
+
+            # Normalize to primitives for schema validation and reporting
+            data = resource.to_dict() if hasattr(resource, "to_dict") else resource
+            
             # Extract apiVersion and kind
-            api_version = resource.get("apiVersion")
-            kind = resource.get("kind")
+            api_version = data.get("apiVersion")
+            kind = data.get("kind")
             
             if not api_version or not kind:
                 # Missing apiVersion or kind - will be caught by other analyzers
@@ -76,7 +89,7 @@ class SchemaAnalyzer(BaseAnalyzer):
             error = self.validator.validate_api_version(api_version, kind)
             if error:
                 # Update resource context in the error
-                error.resource_name = resource.get("metadata", {}).get("name", "<unknown>")
+                error.resource_name = data.get("metadata", {}).get("name", "<unknown>")
                 error.resource_kind = kind
                 logger.debug(f"Invalid API version: {api_version} for {kind}")
                 results.append(error)

@@ -5,6 +5,11 @@ Why: Groups the medium-complexity subcommand help texts that share
      a common pattern (USAGE + OPTIONS + standard flags). Keeps the
      main help_formatter.py lean.
 """
+from __future__ import annotations
+from .shared import print_shared_analysis_options, print_semantic_protection_options
+
+__all__ = ['help_diagnose', 'help_secure', 'help_upgrade', 'help_dna', 'help_evidence']
+
 
 
 def help_diagnose(console, invoked_as: str) -> None:
@@ -24,7 +29,8 @@ def help_diagnose(console, invoked_as: str) -> None:
     console.print("\n[bold cyan]OPTIONS[/bold cyan]")
     console.print("  target              File(s) or directory(s) to analyze")
     console.print("  --output FORMAT     Report format (text, json)")
-    _print_standard_options(console)
+    print_shared_analysis_options(console)
+    print_semantic_protection_options(console, is_heal=False)
 
 
 def help_secure(console, invoked_as: str) -> None:
@@ -41,8 +47,12 @@ def help_secure(console, invoked_as: str) -> None:
         "\nApplies enterprise security hardening (Pro feature)."
     )
     console.print(
-        "Enforces: [dim]runAsNonRoot, readOnlyRootFilesystem, "
-        "drop capabilities, logic limits.[/dim]"
+        "Powered by the [bold cyan]Shield Engine[/bold cyan], it detects and fixes:\n"
+        "  • [yellow]SHD-001[/yellow]: Dangerous HostPath Exposures\n"
+        "  • [yellow]SHD-002[/yellow]: Privilege Escalation Risks\n"
+        "  • [yellow]SHD-003[/yellow]: Sensitive Volume Exposure\n"
+        "  • [yellow]SHD-004[/yellow]: Host Namespace Leaks\n"
+        "  • [yellow]SHD-005[/yellow]: Resource Starvation in High-Impact Workloads"
     )
     console.print("\n[bold cyan]OPTIONS[/bold cyan]")
     console.print("  target              File(s) or directory(s) to harden")
@@ -50,7 +60,8 @@ def help_secure(console, invoked_as: str) -> None:
     console.print("  --diff              Show visual diff")
     console.print("  -y, --yes           Auto-confirm changes")
     console.print("  --output FORMAT     Report format (text, json)")
-    _print_standard_options(console)
+    print_shared_analysis_options(console)
+    print_semantic_protection_options(console, is_heal=True)
 
 
 def help_upgrade(console, command: str, invoked_as: str) -> None:
@@ -74,7 +85,8 @@ def help_upgrade(console, command: str, invoked_as: str) -> None:
     console.print("  --diff              Show visual diff")
     console.print("  -y, --yes           Auto-confirm changes")
     console.print("  --output FORMAT     Report format (text, json)")
-    _print_standard_options(console)
+    print_shared_analysis_options(console)
+    print_semantic_protection_options(console, is_heal=True)
 
 
 def help_dna(console, invoked_as: str) -> None:
@@ -119,34 +131,3 @@ def help_evidence(console, invoked_as: str) -> None:
     console.print("  --output FILE       Path to save the generated report")
 
 
-# =====================================================================
-# SHARED HELPER
-# =====================================================================
-
-
-def _print_standard_options(console) -> None:
-    """Print standard options shared across diagnose, secure, upgrade.
-
-    Why: Eliminates duplication. These flags are identical across
-         several subcommands.
-    """
-    console.print("  --kube-version V    Target K8s version (alias: --k8s-version)")
-    console.print("  --max-depth N       Recursion depth (default: 10)")
-    console.print("  --ext LIST          Extensions to scan (default: .yaml,.yml)")
-    console.print("  --concurrency N     Number of parallel worker processes")
-    console.print("  --strict            Enable strict schema validation")
-    console.print("  --compact           Output with minimal whitespace")
-    console.print("  --verbose           Show detailed execution logs")
-    console.print("  -s, --summary-only  Show aggregate stats for batches")
-    console.print("  --fail-on CHOICE    CI/CD Gate: Exit 1 if found (any/warning/error)")
-    console.print("  --risk-threshold R  Exit 1 if finding meets/exceeds risk (high/medium/low)")
-    console.print("  --catalog PATH      Path to custom K8s schema catalog (bundled by default)")
-    console.print("  --identity-mode M   Identity: 'infer' (default) or 'strict'")
-    console.print("  --stream-to FILE    ULTRA-SCALE: Stream results to NDJSON")
-    console.print("  -p, --plain         ASCII-only output mode")
-    console.print("\n[dim]Advanced & Semantic Controls:[/dim]")
-    console.print("  --check-deprecations Audit for deprecated APIs")
-    console.print("  --cpu-limit L       Override default CPU limit (e.g. 500m)")
-    console.print("  --mem-limit L       Override default Memory limit (e.g. 512Mi)")
-    console.print("  --namespace NS      Default namespace for generated resources")
-    console.print("  --health-threshold N Min score to consider 'Healthy' (default: 70)")

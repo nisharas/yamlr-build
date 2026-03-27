@@ -1,5 +1,5 @@
-name: 'Yamlr'
-description: 'High-Fidelity Kubernetes Healer & Validator (Scan, Heal, OPA)'
+name: 'yamlr'
+description: 'yamlr — Kubernetes manifest safety & healing engine'
 author: 'Yamlr Team'
 branding:
   icon: 'shield'

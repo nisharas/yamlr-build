@@ -6,11 +6,16 @@ Identifies Namespaces (or resources in namespaces) that lack a
 default-deny NetworkPolicy and suggests/stubs one.
 """
 
+from __future__ import annotations
+
 import logging
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
+
 from yamlr.models import ManifestIdentity
 
 logger = logging.getLogger("yamlr.healers.best_practices.network_policy")
+__all__ = ['NetworkPolicyHealer']
+
 
 class NetworkPolicyHealer:
     """Ensures every namespace has a default-deny NetworkPolicy."""
@@ -28,7 +33,7 @@ class NetworkPolicyHealer:
         }
     }
 
-    def heal_docs(self, docs: List[Dict[str, Any]], identities: List[ManifestIdentity], harden: bool = False) -> int:
+    def heal_docs(self, docs: List[Dict[str, Any]], identities: List[ManifestIdentity], harden: bool = False, context: Optional[HealContext] = None) -> int:
         """
         Scans identities for namespaces and checks if a NetworkPolicy exists for them.
         Injects a default-deny policy if missing and stubbing is enabled.
@@ -61,7 +66,7 @@ class NetworkPolicyHealer:
         # 3. For each unprotected namespace, prepare a stub
         for ns in sorted(namespaces):
             if ns not in protected_namespaces:
-                logger.info(f"Namespace '{ns}' has no NetworkPolicy. Suggesting default-deny-all.")
+                logger.debug(f"Namespace '{ns}' has no NetworkPolicy. Suggesting default-deny-all.")
                 
                 # Create the policy doc
                 policy = self.DEFAULT_DENY_TEMPLATE.copy()
@@ -71,5 +76,19 @@ class NetworkPolicyHealer:
                 # Add to docs
                 docs.append(policy)
                 modified_count += 1
+                if context:
+                    from yamlr.core.stages.boundaries import MutationScope
+                    from yamlr.models import HealAction
+                    context.prescribe(HealAction(
+                        stage="Shield",
+                        action_type="harden",
+                        target=f"Namespace/{ns}/NetworkPolicy",
+                        description=f"Injected default-deny NetworkPolicy for namespace '{ns}'",
+                        rationale="A default-deny isolation policy is the foundation of Kubernetes zero-trust networking.",
+                        suggestion="Define explicit allow-list policies for required traffic.",
+                        severity="warning",
+                        rule_id="rule/missing-network-policy",
+                        scope=MutationScope.SPEC_NETWORK
+                    ))
                 
         return modified_count

@@ -1,8 +1,11 @@
+from __future__ import annotations
+
 from typing import Any, Dict, List, Set
 
-from yamlr.analyzers.base import BaseAnalyzer, AnalysisResult
+from yamlr.analyzers.base import AnalysisResult, BaseAnalyzer
 from yamlr.analyzers.rules import Rules
-from yamlr.core.scoring import Severity  # same Severity type you already use
+
+__all__ = ['MissingConfigMapTargetAnalyzer']
 
 
 class MissingConfigMapTargetAnalyzer(BaseAnalyzer):
@@ -13,76 +16,71 @@ class MissingConfigMapTargetAnalyzer(BaseAnalyzer):
    
     @property
     def name(self) -> str:
-        """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
+        """Returns the internal name of the missing ConfigMap target analyzer.
+        
+        Why: To uniquely identify the analyzer in reports and rule registries.
         """
         return "missing-configmap-target"
 
     @property
     def analyzer_type(self) -> str:
-        """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
+        """Returns the type category of the analyzer.
+        
+        Why: To group analyzers by their operational domain (e.g., content, structural).
         """
         return "content"
 
     def analyze(self, docs: List[Dict[str, Any]], **kwargs) -> List[AnalysisResult]:
-        """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
+        """Performs cross-resource analysis to detect missing ConfigMap references.
+        
+        Why: To identify potential runtime failures before deployment into a cluster.
         """
         results: List[AnalysisResult] = []
-
         defined_cm_names = self._collect_configmaps(docs)
 
         for doc in docs:
-            kind = (doc.get("kind") or "").lower()
-            if kind not in {
-                "deployment",
-                "statefulset",
-                "daemonset",
-                "job",
-                "cronjob",
-                "replicaset",
-            }:
-                continue
-
-            spec = doc.get("spec") or {}
-            template = spec.get("template") or {}
-            if not isinstance(template, dict):
-                continue
-
-            pod_spec = template.get("spec") or {}
-            if not isinstance(pod_spec, dict):
-                continue
-
-            containers = pod_spec.get("containers") or []
-            if isinstance(containers, list):
-                for c in containers:
-                    if not isinstance(c, dict):
-                        continue
-                    self._check_container_envfrom(
-                        c, defined_cm_names, doc, results
-                    )
-                    self._check_container_env(
-                        c, defined_cm_names, doc, results
-                    )
-
-            volumes = pod_spec.get("volumes") or []
-            if isinstance(volumes, list):
-                self._check_volumes(volumes, defined_cm_names, doc, results)
+            if self._is_workload(doc):
+                self._analyze_workload(doc, defined_cm_names, results)
 
         return results
+
+    def _is_workload(self, doc: Dict[str, Any]) -> bool:
+        """Determines if a document represents a Kubernetes workload."""
+        kind = (doc.get("kind") or "").lower()
+        return kind in {
+            "deployment", "statefulset", "daemonset", "job", "cronjob", "replicaset"
+        }
+
+    def _analyze_workload(self, doc: Dict[str, Any], defined_cm_names: Set[str], results: List[AnalysisResult]):
+        """Helper to analyze a single workload document."""
+        spec = doc.get("spec") or {}
+        template = spec.get("template") or {}
+        if not isinstance(template, dict):
+            return
+
+        pod_spec = template.get("spec") or {}
+        if not isinstance(pod_spec, dict):
+            return
+
+        containers = pod_spec.get("containers") or []
+        if isinstance(containers, list):
+            for c in containers:
+                if isinstance(c, dict):
+                    self._check_container_envfrom(c, defined_cm_names, doc, results)
+                    self._check_container_env(c, defined_cm_names, doc, results)
+
+        volumes = pod_spec.get("volumes") or []
+        if isinstance(volumes, list):
+            self._check_volumes(volumes, defined_cm_names, doc, results)
 
     # ------------------------------------------------------------------ #
     # Internal helpers
     # ------------------------------------------------------------------ #
 
     def _collect_configmaps(self, docs: List[Dict[str, Any]]) -> Set[str]:
-        """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
+        """Scans the manifest set to index all defined ConfigMap names.
+        
+        Why: To provide a lookup table for validating whether a reference has a corresponding target.
         """
         names: Set[str] = set()
         for d in docs:
@@ -100,9 +98,9 @@ class MissingConfigMapTargetAnalyzer(BaseAnalyzer):
         cm_name: str,
         field_path: str,
     ) -> AnalysisResult:
-        """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
+        """Factory method for creating structured results for missing ConfigMap findings.
+        
+        Why: To ensure consistent reporting and actionable feedback for the user.
         """
         meta = doc.get("metadata") or {}
         obj_name = meta.get("name", "<unknown>")
@@ -124,7 +122,7 @@ class MissingConfigMapTargetAnalyzer(BaseAnalyzer):
             message=message,
             resource_name=obj_name,
             resource_kind=doc.get("kind", ""),
-            file_path="unknown",        # or actual path if you can wire it through
+            file_path="unknown",
             line_number=0,
             suggestion=suggestion,
         )
@@ -137,9 +135,9 @@ class MissingConfigMapTargetAnalyzer(BaseAnalyzer):
         doc: Dict[str, Any],
         results: List[AnalysisResult],
     ) -> None:
-        """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
+        """Inspects envFrom blocks for missing ConfigMap references.
+        
+        Why: To catch bulk environment variable injection failures.
         """
         env_from = container.get("envFrom")
         if not isinstance(env_from, list):
@@ -168,9 +166,9 @@ class MissingConfigMapTargetAnalyzer(BaseAnalyzer):
         doc: Dict[str, Any],
         results: List[AnalysisResult],
     ) -> None:
-        """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
+        """Inspects env blocks for missing ConfigMapKeyRef references.
+        
+        Why: To catch individual environment variable source failures.
         """
         env = container.get("env")
         if not isinstance(env, list):
@@ -202,9 +200,9 @@ class MissingConfigMapTargetAnalyzer(BaseAnalyzer):
         doc: Dict[str, Any],
         results: List[AnalysisResult],
     ) -> None:
-        """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
+        """Inspects pod volumes for missing ConfigMap mounts.
+        
+        Why: To catch filesystem-based configuration binding failures.
         """
         for idx, vol in enumerate(volumes):
             if not isinstance(vol, dict):

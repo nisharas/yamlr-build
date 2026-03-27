@@ -1,0 +1,18 @@
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: perf-app
+spec:
+  template:
+    spec:
+      containers:
+      - name: app
+        image: nginx:latest
+        resources:
+          requests:
+            cpu: "100m"
+      volumes:
+      - name: cache
+        hostPath:
+          path: /tmp/unsafe

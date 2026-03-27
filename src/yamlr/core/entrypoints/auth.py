@@ -1,11 +1,14 @@
+from __future__ import annotations
 from pathlib import Path
 
 from yamlr.core.bridge import ProStatus, YamlrBridge
+__all__ = ['handle_auth_command']
+
 
 
 def handle_auth_command(args, console):
     """
-    Manages Yamlr Enterprise authentication.
+    Manages Yamlr Enterprise (Pro) authentication.
     """
 
     # 1. Login Mode
@@ -39,8 +42,8 @@ def handle_auth_command(args, console):
             return 1
 
     # 2. Status Mode (Default)
-    status, message = YamlrBridge.check_pro_status()
-    console.print("\n[bold]Yamlr Enterprise Status[/bold]")
+    status, _ = YamlrBridge.check_pro_status()
+    console.print("\n[bold]Yamlr Enterprise (Pro) Status[/bold]")
     console.print("--------------------------")
 
     badge, msg, color = YamlrBridge.get_pro_status_display()

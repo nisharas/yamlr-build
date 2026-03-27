@@ -1,6 +1,0 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: trailing-ws-i1558
-data:
-  key: value

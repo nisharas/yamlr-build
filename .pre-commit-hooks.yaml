@@ -12,3 +12,17 @@
   language: python
   files: \.(yaml|yml)$
   args: ["--output=text"]
+- id: yamlr-heal
+  name: Yamlr Heal (Dry-run)
+  description: Proactive manifest repair (S1 Preview).
+  entry: yamlr heal
+  language: python
+  files: \.(yaml|yml)$
+  args: ["--quiet", "--dry-run"]
+- id: yamlr-migrate
+  name: Yamlr Migrate (Dry-run)
+  description: API deprecation migration (S1 Preview).
+  entry: yamlr migrate
+  language: python
+  files: \.(yaml|yml)$
+  args: ["--quiet", "--dry-run"]

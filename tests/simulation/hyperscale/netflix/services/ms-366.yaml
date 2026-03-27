@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-366
+  labels:
+    app: ms-366
+    dependency: ms-367
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-366
+  template:
+    metadata:
+      labels:
+        app: ms-366
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-367
