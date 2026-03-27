@@ -1,3 +1,4 @@
+from __future__ import annotations
 #!/usr/bin/env python3
 """
 Yamlr Nuitka Build Orchestrator (Google-Quality Edition)
@@ -12,6 +13,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from version_helper import get_version
 
 # Paths
 ROOT_DIR = Path(__file__).parent.parent.resolve()
@@ -26,6 +28,7 @@ def build():
 
     app_name = "yamlr_pro" if args.pro else "yamlr"
     binary_name = f"{app_name}.exe" if sys.platform == "win32" else app_name
+    version = get_version()
 
     print(f"🚀 Starting Native {app_name.upper()} Build...")
 
@@ -41,7 +44,19 @@ def build():
         "--remove-output",  # Clean build
         "--onefile-tempdir-spec=.yamlr_runtime", # Extract into the excluded folder
         "--include-package=yamlr", # Explicitly include the main package
+        "--include-package=rich",  # Fix missing unicode data in binary
+        "--include-package=jwt",   # Pro dependency
+        "--include-package=cryptography", # Pro dependency
     ]
+
+    if sys.platform == "win32":
+        # Add Windows specific version metadata
+        cmd.extend([
+            f"--windows-file-version={version}",
+            f"--windows-product-version={version}",
+            f"--windows-company-name=Yamlr Dev",
+            f"--windows-product-name=Yamlr",
+        ])
 
     # 🛡 Zero-Leak Logic: Control what modules get compiled
     if not args.pro:
@@ -61,7 +76,12 @@ def build():
     # Rules: Direct mapping for reliable resolution in frozen context
     rules_src = SRC_DIR / "yamlr" / "core" / "data" / "rules.yaml"
     if rules_src.exists():
-        cmd.append(f"--include-data-file={rules_src}=yamlr/core/entrypoints/rules.yaml")
+        cmd.append(f"--include-data-file={rules_src}=yamlr/core/data/rules.yaml")
+    
+    # Deprecations: Required for scan/check version awareness
+    depr_src = SRC_DIR / "yamlr" / "data" / "k8s_deprecations.json"
+    if depr_src.exists():
+        cmd.append(f"--include-data-file={depr_src}=yamlr/data/k8s_deprecations.json")
     
     # Other package data
     cmd.append("--include-package-data=yamlr.core.data")

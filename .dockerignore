@@ -1,0 +1,26 @@
+# Git and IDE
+.git
+.gitignore
+.vscode
+.idea
+*.md
+
+# Build Artifacts
+build/
+dist/
+*.spec
+.tmp
+venv/
+.venv/
+__pycache__/
+*.pyc
+
+# Test Data
+tests/
+legacy_monolith/
+coverage.xml
+.coverage
+htmlcov/
+
+# Logs
+*.log

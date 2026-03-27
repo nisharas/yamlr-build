@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: aws-svc-945
+  namespace: us-east-1
+spec:
+  selector:
+    app: aws-svc-945
+  ports:
+  - port: 80
+    targetPort: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: aws-svc-945-ingress
+  namespace: us-east-1
+spec:
+  rules:
+  - http:
+      paths:
+      - path: /api/945
+        pathType: Prefix
+        backend:
+          service:
+            name: aws-svc-945
+            port:
+              number: 80

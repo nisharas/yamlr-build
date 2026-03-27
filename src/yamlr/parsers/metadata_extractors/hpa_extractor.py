@@ -6,12 +6,17 @@ Extracts:
 - spec.scaleTargetRef.name (HorizontalPodAutoscaler)
 """
 
+from __future__ import annotations
 from typing import List
 
 from yamlr.models import ManifestIdentity, Shard
+__all__ = ['HPAExtractor']
 
 
-class HPAExtractor:
+
+from .base_extractor import BaseMetadataExtractor
+
+class HPAExtractor(BaseMetadataExtractor):
     """Extracts scale target references from HPA resources."""
 
     @staticmethod
@@ -24,8 +29,6 @@ class HPAExtractor:
     ) -> bool:
         """
         Extract scale target name if in HPA context.
-
-        Only applies to HorizontalPodAutoscaler resources.
 
         Returns:
             bool: True if extraction was performed

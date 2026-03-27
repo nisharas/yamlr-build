@@ -1,0 +1,14 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: baseline-test
+spec:
+  template:
+    spec:
+      containers:
+      - name: baseline-app
+        image: nginx:latest # Violation 1: rule/no-latest-tag
+        resources: {} # Violation 2: rule/resource-requests, Violation 3: rule/resource-limits
+      - name: regression-app
+        image: redis:latest # NEW Violation: rule/no-latest-tag (different container)
+        resources: {} # NEW Violations

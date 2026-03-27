@@ -14,6 +14,8 @@ Author: Nishar A Sunkesala / Yamlr Team
 Date: 2026-01-26
 """
 
+from __future__ import annotations
+from .annotations_extractor import AnnotationsExtractor
 from .config_extractor import ConfigExtractor
 from .hpa_extractor import HPAExtractor
 from .ingress_extractor import IngressExtractor
@@ -24,30 +26,50 @@ from .sa_extractor import ServiceAccountExtractor
 from .selector_extractor import SelectorExtractor
 from .storage_extractor import StorageExtractor
 from .volume_extractor import VolumeExtractor
+from .owner_extractor import OwnerExtractor
+from .mount_extractor import MountExtractor
+from .vpa_extractor import VPAExtractor
+from .gateway_extractor import GatewayExtractor
+from .kms_extractor import KMSExtractor
+from .cloud_extractor import CloudExtractor
+from .network_policy_extractor import NetworkPolicyExtractor
 
+
+# Global cache for extractor instances to prevent redundant object instantiation.
+# Fixes Finding 28.4 (Audit Round 28) - "Silent Killer" instantiation leak.
+_EXTRACTOR_CACHE: Optional[List[Any]] = None
 
 def get_extractors():
     """
     Returns all metadata extractors in execution order.
-
-    Extractors are executed in the order returned here.
-    Order doesn't matter much since they check for different patterns.
+    Uses a global cache to ensure O(1) retrieval without object churn.
 
     Returns:
-        list: List of extractor instances
+        list: List of shared extractor instances
     """
-    return [
-        SelectorExtractor(),
-        LabelsExtractor(),
-        ConfigExtractor(),
-        VolumeExtractor(),
-        IngressExtractor(),
-        HPAExtractor(),
-        ServiceAccountExtractor(),
-        PortsExtractor(),
-        RBACExtractor(),
-        StorageExtractor(),
-    ]
+    global _EXTRACTOR_CACHE
+    if _EXTRACTOR_CACHE is None:
+        _EXTRACTOR_CACHE = [
+            SelectorExtractor(),
+            LabelsExtractor(),
+            ConfigExtractor(),
+            VolumeExtractor(),
+            IngressExtractor(),
+            HPAExtractor(),
+            ServiceAccountExtractor(),
+            PortsExtractor(),
+            RBACExtractor(),
+            StorageExtractor(),
+            AnnotationsExtractor(),
+            OwnerExtractor(),
+            MountExtractor(),
+            VPAExtractor(),
+            GatewayExtractor(),
+            KMSExtractor(),
+            CloudExtractor(),
+            NetworkPolicyExtractor(),
+        ]
+    return _EXTRACTOR_CACHE
 
 
 __all__ = [
@@ -61,4 +83,10 @@ __all__ = [
     "ServiceAccountExtractor",
     "RBACExtractor",
     "StorageExtractor",
+    "OwnerExtractor",
+    "MountExtractor",
+    "VPAExtractor",
+    "GatewayExtractor",
+    "KMSExtractor",
+    "CloudExtractor",
 ]

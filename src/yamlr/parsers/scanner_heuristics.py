@@ -14,13 +14,16 @@ Author: Nishar A Sunkesala / Yamlr Team
 Date: 2026-02-17
 """
 
+from __future__ import annotations
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from yamlr.models import Shard, ManifestIdentity
+from yamlr.models import Shard, SPECIAL_PURPOSE_BLOCKS
 from yamlr.parsers.metadata_extractors import get_extractors
 
 logger = logging.getLogger("yamlr.scanner")
+__all__ = ['HeuristicsMixin']
+
 
 
 class HeuristicsMixin:
@@ -102,6 +105,14 @@ class HeuristicsMixin:
         if not self._lexer_context:
             return False
 
+        # [PRECISION-10] Use line-specific repair tags if available
+        # Why: Global repair_stats (flush_left_lists_fixed) can cause false positives 
+        # for all list items in a large file. intent_tag ensures 1:1 correlation.
+        if hasattr(shard, "intent_tag") and shard.intent_tag:
+            tag_lower = shard.intent_tag.lower()
+            if any(marker in tag_lower for marker in ["repaired", "fixed", "normalized", "typo"]):
+                return True
+
         repair_stats = self._lexer_context.get("repair_stats", {})
 
         # Check 1: List item indentation corrections.
@@ -169,8 +180,8 @@ class HeuristicsMixin:
         # Blocks like 'labels' or 'data' can contain arbitrary keys.
         # We disable fuzzy matching in these areas to prevent false positives
         # (e.g., matching a label 'kind: prod' as the resource Kind).
-        FREEFORM_BLOCKS = {"labels", "annotations", "data", "binaryData", "extraArgs"}
-        self._in_freeform_block = any(k in path_keys for k in FREEFORM_BLOCKS)
+        # Fixes Finding 28.1 (Audit Round 28) - Centralized Source of Truth.
+        self._in_freeform_block = any(k in path_keys for k in SPECIAL_PURPOSE_BLOCKS)
 
         # Global Metadata Enforcement:
         # We strictly define 'Global Metadata' as the 'metadata' block that
@@ -201,7 +212,7 @@ class HeuristicsMixin:
         for extractor in get_extractors():
             try:
                 extractor.extract_if_applicable(shard, key, val, path_keys, self._current_identity)
-            except Exception as e:
+            except (AttributeError, KeyError, ImportError) as e:
                 # Forensic catch for plugin instability.
                 logger.debug(f"Extractor ({type(extractor).__name__}) failure: {e}")
 

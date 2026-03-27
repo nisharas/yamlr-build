@@ -1,3 +1,4 @@
+from __future__ import annotations
 import os
 import yaml
 import argparse
@@ -16,7 +17,9 @@ def sync_actions():
         "stream_to", "yes", "yes_all", "diff", "dry_run", "no_backup", "pro_preview", "targets"
     }
 
-    sub = list({a.choices for a in parser._subparsers._group_actions if hasattr(a, 'choices')})[0] if parser._subparsers else {}
+    # Find the subparser action
+    sub_action = next((a for a in parser._actions if isinstance(a, argparse._SubParsersAction)), None)
+    sub = sub_action.choices if sub_action else {}
 
     for cmd, d_path in action_maps.items():
         yml_path = os.path.join(d_path, "action.yml")

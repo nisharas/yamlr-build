@@ -11,6 +11,7 @@ Author: Nishar A Sunkesala / Yamlr Team
 Date: 2026-01-27
 """
 
+from __future__ import annotations
 import difflib
 
 from rich.panel import Panel
@@ -21,6 +22,8 @@ from rich.text import Text
 from yamlr.cli.commands.base import get_console
 
 console = get_console()
+
+__all__ = ["DiffEngine"]
 
 
 class DiffEngine:
@@ -39,7 +42,8 @@ class DiffEngine:
             file_path: Name of the file being modified.
             side_by_side: If True, uses a 2-column layout. False uses unified diff.
         """
-        if original == healed:
+        # Handle None case (means no changes or pruned in ultra-scale)
+        if healed is None or original == healed:
             console.print(f"[dim]No changes for {file_path}[/dim]")
             return
 
@@ -147,8 +151,8 @@ class DiffEngine:
                 # However, Rich Syntax themes handle bg.
                 # Improving visibility by adding ">>>" markers
 
-                left_panel = Panel(left_content, style="red" if left_content else "dim")
-                right_panel = Panel(
+                Panel(left_content, style="red" if left_content else "dim")
+                Panel(
                     right_content, style="green" if right_content else "dim"
                 )
 

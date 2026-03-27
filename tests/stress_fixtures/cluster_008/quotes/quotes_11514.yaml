@@ -1,6 +1,0 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: unclosed-sq-i1228
-data:
-  message: hello world

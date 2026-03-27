@@ -1,6 +1,0 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: unclosed-dq-i1293
-data:
-  message: hello world

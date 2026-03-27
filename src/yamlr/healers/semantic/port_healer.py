@@ -10,11 +10,14 @@ to handle multi-port workloads where the Service references a port by
 name (e.g. 'http-svc') and the container defines a close match (e.g. 'http').
 """
 
+from __future__ import annotations
 import difflib
 import logging
-from typing import List, Dict, Any, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
+from yamlr.models import ManifestIdentity, WORKLOAD_KINDS
 
-from yamlr.models import ManifestIdentity
+if TYPE_CHECKING:
+    from yamlr.core.context import HealContext
 
 logger = logging.getLogger("yamlr.healers.semantic.port")
 
@@ -22,6 +25,8 @@ logger = logging.getLogger("yamlr.healers.semantic.port")
 # 0.60 captures realistic K8s port-name suffix typos (e.g. 'http-svc' → 'http')
 # while rejecting completely unrelated names (e.g. 'redis-port' vs 'http' ~0.25).
 _NAMED_PORT_SIMILARITY_THRESHOLD = 0.60
+__all__ = ['PortMismatchHealer']
+
 
 
 class PortMismatchHealer:
@@ -33,121 +38,127 @@ class PortMismatchHealer:
            A. Single-container-port ambiguity (original strategy).
            B. Named-port typos on multi-port workloads (new PRO-12-05 strategy).
     """
-
-    def heal_docs(self, docs: List[Dict[str, Any]], identities: List[ManifestIdentity]) -> int:
+    def heal_docs(self, docs: List[Dict[str, Any]], identities: List[ManifestIdentity], context: Optional["HealContext"] = None) -> int:
         """Scan and align ports in-place within the documents.
-
-        Why: Mutates docs directly (same approach as SelectorAlignment)
-             to remain compatible with the pipeline's stage contract.
-
-        Args:
-            docs: List of parsed YAML documents (dicts).
-            identities: Pre-built identity objects with container_ports.
-
-        Returns:
-            Number of Service documents that were modified.
+        
+        Why: Decomposed to resolve SonarQube complexity warnings per Audit Round 24.
         """
         modified_count = 0
+        workloads = [ident for ident in identities if ident.kind in WORKLOAD_KINDS]
 
-        # 1. Build Workload Index
-        workloads = [
-            ident for ident in identities
-            if ident.kind in ("Deployment", "StatefulSet", "DaemonSet", "Pod")
-        ]
-
-        # 2. Iterate through Services
         for doc in docs:
             if doc.get("kind") != "Service":
                 continue
-
-            spec = doc.get("spec")
-            if not spec or not isinstance(spec, dict):
-                continue
-
-            selector = spec.get("selector")
-            if not selector or not isinstance(selector, dict):
-                continue
-
-            ports = spec.get("ports")
-            if not ports or not isinstance(ports, list):
-                continue
-
-            svc_name = doc.get("metadata", {}).get("name")
-            svc_ns = doc.get("metadata", {}).get("namespace", "default")
-
-            # 3. Find matching workloads
-            matches = [
-                w for w in workloads
-                if (w.namespace or "default") == svc_ns
-                and self._labels_match(selector, w.labels)
-            ]
-
-            logger.debug(f"Service {svc_name}: Found {len(matches)} matching workloads")
-            if not matches:
-                continue
-
-            target_workload = matches[0]
-            logger.debug(
-                f"Target workload: {target_workload.kind}/{target_workload.name}, "
-                f"Ports: {target_workload.container_ports}"
-            )
-            if not target_workload.container_ports:
-                continue
-
-            w_ports = [str(p) for p in target_workload.container_ports]
-            w_port_names = self._extract_named_ports(target_workload, docs)
-
-            doc_modified = False
-            for s_port in ports:
-                if not isinstance(s_port, dict):
-                    continue
-
-                target = s_port.get("targetPort", s_port.get("port"))
-                if not target:
-                    continue
-
-                # Skip if the target port is already a valid numeric match.
-                if str(target) in w_ports:
-                    continue
-
-                # --- STRATEGY A: Single-container-port auto-alignment ---
-                # If the workload exposes exactly one port, it is unambiguous.
-                if len(w_ports) == 1:
-                    new_target = w_ports[0]
-                    try:
-                        new_target = int(new_target)
-                    except ValueError:
-                        pass
-                    s_port["targetPort"] = new_target
-                    doc_modified = True
-                    logger.info(
-                        f"✨ Port Surgery [A]: Service '{svc_name}' targetPort "
-                        f"{target} → {new_target} (aligned with "
-                        f"{target_workload.kind}/{target_workload.name})"
-                    )
-                    continue
-
-                # --- STRATEGY B: Named-port fuzzy matching ---
-                # If the targetPort is a string (named port reference) and the
-                # workload exposes multiple named ports, fuzzy-match to find
-                # the closest intended port number.
-                if isinstance(target, str) and w_port_names:
-                    best_port_num, best_ratio = self._fuzzy_match_named_port(
-                        target, w_port_names
-                    )
-                    if best_port_num is not None and best_ratio >= _NAMED_PORT_SIMILARITY_THRESHOLD:
-                        s_port["targetPort"] = best_port_num
-                        doc_modified = True
-                        logger.info(
-                            f"✨ Port Surgery [B]: Service '{svc_name}' targetPort "
-                            f"'{target}' → {best_port_num} (fuzzy matched named port, "
-                            f"score={best_ratio:.2f})"
-                        )
-
-            if doc_modified:
+            
+            if self._heal_service_ports(doc, workloads, docs, context):
                 modified_count += 1
-
+                
         return modified_count
+
+    def _heal_service_ports(self, doc: Dict[str, Any], workloads: List[ManifestIdentity], all_docs: List[Dict[str, Any]], context: Optional["HealContext"]) -> bool:
+        """Heals ports for a single Service document."""
+        spec = doc.get("spec")
+        if not (isinstance(spec, dict) and spec.get("selector") and isinstance(spec.get("ports"), list)):
+            return False
+            
+        svc_meta = doc.get("metadata", {})
+        svc_name = svc_meta.get("name", "unknown")
+        svc_ns = svc_meta.get("namespace", "default")
+        
+        target_workload = self._find_matching_workload(spec["selector"], svc_ns, workloads)
+        if not (target_workload and target_workload.container_ports):
+            return False
+            
+        w_ports = [str(p) for p in target_workload.container_ports]
+        w_port_names = self._extract_named_ports(target_workload, all_docs)
+        
+        doc_modified = False
+        for s_port in spec["ports"]:
+            if not isinstance(s_port, dict):
+                continue
+            if self._align_port_entry(s_port, w_ports, w_port_names, svc_name, target_workload, context):
+                doc_modified = True
+                
+        return doc_modified
+
+    def _find_matching_workload(self, selector: Dict[str, str], namespace: str, workloads: List[ManifestIdentity]) -> Optional[ManifestIdentity]:
+        """Finds the workload targeted by the Service selector."""
+        for w in workloads:
+            if (w.namespace or "default") == namespace and self._labels_match(selector, w.labels):
+                return w
+        return None
+
+    def _align_port_entry(self, s_port: Dict[str, Any], w_ports: List[str], w_port_names: Dict[str, int], svc_name: str, target_workload: ManifestIdentity, context: Optional["HealContext"]) -> bool:
+        """Aligns a single port entry using multi-strategy logic."""
+        target = s_port.get("targetPort", s_port.get("port"))
+        if not target or str(target) in w_ports:
+            return False
+            
+        # Strategy A: Single-port ambiguity
+        if len(w_ports) == 1:
+            return self._apply_strategy_a(s_port, target, w_ports[0], svc_name, target_workload, context)
+            
+        # Strategy B: Named-port fuzzy matching
+        if isinstance(target, str) and w_port_names:
+            return self._apply_strategy_b(s_port, target, w_port_names, svc_name, context)
+            
+        return False
+
+    def _apply_strategy_a(self, s_port: Dict[str, Any], old_target: Any, new_target: str, svc_name: str, target_workload: ManifestIdentity, context: Optional["HealContext"]) -> bool:
+        """Strategy A: Single-container-port auto-alignment."""
+        try:
+            val = int(new_target)
+        except ValueError:
+            val = new_target
+            
+        s_port["targetPort"] = val
+        logger.info(
+            f"✨ Port Surgery [A]: Service '{svc_name}' targetPort "
+            f"{old_target} → {val} (aligned with "
+            f"{target_workload.kind}/{target_workload.name})"
+        )
+        if context:
+            from yamlr.models import HealAction
+            from yamlr.core.stages.boundaries import MutationScope
+            context.prescribe(HealAction(
+                stage="PortHealer",
+                action_type="repair",
+                target=f"Service/{svc_name}.spec.ports",
+                description=f"Aligned Service targetPort {old_target} -> {val}",
+                rationale=f"The Service targetPort was ambiguous or mismatched. Aligned with the single available container port in workload {target_workload.kind}/{target_workload.name}.",
+                suggestion="Ensure targetPort matches a valid containerPort or port name in the target Pod.",
+                severity="warning",
+                rule_id="rule/port-mismatch",
+                scope=MutationScope.SPEC_PORTS
+            ))
+        return True
+
+    def _apply_strategy_b(self, s_port: Dict[str, Any], target_name: str, w_port_names: Dict[str, int], svc_name: str, context: Optional["HealContext"]) -> bool:
+        """Strategy B: Named-port fuzzy matching."""
+        best_num, ratio = self._fuzzy_match_named_port(target_name, w_port_names)
+        if best_num is not None and ratio >= _NAMED_PORT_SIMILARITY_THRESHOLD:
+            s_port["targetPort"] = best_num
+            logger.info(
+                f"✨ Port Surgery [B]: Service '{svc_name}' targetPort "
+                f"'{target_name}' → {best_num} (fuzzy matched named port, "
+                f"score={ratio:.2f})"
+            )
+            if context:
+                from yamlr.models import HealAction
+                from yamlr.core.stages.boundaries import MutationScope
+                context.prescribe(HealAction(
+                    stage="PortHealer",
+                    action_type="repair",
+                    target=f"Service/{svc_name}.spec.ports",
+                    description=f"Aligned fuzzy Service targetPort '{target_name}' -> {best_num}",
+                    rationale=f"The Service targetPort name '{target_name}' was a fuzzy match for container port {best_num} (score: {ratio:.2f}).",
+                    suggestion="Use the exact containerPort number or name defined in the Pod spec.",
+                    severity="warning",
+                    rule_id="rule/fuzzy-port-match",
+                    scope=MutationScope.SPEC_PORTS
+                ))
+            return True
+        return False
 
     # ------------------------------------------------------------------
     # Helpers
@@ -166,45 +177,44 @@ class PortMismatchHealer:
             if labels.get(k) != v:
                 return False
         return True
-
     def _extract_named_ports(
         self,
         workload: ManifestIdentity,
         docs: List[Dict[str, Any]],
     ) -> Dict[str, int]:
-        """Builds a {port_name: port_number} map from a workload's containers.
+        """Builds a {port_name: port_number} map from a workload's containers."""
+        doc = self._find_workload_doc(workload, docs)
+        if not doc:
+            return {}
+            
+        containers = (
+            doc.get("spec", {})
+            .get("template", {})
+            .get("spec", {})
+            .get("containers", [])
+        )
+        return self._collect_container_ports(containers)
 
-        Why: `ManifestIdentity.container_ports` stores only numbers. This
-             method digs into the raw doc to retrieve named port entries so
-             Strategy B can do name-to-number resolution.
-
-        Args:
-            workload: The matched ManifestIdentity.
-            docs: Full list of documents (used to find the raw workload YAML).
-
-        Returns:
-            Dict mapping port name → container port number.
-        """
-        named: Dict[str, int] = {}
+    def _find_workload_doc(self, workload: ManifestIdentity, docs: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """Finds the raw document corresponding to a ManifestIdentity."""
         for doc in docs:
             if (
                 doc.get("kind") == workload.kind
                 and doc.get("metadata", {}).get("name") == workload.name
             ):
-                containers = (
-                    doc.get("spec", {})
-                    .get("template", {})
-                    .get("spec", {})
-                    .get("containers", [])
-                )
-                for container in containers:
-                    for port_def in container.get("ports", []):
-                        if isinstance(port_def, dict):
-                            port_name = port_def.get("name")
-                            port_num = port_def.get("containerPort")
-                            if port_name and port_num:
-                                named[str(port_name)] = int(port_num)
-                break
+                return doc
+        return None
+
+    def _collect_container_ports(self, containers: List[Dict[str, Any]]) -> Dict[str, int]:
+        """Collects all named ports from a list of containers."""
+        named: Dict[str, int] = {}
+        for container in containers:
+            for port_def in container.get("ports", []):
+                if isinstance(port_def, dict):
+                    name = port_def.get("name")
+                    num = port_def.get("containerPort")
+                    if name and num:
+                        named[str(name)] = int(num)
         return named
 
     def _fuzzy_match_named_port(

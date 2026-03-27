@@ -81,5 +81,5 @@ def generate_man_pages(input_dir, output_dir):
             
             print(f"Generated {output_path}")
 
-if __name__ == "__main__":
-    generate_man_pages("d:/yamlr/docs/cli", "d:/yamlr/docs/man/man1")
+    base_dir = Path(__file__).parent.parent.parent
+    generate_man_pages(str(base_dir / "docs/cli"), str(base_dir / "docs/man/man1"))

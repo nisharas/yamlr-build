@@ -4,13 +4,18 @@ Formatter SUMMARY Mixin
 -----------------------
 Extracted to enforce <500 line modularity rule.
 """
-from typing import Any, Dict, List, Optional
-from rich.console import Console
+from __future__ import annotations
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from yamlr.models import HealFileResult
 from rich.panel import Panel
 from rich.table import Table
 from yamlr.cli.commands.base import get_console
 
 console = get_console()
+__all__ = ['SummaryMixin']
+
 
 class SummaryMixin:
     PRO_FIXABLE_RULES = {
@@ -24,7 +29,7 @@ class SummaryMixin:
         "rule/network-policy-missing", "rule/untrusted-registry"
     }
 
-    def _print_summary_stats(self, reports: List[Dict[str, Any]], elapsed_time: float = 0.0, telemetry_data: Optional[Dict[str, Any]] = None):
+    def _print_summary_stats(self, reports: List[HealFileResult], elapsed_time: float = 0.0, telemetry_data: Optional[Dict[str, Any]] = None):
         """
         FIX: Compact summary mode for large batches (100+ files).
 
@@ -59,8 +64,11 @@ class SummaryMixin:
             if status in ["ENGINE_ERROR", "FILE_NOT_FOUND", "SECURITY_ERROR"]:
                 failed += 1
 
-            total_time += r.get("processing_time_seconds", 0)
-            avg_score += r.get("health_score", 0)
+            try:
+                total_time += float(r.get("processing_time_seconds", 0))
+                avg_score += int(r.get("dna_integrity_score", 0))
+            except (TypeError, ValueError):
+                pass
 
             # NEW: Track Detected vs Fixed (Activation Metrics)
             stats = r.get("processing_stats") or r.get("stats")
@@ -113,26 +121,38 @@ class SummaryMixin:
         summary_text = (
             f"[bold cyan]Files Processed:[/bold cyan] {total_files}\n"
             f"[bold cyan]Resources Found:[/bold cyan] {total_resources}\n"
-            f"[bold cyan]Average Health Score:[/bold cyan] {avg_score:.1f}/100\n"
+            f"[bold cyan]Average DNA Integrity:[/bold cyan] {avg_score:.1f}/100\n"
             f"[bold cyan]Average Processing Time (per file):[/bold cyan] {avg_time:.2f}s"
         )
+        
+        # [ROUND-10] Security DNA Receipt for single-file operations
+        if total_files == 1:
+            dna = reports[0].get("dna_hash")
+            if dna:
+                summary_text += f"\n[bold cyan]Security DNA Receipt:[/bold cyan] [dim green]{dna[:16]}...[/dim green]"
+
         
         if throughput > 0:
             summary_text += f" [dim]({throughput:.1f} files/sec)[/dim]"
         
-        total_detected = by_status.get('_total_detected', 0)
-        total_fixed = by_status.get('_total_fixed', 0)
-        pro_fixable = by_status.get('_pro_fixable', 0)
-        
-        heal_rate = (total_fixed / total_detected * 100) if total_detected > 0 else 0.0
-        pro_rate = (pro_fixable / total_detected * 100) if total_detected > 0 else 0.0
+        try:
+            tot_detected = int(by_status.get('_total_detected', 0))
+            tot_fixed = int(by_status.get('_total_fixed', 0))
+            tot_pro = int(by_status.get('_pro_fixable', 0))
+        except (TypeError, ValueError):
+            tot_detected = 0
+            tot_fixed = 0
+            tot_pro = 0
+            
+        heal_rate = (tot_fixed / tot_detected * 100) if tot_detected > 0 else 0.0
+        pro_rate = (tot_pro / tot_detected * 100) if tot_detected > 0 else 0.0
 
         summary_text += (
             f"\n[bold cyan]Total Elapsed Time:[/bold cyan] {elapsed_time:.2f}s\n\n"
             f"\n[bold]Auto-Healing Efficiency:[/bold]\n"
-            f"  [bold #ff5f87]{self._get_icon('🎯')} Issue Detection Rate:[/bold #ff5f87] 100% ({total_detected} detected)\n"
-            f"  [bold green]{self._get_icon('✅')} Auto-Healed (Free):[/bold green] {heal_rate:.1f}% ({total_fixed} fixed)\n"
-            f"  [bold bright_cyan]{self._get_icon('💎')} PRO would fix:[/bold bright_cyan] {pro_rate:.1f}% ({pro_fixable} issues)\n\n"
+            f"  [bold #ff5f87]{self._get_icon('🎯')} Issue Detection Rate:[/bold #ff5f87] 100% ({tot_detected} detected)\n"
+            f"  [bold green]{self._get_icon('✅')} Auto-Healed (Free):[/bold green] {heal_rate:.1f}% ({tot_fixed} fixed)\n"
+            f"  [bold bright_cyan]{self._get_icon('💎')} PRO would fix:[/bold bright_cyan] {pro_rate:.1f}% ({tot_pro} issues)\n\n"
             f"[bold]File Status Breakdown:[/bold]\n"
             f"  [green]{self._get_icon('✓')} Healthy files (zero issues):[/green] {by_status.get('CLEAN', 0) + by_status.get('UNCHANGED', 0)}\n"
             f"  [cyan]{self._get_icon('→')} Files auto-healed and written to disk:[/cyan] {by_status.get('HEALED', 0)}\n"
@@ -171,7 +191,7 @@ class SummaryMixin:
         # --- SCORE ANIMATION (Dopamine Drip) ---
         if telemetry_data and not getattr(console, "_yamlr_plain", False):
             self._animate_score_increase(
-                telemetry_data.get("last_health_score", 0.0),
+                telemetry_data.get("last_dna_integrity_score", 0.0),
                 avg_score,
                 telemetry_data.get("surgical_efficiency", 0.0)
             )
@@ -216,11 +236,13 @@ class SummaryMixin:
         # [Feature] Deprecation Summary
         self._render_deprecation_summary(reports)
 
-    def print_impact_summary(self, reports: List[Any], elapsed_time: float):
-        """
-        [ULTRA-SCALE] Impact Summary View.
+    def print_impact_summary(self, reports: List[HealFileResult], elapsed_time: float):
+        """[ULTRA-SCALE] Impact Summary View.
         Designed for 10k-100k+ file scans where a table is too large.
         Focuses on 'At a Glance' metrics and critical blockers.
+        
+        Why: Enables high-level executive reporting and ROI calculation 
+             for hyperscale infrastructure.
         """
         total_files = len(reports)
         crit_errors = 0
@@ -318,23 +340,40 @@ class SummaryMixin:
         from rich.progress import ProgressBar
         import time
         
+        try:
+            old_val = float(old_score)
+        except (TypeError, ValueError):
+            old_val = 0.0
+            
         # Only animate if there's a positive change or high baseline
-        if new_score < old_score and new_score < 100:
+        if new_score < old_val and new_score < 100:
             return 
 
-        console.print(f"\n[bold cyan]✨ Project Health Progression[/bold cyan]")
+        console.print("\n[bold cyan]✨ DNA Integrity Progression[/bold cyan]")
         
         with Live(console=console, refresh_per_second=10) as live:
-            target = int(new_score)
-            start = int(old_score) if old_score < new_score else 0
+            try:
+                target = int(new_score)
+                start = int(old_val) if old_val < target else 0
+            except (TypeError, ValueError):
+                target = 0
+                start = 0
             
             from rich.columns import Columns
             from rich.text import Text
             for i in range(start, target + 1):
-                color = "green" if i > 80 else "yellow" if i > 50 else "red"
+                try:
+                    color = "green" if i > 80 else "yellow" if i > 50 else "red"
+                except (TypeError, ValueError):
+                    color = "red"
                 bar = ProgressBar(total=100, completed=i, width=40, style=color)
                 
-                eff_text = f" | Efficiency: {efficiency:.1f}x" if efficiency > 0 else ""
+                try:
+                    eff_val = float(efficiency)
+                except (TypeError, ValueError):
+                    eff_val = 0.0
+                    
+                eff_text = f" | Efficiency: {eff_val:.1f}x" if eff_val > 0 else ""
                 
                 # Use Columns to render the bar alongside text instead of stringifying the Bar object
                 renderable = Columns([
@@ -347,4 +386,4 @@ class SummaryMixin:
         if new_score > old_score:
             console.print(f"  [bold green]⬆ Project health improved by {new_score - old_score:.1f}%![/bold green]")
         elif new_score == 100:
-            console.print(f"  [bold cyan]🏆 Pure DNA: Project is at 100% integrity.[/bold cyan]")
+            console.print("  [bold cyan]🏆 Pure DNA: Project is at 100% integrity.[/bold cyan]")

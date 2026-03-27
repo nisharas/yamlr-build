@@ -1,3 +1,4 @@
+from __future__ import annotations
 #!/usr/bin/env python3
 """
 YAMLR PERFORMANCE BENCHMARK
@@ -11,9 +12,10 @@ from pathlib import Path
 
 from yamlr.core.engine import YamlrEngine
 
-# Constants
-TARGET_SIZE_MB = 10
-OUTPUT_FILE = Path("tests/corpus/stress/benchmark_large.yaml")
+# Paths
+ROOT_DIR = Path(__file__).parent.parent.resolve()
+TARGET_SIZE_MB = 2
+OUTPUT_FILE = ROOT_DIR / "tests/corpus/stress/benchmark_large.yaml"
 
 TEMPLATE = """
 ---
@@ -68,7 +70,8 @@ def run_benchmark():
     # Initialize Engine (exclude initiation time from benchmark)
     print("\nInitializing Engine...")
     engine = YamlrEngine(
-        workspace_path=".", catalog_path="catalog/k8s_v1_distilled.json"
+        workspace_path=str(ROOT_DIR), 
+        catalog_path=str(ROOT_DIR / "catalog/k8s_v1_distilled.json")
     )
 
     print(f"Starting Scan on {OUTPUT_FILE}...")
@@ -87,7 +90,7 @@ def run_benchmark():
     print(f"Duration:       {duration:.4f} seconds")
     print(f"Throughput:     {throughput:.2f} MB/s")
     print(f"Success:        {result['success']}")
-    print(f"Health Score:   {result['health_score']}")
+    print(f"Health Score:   {result.dna_integrity_score}")
     print("--------------------------------------------------")
 
     # Cleanup (optional, maybe keep for manual inspection)

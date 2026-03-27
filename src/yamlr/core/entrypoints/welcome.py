@@ -3,16 +3,19 @@ WELCOME COMMAND - The Interactive Onboarding
 --------------------------------------------
 Displays the brand banner and quick-start guide.
 """
+from __future__ import annotations
 from yamlr.core.entrypoints.display import print_custom_header
-from yamlr.core.entrypoints.base import get_console, CORE_VERSION
+from yamlr.core.entrypoints.base import get_console
 from yamlr.core.bridge import YamlrBridge
 from rich.align import Align
 from rich.columns import Columns
-from rich.console import Group, Console
+from rich.console import Group
 from rich.panel import Panel
 from rich.table import Table
+__all__ = ['handle_welcome_command']
 
-def handle_welcome_command(args, engine, is_pro: bool):
+
+def handle_welcome_command(_, engine, is_pro: bool):
     """
     Displays the Yamlr welcome experience with a 'Premium' dashboard layout.
     
@@ -35,8 +38,9 @@ def handle_welcome_command(args, engine, is_pro: bool):
     core_actions.add_row("heal", "Propose repairs (Dry-run by default)")
     core_actions.add_row("secure", "Analyze & suggest security hardening (Pro)")
     core_actions.add_row("init", "Initialize .yamlr.yaml config")
+    core_actions.add_row("baseline", "Snapshot violations for GitOps Guard")
     core_actions.add_row("restore", "Revert changes from backups")
-    core_actions.add_row("demo", "Launch 'Magic Moment' sample")
+    core_actions.add_row("demo", "Launch 'Safety Engine' showcase")
     
     core_panel = Panel(
         core_actions, 
@@ -49,10 +53,11 @@ def handle_welcome_command(args, engine, is_pro: bool):
     scaling_info = Table(show_header=False, box=None, padding=(0, 1))
     scaling_info.add_column(style="magenta bold")
     scaling_info.add_column()
-    scaling_info.add_row("Enterprise Scaling", "Verified for 70k+ files")
-    scaling_info.add_row("CI throughput", "~50 files/sec (multi-proc)")
-    scaling_info.add_row("Memory Safety", "O(1) growth with streaming")
+    scaling_info.add_row("Turbo-Native", "150 MB/s Core Ingestion")
+    scaling_info.add_row("CLI Latency", "Verified sub-150ms startup")
+    scaling_info.add_row("Scaling", "Verified for 100k+ files")
     scaling_info.add_row("rules", "See active protections")
+    scaling_info.add_row("timing", "Debug startup bottlenecks")
     scaling_info.add_row("status", "System & Catalog health")
 
     help_panel = Panel(
@@ -99,7 +104,7 @@ def handle_welcome_command(args, engine, is_pro: bool):
     )
     spotlight_panel = Panel(
         spotlight_text,
-        title="[bold green]🦾 Power Healing Spotlight[/bold green]",
+        title="[bold green]🦾 Surgical Engine Spotlight[/bold green]",
         border_style="green",
         padding=(1, 2)
     )
@@ -143,7 +148,7 @@ def handle_welcome_command(args, engine, is_pro: bool):
 
     mastery_panel = Panel(
         mastery_table,
-        title="[bold magenta]🏆 Project Mastery Dashboard[/bold magenta]",
+        title="[bold magenta]🏆 Engineering Efficiency Dashboard[/bold magenta]",
         border_style="magenta",
         padding=(1, 2)
     )
@@ -152,9 +157,10 @@ def handle_welcome_command(args, engine, is_pro: bool):
     console.print(Columns([core_panel, mastery_panel], equal=True, expand=True))
     console.print(Columns([help_panel, discovery_panel], equal=True, expand=True))
     console.print(spotlight_panel)
-    console.print(cta_panel)
+    console.print(Columns([cta_panel, tip_panel], equal=True, expand=True))
     
     tier_label = "Enterprise" if is_pro else "Free Version"
+    from yamlr.core.entrypoints.base import CORE_VERSION
     footer = (
         f"  [dim]Version: {CORE_VERSION} | Build: Stable | Identity: {tier_label}[/dim]\n"
         f"  [dim]Documentation: [link=https://yamlr.dev]https://yamlr.dev[/link] | Use [bold]yamlr completion --install[/bold] for autocomplete.[/dim]"

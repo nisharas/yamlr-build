@@ -1,5 +1,8 @@
+from __future__ import annotations
 from pathlib import Path
 from yamlr.core.context import HealContext
+
+__all__ = ["handle_init_command"]
 
 DEFAULT_CONFIG_TEMPLATE = """# Yamlr Configuration File
 # Documentation: https://yamlr.dev/config

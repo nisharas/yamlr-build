@@ -5,27 +5,35 @@ Yamlr REFERENTIAL ALIGNMENT STAGE
 Stage 6.8: Applies cross-resource reference auto-corrections.
 """
 
-from typing import Any
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, Dict
+
+if TYPE_CHECKING:
+    from yamlr.healers.semantic.reference_healer import ReferenceHealer
 from yamlr.core.context import HealContext
 from yamlr.core.stages.base import PipelineStage
+
+__all__ = ['StageReferentialAlignment']
+
 
 class StageReferentialAlignment(PipelineStage):
     """
     Stage 6.8: Referential Alignment.
     Applies suggestions for missing ConfigMaps/Secrets/PVCs.
     """
-    def __init__(self, healer: Any):
+    def __init__(self, name: str, healer: "ReferenceHealer"):
+        """Initializes the referential alignment stage.
+        
+        Why: To resolve missing dependencies identified during semantic analysis.
         """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
-        """
-        super().__init__("Stage 6.8: Referential Alignment")
+        super().__init__(name)
         self.healer = healer
 
-    def run(self, context: HealContext):
-        """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
+    def run(self, context: HealContext) -> Dict[str, Any]:
+        """Executes referential healing on the current document set.
+        
+        Why: To repair broken ConfigMap, Secret, and PVC references automatically.
         """
         if not context.docs or not context.findings:
             return {"success": True, "repairs": 0}

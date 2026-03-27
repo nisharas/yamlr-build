@@ -5,7 +5,10 @@ demo, welcome, completion, status, rules, stats, manual.
 Why: Groups the simple, low-flag subcommand help texts that don't
      need complex shared helpers. Keeps per-module line counts low.
 """
+from __future__ import annotations
 from typing import List, Any
+__all__ = ['help_catalog', 'help_version', 'help_explain', 'help_auth', 'help_init', 'help_restore', 'help_demo', 'help_welcome', 'help_completion', 'help_status', 'help_rules', 'help_stats', 'help_roi', 'help_manual', 'help_mcp', 'render_upgrade_advisory']
+
 
 
 
@@ -53,12 +56,12 @@ def help_auth(console, invoked_as: str) -> None:
         f"{invoked_as} auth <action>[/bold white]"
     )
     console.print("\n[bold cyan]ACTIONS[/bold cyan]")
-    console.print("  login    Connect to Yamlr Enterprise and activate license")
+    console.print("  login    Connect to Yamlr Enterprise (Pro) and activate license")
     console.print("  logout   Clear local authentication tokens")
     console.print("  status   Display current license and user info")
     console.print("  whoami   Alias for 'auth status'")
     console.print(
-        "\n[dim]Yamlr Pro features require a valid enterprise license.[/dim]"
+        "\n[dim]Yamlr Enterprise (Pro) features require a valid enterprise license.[/dim]"
     )
 
 
@@ -75,6 +78,7 @@ def help_init(console, invoked_as: str) -> None:
     console.print("Use this to customize rule thresholds and file ignores.")
     console.print("\n[bold cyan]OPTIONS[/bold cyan]")
     console.print("  --force             Overwrite existing .yamlr.yaml file")
+    console.print("  --output FORMAT     Report format (text, json)")
 
 
 def help_restore(console, invoked_as: str) -> None:
@@ -168,6 +172,7 @@ def help_rules(console, invoked_as: str) -> None:
     )
     console.print("\n[bold cyan]OPTIONS[/bold cyan]")
     console.print("  --output json       Export rule definitions as structured JSON")
+    console.print("  -v, --verbose       Show full rationale for every rule")
 
 
 def help_stats(console, invoked_as: str) -> None:
@@ -176,12 +181,30 @@ def help_stats(console, invoked_as: str) -> None:
         f"\n[bold green]USAGE:[/bold green] [bold white]"
         f"{invoked_as} stats[/bold white] [options]"
     )
+    console.print(
+        "\nDisplays project-wide Engineering Efficiency metrics, focusing on "
+        "surgical impact and technical mastery."
+    )
     console.print("\n[bold cyan]OPTIONS[/bold cyan]")
     console.print("  --output {text,json} Target output format")
     console.print(
-        "\n[dim]Mastery ranks: Novice -> Surgical Lead -> "
+        "\n[dim]Efficiency ranks: Novice -> Surgical Lead -> "
         "Architect -> Grandmaster[/dim]"
     )
+
+
+def help_roi(console, invoked_as: str) -> None:
+    """Display help for the 'roi' command."""
+    console.print(
+        f"\n[bold green]USAGE:[/bold green] [bold white]"
+        f"{invoked_as} roi[/bold white] [options]"
+    )
+    console.print(
+        "\nDisplays the Executive ROI Portfolio, translating technical "
+        "fixes into reclaimed engineering budget and financial value."
+    )
+    console.print("\n[bold cyan]OPTIONS[/bold cyan]")
+    console.print("  --output {text,json} Target output format")
 
 
 def help_manual(console, invoked_as: str) -> None:
@@ -191,12 +214,27 @@ def help_manual(console, invoked_as: str) -> None:
         f"{invoked_as} manual[/bold white]"
     )
     console.print(
-        "\nDisplays the full, high-fidelity Yamlr User Guide "
-        "directly in your terminal."
-    )
-    console.print(
         "This is the definitive reference for all engine capabilities "
         "and configuration options."
+    )
+
+def help_mcp(console, invoked_as: str) -> None:
+    """Display help for the 'mcp' command."""
+    console.print(
+        f"\n[bold green]USAGE:[/bold green] [bold white]"
+        f"{invoked_as} mcp[/bold white] [options]"
+    )
+    console.print(
+        "\nStarts the [bold cyan]Model Context Protocol (MCP) Server[/bold cyan]."
+    )
+    console.print(
+        "This allows AI Agents (like Antigravity or Claude) to use Yamlr "
+        "as a tool for manifest analysis and healing."
+    )
+    console.print("\n[bold cyan]OPTIONS[/bold cyan]")
+    console.print("  --transport {stdio}  Communication transport (default: stdio)")
+    console.print(
+        "\n[dim]✨ Yamlr Enterprise (Pro) license is required for AI Agent integration.[/dim]"
     )
 def render_upgrade_advisory(console, current_v: str, target_v: str, risk_score: int, findings: List[Any]) -> None:
     """Displays a high-trust 'Safety Advisory' for K8s version upgrades.

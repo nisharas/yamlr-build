@@ -269,5 +269,57 @@
       "data": { "type": "object" },
       "stringData": { "type": "object" }
     }
+  },
+  
+  "ReplicaSet": {
+    "fields": {
+      "metadata": { "type": "object" },
+      "spec": {
+        "type": "object",
+        "fields": {
+          "replicas": { "type": "integer" },
+          "selector": { "type": "object" },
+          "template": { "ref": "PodTemplateSpec" }
+        }
+      }
+    }
+  },
+
+  "PersistentVolume": {
+    "fields": {
+      "metadata": { "type": "object" },
+      "spec": {
+        "type": "object",
+        "fields": {
+          "capacity": { "type": "object" },
+          "accessModes": { "type": "array", "item_type": "string" },
+          "persistentVolumeReclaimPolicy": { "type": "string" },
+          "storageClassName": { "type": "string" },
+          "volumeMode": { "type": "string" },
+          "awsElasticBlockStore": {
+            "type": "object",
+            "fields": {
+              "volumeID": { "type": "string" },
+              "fsType": { "type": "string" }
+            }
+          }
+        }
+      }
+    }
+  },
+
+  "PersistentVolumeClaim": {
+    "fields": {
+      "metadata": { "type": "object" },
+      "spec": {
+        "type": "object",
+        "fields": {
+          "accessModes": { "type": "array", "item_type": "string" },
+          "resources": { "type": "object" },
+          "storageClassName": { "type": "string" },
+          "volumeMode": { "type": "string" }
+        }
+      }
+    }
   }
 }

@@ -1,16 +1,25 @@
 import os
 import re
+from pathlib import Path
+
+# Use project-relative paths
+ROOT = Path(__file__).resolve().parent.parent
+audit_file = ROOT / "audit_results.txt"
 
 files_with_issues = set()
-with open("d:/yamlr/audit_results.txt", "r", encoding="utf-8") as f:
-    for line in f:
-        if line.startswith("[UNDOCUMENTED]"):
-            # Format: [UNDOCUMENTED] d:/yamlr/src\yamlr\analyzers\best_practices.py: name
-            # We want to extract the path.
-            parts = line.split("] ", 1)[1]
-            path = parts.rsplit(":", 1)[0].strip()
-            path = path.replace("\\", "/")
-            files_with_issues.add(path)
+if audit_file.exists():
+    with open(audit_file, "r", encoding="utf-8") as f:
+        for line in f:
+            if line.startswith("[UNDOCUMENTED]"):
+                # Format: [UNDOCUMENTED] path: name
+                parts = line.split("] ", 1)[1]
+                path_str = parts.rsplit(":", 1)[0].strip()
+                # Handle potential absolute paths from audit results
+                if os.path.isabs(path_str):
+                    path = Path(path_str)
+                else:
+                    path = ROOT / path_str
+                files_with_issues.add(str(path.resolve()))
 
 def inject_docstrings(filepath):
     with open(filepath, "r", encoding="utf-8") as f:

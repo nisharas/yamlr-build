@@ -2,12 +2,13 @@
 RESTORE COMMAND - Yamlr UX Enhancement
 Restores a file from its backup in .yamlr/backups/
 """
-import os
-import sys
+from __future__ import annotations
 from pathlib import Path
 from datetime import datetime
 
 from yamlr.core.entrypoints.base import get_console
+__all__ = ['handle_restore_command']
+
 
 def handle_restore_command(args, workspace: str = "."):
     """
@@ -19,7 +20,7 @@ def handle_restore_command(args, workspace: str = "."):
     
     if not args.path or len(args.path) == 0:
         # UX Enhancement: List all available backups if no target specified
-        console.print(f"\n[bold cyan]── yamlr SRE Backup Storage ──[/bold cyan]\n")
+        console.print("\n[bold cyan]── yamlr SRE Backup Storage ──[/bold cyan]\n")
         
         workspace_path = Path(workspace).resolve()
         backup_dir = workspace_path / ".yamlr" / "backups"
@@ -48,7 +49,7 @@ def handle_restore_command(args, workspace: str = "."):
                 rel = b.relative_to(backup_dir)
                 orig = rel.parent / rel.stem.split('.')[0]
                 orig_str = str(orig) + (b.suffix or ".yaml")
-            except:
+            except (ValueError, IndexError, AttributeError):
                 orig_str = "Unknown"
                 
             table.add_row(b.name, orig_str, mtime)
@@ -130,7 +131,7 @@ def handle_restore_command(args, workspace: str = "."):
     
     # Confirm restoration
     target_path = workspace_path / rel_path
-    console.print(f"\n[bold yellow]About to restore:[/bold yellow]")
+    console.print("\n[bold yellow]About to restore:[/bold yellow]")
     console.print(f"  From: {selected}")
     console.print(f"  To:   {target_path}")
     
@@ -147,6 +148,6 @@ def handle_restore_command(args, workspace: str = "."):
         console.print(f"\n[bold green]✓ Restored {target_file.name} from backup[/bold green]")
         console.print(f"[dim]Backup: {selected.name}[/dim]")
         return 0
-    except Exception as e:
+    except (shutil.Error, OSError, IOError) as e:
         console.print(f"[red]Restore failed: {e}[/red]")
         return 1

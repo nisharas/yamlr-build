@@ -9,8 +9,9 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../s
 from yamlr.core.pipeline import HealingPipeline
 
 def run_toxic_audit_in_process():
-    corpus_dir = Path("tests/corpus/toxic")
-    catalog_path = Path("catalog/k8s_v1_distilled.json")
+    root_dir = Path(__file__).parent.parent.resolve()
+    corpus_dir = root_dir / "tests/corpus/toxic"
+    catalog_path = root_dir / "catalog" / "k8s_v1_distilled.json"
     
     with open(catalog_path, 'r', encoding='utf-8') as f:
         catalog = json.load(f)

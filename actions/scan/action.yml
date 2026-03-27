@@ -1,43 +1,137 @@
-name: 'Yamlr Guard'
-description: 'Autonomous K8s Manifest Sentinel (Binary-in-a-Box)'
-author: 'Yamlr'
-
+name: Yamlr Guard
+description: Autonomous K8s Manifest Sentinel (Binary-in-a-Box)
+author: Yamlr
 inputs:
   path:
-    description: 'Path to scan (file or directory)'
+    description: Path to scan (file or directory)
     required: false
-    default: '.'
+    default: .
   config:
-    description: 'Path to .yamlr.yaml'
+    description: Path to .yamlr.yaml
     required: false
   fail-on-error:
-    description: 'Fail the build if issues are found'
+    description: Fail the build if issues are found
     required: false
     default: 'true'
   kube-version:
-    description: 'Target Kubernetes version for validation'
+    description: Target Kubernetes version for validation
     required: false
   github-token:
-    description: 'GitHub token to automatically post a summary comment on Pull Requests'
+    description: GitHub token to automatically post a summary comment on Pull Requests
     required: false
   extra-args:
-    description: 'Universal passthrough for any current or future Yamlr CLI flags (e.g., "--strict --harden")'
+    description: Universal passthrough for any current or future Yamlr CLI flags (e.g.,
+      "--strict --harden")
     required: false
     default: ''
-
+  k8s-version:
+    description: Target K8s version (e.g., 1.28, v1.31)
+    required: false
+  max-depth:
+    description: 'Limit directory recursion depth (default: 10)'
+    required: false
+  ext:
+    description: 'Extensions to process (default: .yaml,.yml)'
+    required: false
+  concurrency:
+    description: Parallel worker count (defaults to CPU core count)
+    required: false
+  identity-mode:
+    description: 'Identity detection style: ''infer'' (default) or ''strict'''
+    required: false
+  strict:
+    description: Treat all schema warnings as errors
+    required: false
+    default: 'false'
+  compact:
+    description: Minify output (2-space indent, no extra whitespace)
+    required: false
+    default: 'false'
+  cpu-limit:
+    description: Standard CPU request/limit for auto-injection (e.g. 500m)
+    required: false
+  mem-limit:
+    description: Standard Memory request/limit for auto-injection (e.g. 512Mi)
+    required: false
+  namespace:
+    description: Default namespace for generated resources
+    required: false
+  health-threshold:
+    description: Custom health score penalty threshold (0-100)
+    required: false
+  enforce-limits:
+    description: Inject default CPU/Memory requests/limits if missing.
+    required: false
+    default: 'false'
+  enforce-probes:
+    description: Inject default Liveness/Readiness probes.
+    required: false
+    default: 'false'
+  enforce-namespace:
+    description: Inject default namespace for resources missing one.
+    required: false
+    default: 'false'
+  fix-tags:
+    description: Auto-remediate :latest or missing image tags.
+    required: false
+    default: 'false'
+  harden:
+    description: Apply enterprise security hardening (Pro features).
+    required: false
+    default: 'false'
+  fail-on:
+    description: 'CI/CD GATE: Exit with code 1 if specified severity is found'
+    required: false
+  check-deprecations:
+    description: Explicitly audit for and record deprecated Kubernetes APIs
+    required: false
+    default: 'false'
+  opa-bundle:
+    description: Path or URL to OPA bundle (Supports Gatekeeper Templates)
+    required: false
+  kyverno-report:
+    description: '[PRO] Path to Kyverno PolicyReport JSON for Auto-Fix ingestion'
+    required: false
+  output:
+    description: Output format
+    required: false
+  fast:
+    description: Skip deep semantic analysis for speed
+    required: false
+    default: 'false'
 outputs:
   health-score:
-    description: 'The overall health score of the scanned manifests'
+    description: The overall health score of the scanned manifests
   results-sarif:
-    description: 'Path to the generated SARIF report'
-
+    description: Path to the generated SARIF report
 runs:
-  using: 'docker'
-  image: 'Dockerfile'
+  using: docker
+  image: Dockerfile
   env:
     INPUT_PATH: ${{ inputs.path }}
     INPUT_CONFIG: ${{ inputs.config }}
     INPUT_FAIL_ON_ERROR: ${{ inputs.fail-on-error }}
-    INPUT_KUBE_VERSION: ${{ inputs.kube-version }}
+    INPUT_KUBE_VERSION: ${{ inputs.kube-version || inputs.k8s-version }}
     GITHUB_TOKEN: ${{ inputs.github-token }}
     INPUT_EXTRA_ARGS: ${{ inputs.extra-args }}
+    INPUT_MAX_DEPTH: ${{ inputs.max-depth }}
+    INPUT_EXT: ${{ inputs.ext }}
+    INPUT_CONCURRENCY: ${{ inputs.concurrency }}
+    INPUT_IDENTITY_MODE: ${{ inputs.identity-mode }}
+    INPUT_STRICT: ${{ inputs.strict }}
+    INPUT_COMPACT: ${{ inputs.compact }}
+    INPUT_CPU_LIMIT: ${{ inputs.cpu-limit }}
+    INPUT_MEM_LIMIT: ${{ inputs.mem-limit }}
+    INPUT_NAMESPACE: ${{ inputs.namespace }}
+    INPUT_HEALTH_THRESHOLD: ${{ inputs.health-threshold }}
+    INPUT_ENFORCE_LIMITS: ${{ inputs.enforce-limits }}
+    INPUT_ENFORCE_PROBES: ${{ inputs.enforce-probes }}
+    INPUT_ENFORCE_NAMESPACE: ${{ inputs.enforce-namespace }}
+    INPUT_FIX_TAGS: ${{ inputs.fix-tags }}
+    INPUT_HARDEN: ${{ inputs.harden }}
+    INPUT_FAIL_ON: ${{ inputs.fail-on }}
+    INPUT_CHECK_DEPRECATIONS: ${{ inputs.check-deprecations }}
+    INPUT_OPA_BUNDLE: ${{ inputs.opa-bundle }}
+    INPUT_KYVERNO_REPORT: ${{ inputs.kyverno-report }}
+    INPUT_OUTPUT: ${{ inputs.output }}
+    INPUT_FAST: ${{ inputs.fast }}

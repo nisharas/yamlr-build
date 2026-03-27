@@ -1,5 +1,5 @@
 """
-Yamlr Enterprise: Kyverno Remediation Adapter
+Yamlr Enterprise (Pro): Kyverno Remediation Adapter
 ---------------------------------------------
 Integrates Kyverno PolicyReports into the Yamlr cross-resource healing pipeline.
 Parses native Kyverno JSON outputs and translates 'fail' results into
@@ -8,13 +8,18 @@ Yamlr AnalysisResult objects for automated mutation and reporting.
 Author: Nishar A Sunkesala / Yamlr Team
 """
 
+from __future__ import annotations
 import json
 import logging
 from typing import Any, Dict, List, Optional
 import os
 
+__all__ = ['KyvernoAdapter']
+
 try:
     from yamlr.analyzers.base import AnalysisResult, BaseAnalyzer
+    from yamlr.core.remediation import RemediationRegistry
+    from yamlr.core.exceptions import YamlrSecurityError
 except ImportError:
     # Fallback for when running in isolation/tests
     from dataclasses import dataclass
@@ -30,6 +35,7 @@ except ImportError:
         rule_id: Optional[str] = None
         line_number: Optional[int] = None
         suggestion: Optional[str] = None
+        rationale: Optional[str] = None
         fix_available: bool = False
         fix_id: Optional[str] = None
 
@@ -59,20 +65,32 @@ class KyvernoAdapter(BaseAnalyzer):
         # Runs at cross-resource phase as it depends on external ingestion
         return "metadata"
 
-    def analyze(self, identities: List[Any]) -> List[AnalysisResult]:
+    def analyze(self, identities: List[Any], **kwargs) -> List[AnalysisResult]:
         """
         Parses the Kyverno report and yields Yamlr AnalysisResults.
         """
         if not self.report_path or not os.path.exists(self.report_path):
-            logger.warning(f"Kyverno PolicyReport not found: {self.report_path}")
-            return []
+            msg = f"Kyverno PolicyReport not found: {self.report_path}"
+            logger.error(msg)
+            raise YamlrSecurityError(
+                f"Kyverno Report Missing: {self.report_path}",
+                remediation="Ensure the Kyverno PolicyReport JSON exists at the specified path before scanning."
+            )
 
         try:
             with open(self.report_path, "r", encoding="utf-8") as f:
                 self._report_data = json.load(f)
-        except Exception as e:
+        except (json.JSONDecodeError, OSError, IOError) as e:
             logger.error(f"Failed to load Kyverno report: {e}")
-            return []
+            raise YamlrSecurityError(
+                f"Kyverno Report Processing Failure: {e}",
+                remediation="Validate that the Kyverno report is a valid JSON file and contains standard PolicyReport fields."
+            )
+
+        try:
+            from yamlr.core.bridge import YamlrBridge
+            YamlrBridge.get_license_manager().track_usage("kyverno_report_ingested", 1)
+        except Exception: pass
 
         return self._parse_report(self._report_data, identities)
 
@@ -115,12 +133,20 @@ class KyvernoAdapter(BaseAnalyzer):
                     for item in identities:
                         doc = item.to_dict() if hasattr(item, "to_dict") else item
                         item_kind = doc.get("kind", "Unknown")
-                        item_name = doc.get("metadata", {}).get("name", "Unnamed")
-                        item_ns = doc.get("metadata", {}).get("namespace", "default")
+                        item_name = doc.get("name", "Unnamed")
+                        item_ns = doc.get("namespace", "default")
 
                         if r_kind == item_kind and r_name == item_name and (r_ns == item_ns or not r_ns):
                             fpath = getattr(item, "file_path", "unknown") if hasattr(item, "file_path") else "unknown"
                             break
+
+                    # Phase 9: Resolution of Fixes via RemediationRegistry
+                    rule_id = f"kyverno/{policy}/{rule}"
+                    fix_id = None
+                    try:
+                        fix_id = RemediationRegistry.get_fix_id(rule_id)
+                    except (AttributeError, KeyError):
+                        pass
 
                     results.append(
                         AnalysisResult(
@@ -131,8 +157,10 @@ class KyvernoAdapter(BaseAnalyzer):
                             resource_name=r_name,
                             resource_kind=r_kind,
                             file_path=fpath,
-                            rule_id=f"kyverno/{policy}/{rule}",
+                            rule_id=rule_id,
                             suggestion="Check Kyverno ClusterPolicy documentation for remediation steps.",
+                            fix_available=fix_id is not None,
+                            fix_id=fix_id,
                         )
                     )
 

@@ -9,13 +9,18 @@ Handles all physical I/O operations:
 Decoupled from YamlrEngine to support future S3/Remote backends.
 """
 
-import logging
+from __future__ import annotations
 import os
+import time
 import shutil
+import logging
+import subprocess
 from pathlib import Path
-from typing import Generator, List, Tuple
+from typing import Generator, List, Tuple, Dict, Any, Callable
 
 logger = logging.getLogger("yamlr.dev")
+
+__all__ = ["FileSystemManager"]
 
 
 class FileSystemManager:
@@ -26,15 +31,54 @@ class FileSystemManager:
     # [Security] Prevent OOM by limiting file reading size (50MB default)
     MAX_FILE_SIZE = 50 * 1024 * 1024 
 
-    def __init__(self, workspace_root: Path, app_name: str = "Yamlr"):
-        """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
+    def __init__(self, workspace_root: Path, app_name: str = "yamlr"):
+        """Initializes the file system manager for a given workspace.
+        
+        Why: To establish a secure root for all manifest-related I/O and telemetry persistence.
         """
         self.workspace = workspace_root.resolve()
         self.app_name = app_name.lower()
         self.state_dir = self.workspace / f".{self.app_name}"
         self.backup_dir = self.state_dir / "backups"
+
+    def _is_safe_path(self, path: Path) -> bool:
+        """
+        Verifies if a path is contained within the authorized workspace.
+        
+        Why: To prevent Path Traversal attacks (CWE-22) where a malicious 
+             manifest could trick the engine into reading or writing system files.
+        Args:
+            path: The path to validate.
+        Returns:
+            True if the path is inside the workspace, False otherwise.
+        """
+        try:
+            resolved_target = path.resolve()
+            return self.workspace in resolved_target.parents or resolved_target == self.workspace
+        except OSError:
+            return False
+
+    # =========================================================================
+    # INTERNAL UTILITIES
+    # =========================================================================
+
+    def _with_retry(self, func: Callable, *args, max_attempts: int = 3, delay: float = 0.1, **kwargs) -> Any:
+        """
+        Executes a file operation with a retry loop for Windows file contention.
+        Why: Handles 'PermissionError' caused by Antivirus/Search Indexers locking files.
+        """
+        last_err = None
+        for attempt in range(max_attempts):
+            try:
+                return func(*args, **kwargs)
+            except (PermissionError, IOError) as e:
+                # On Windows, PermissionError is common during lock contention
+                if os.name == "nt" and attempt < max_attempts - 1:
+                    time.sleep(delay * (2 ** attempt)) # Exponential backoff
+                    last_err = e
+                    continue
+                raise e
+        raise last_err
 
     def ensure_workspace(self):
         """Creates workspace and state directories if missing."""
@@ -48,22 +92,43 @@ class FileSystemManager:
         # Ensure hidden state dir exists
         if not self.state_dir.exists():
             self.state_dir.mkdir(exist_ok=True)
+            
+        # [Security] Self-Healing: Cleanup stale cleartext fragments on startup
+        self.cleanup_fragments()
 
         # Ensure backup dir exists with restricted permissions (0o700)
         # This protects sensitive manifest data from other users on the host.
         if not self.backup_dir.exists():
+            # [Security] Guard against TOCTOU and symlink races (VULN-009)
+            if self.backup_dir.is_symlink():
+                logger.error(f"Security Alert: Backup directory {self.backup_dir} is a symlink. Potential hijacking attempt.")
+                from yamlr.core.exceptions import YamlrSecurityError
+                raise YamlrSecurityError(f"Secure vault path {self.backup_dir} is a symlink.")
+
+            # Potential Race Condition: Another process could create it as a symlink 
+            # between check and mkdir. Python 3.12+ mkdir(exist_ok=True) is mostly 
+            # atomic, but we double-check permissions.
             try:
                 # 0o700 = Only current user can read/write/execute
                 if os.name != "nt":
                     self.backup_dir.mkdir(mode=0o700, exist_ok=True)
                 else:
                     self.backup_dir.mkdir(exist_ok=True)
-            except Exception as e:
+                    self._set_windows_permissions(self.backup_dir)
+            except OSError as e:
                 logger.warning(f"Failed to set restricted permissions on backup vault: {e}")
                 self.backup_dir.mkdir(exist_ok=True)
 
     def read_text(self, path: Path) -> str:
         """Reads text file with BOM handling and size guards."""
+        # [Security] Prevent Path Traversal (Read-side)
+        if not self._is_safe_path(path):
+            from yamlr.core.exceptions import YamlrSecurityError
+            raise YamlrSecurityError(
+                f"Security violation: Refusing to read file outside workspace: {path}",
+                remediation="Ensure all scanned files are contained within the project root."
+            )
+
         # [Security] Guard against massive files (OOM/DoS)
         try:
             if path.stat().st_size > self.MAX_FILE_SIZE:
@@ -92,23 +157,69 @@ class FileSystemManager:
         Raises:
             IOError: If a security violation is detected or disk I/O fails.
         """
-        # [Security] Prevent symlink traversal attacks
-        if target_path.exists() and target_path.is_symlink():
-            raise IOError(f"Security violation: Refusing to write to symlink '{target_path}'")
+        # [Security] Prevent Path Traversal (Write-side)
+        if not self._is_safe_path(target_path):
+            from yamlr.core.exceptions import YamlrSecurityError
+            raise YamlrSecurityError(
+                f"Security violation: Refusing to write to file outside workspace: {target_path}",
+                remediation="Yamlr strictly enforces workspace boundaries for all write operations."
+            )
 
-        temp_file = target_path.with_suffix(".yamlr.tmp")
+        # [Security] Prevent symlink traversal attacks (TOCTOU Hardening [HIGH-3])
+        # We use lstat to check the target without following it.
+        try:
+            target_stat = target_path.lstat()
+            import stat
+            if stat.S_ISLNK(target_stat.st_mode):
+                from yamlr.core.exceptions import YamlrSecurityError
+                raise YamlrSecurityError(f"Security violation: Refusing to write to symlink '{target_path}'")
+        except FileNotFoundError:
+            pass # Target doesn't exist, safe to proceed
+
+        # [Security] Centralized Tmp Isolation
+        # Why: Prevents 'Cleartext Fragment' leaks by isolating .tmp files in a restricted dir.
+        tmp_dir = self.state_dir / "tmp"
+        tmp_dir.mkdir(exist_ok=True)
+        if os.name != "nt": os.chmod(tmp_dir, 0o700)
+        else: self._set_windows_permissions(tmp_dir)
+
+        # Unique temp name to prevent collisions/races
+        import uuid
+        temp_file = tmp_dir / f"{target_path.name}.{uuid.uuid4().hex}.tmp"
+        
         try:
             with open(temp_file, "w", encoding="utf-8") as f:
                 f.write(content)
                 f.flush()
-                os.fsync(f.fileno()) # [Hardening] Ensure data is on disk before replace
+                # Ensure data is on disk before move
+                os.fsync(f.fileno())
 
-            os.replace(temp_file, target_path)
+            # Move to final destination (with retry for Windows locks)
+            self._with_retry(os.replace, temp_file, target_path)
 
         except Exception as e:
             if temp_file.exists():
                 temp_file.unlink()
             raise IOError(f"Atomic write failed: {e}")
+
+    def cleanup_fragments(self):
+        """
+        Clears stale .tmp files from the secure state-dir.
+        
+        Why: Eliminates 'Cleartext Fragments' left behind by abnormal exits/crashes.
+        """
+        tmp_dir = self.state_dir / "tmp"
+        if not tmp_dir.exists():
+            return
+            
+        try:
+            for f in tmp_dir.glob("*.tmp"):
+                # Prune if older than 1 hour (safety buffer for concurrent runs)
+                import time
+                if time.time() - f.stat().st_mtime > 3600:
+                    f.unlink()
+        except Exception as e:
+            logger.debug(f"Fragment cleanup failed: {e}")
 
     def create_backup(self, target_path: Path) -> Path:
         """
@@ -117,11 +228,18 @@ class FileSystemManager:
         Structure:
         <workspace>/.Yamlr/backups/path/to/file-<timestamp>.yaml
         """
+        # [Security] Prevent Arbitrary File Read via Mirroring (VULN-005)
+        if not self._is_safe_path(target_path):
+            from yamlr.core.exceptions import YamlrSecurityError
+            raise YamlrSecurityError(
+                f"Security violation: Refusing to backup file outside workspace: {target_path}",
+                remediation="Yamlr only performs backups for files within the active project root."
+            )
+
         try:
             rel_path = target_path.relative_to(self.workspace)
         except ValueError:
-            # File is outside workspace - preserve structure under 'external' folder
-            # [Fix] Ensure rel_path is truly relative by stripping the anchor (e.g. '/' or 'C:\')
+            # Fallback (should be blocked by _is_safe_path, but kept for defensive depth)
             abs_path = target_path.resolve()
             rel_path = Path("external") / abs_path.relative_to(abs_path.anchor)
 
@@ -146,14 +264,37 @@ class FileSystemManager:
         backup_dest_dir.mkdir(parents=True, exist_ok=True)
         backup_path = backup_dest_dir / backup_name
 
-        shutil.copy2(target_path, backup_path)
+        # Atomic copy via with_retry for Windows resilience
+        self._with_retry(shutil.copy2, target_path, backup_path)
 
         # [Smart Rotation] Keep specific file history lean (Max 5 versions)
         self._rotate_backups(backup_dest_dir, target_path.stem, target_path.suffix)
 
         return backup_path
 
-    def _rotate_backups(self, backup_dir: Path, stem: str, suffix: str, keep: int = 5):
+    def _set_windows_permissions(self, path: Path) -> None:
+        """
+        Hardening: Enforce Windows ACLs to restrict access to the current user.
+        Why: Windows does not respect posix mode 0o700 in mkdir.
+        """
+        if os.name != "nt":
+            return
+
+        try:
+            # Grant full access to current user, remove all other inherited permissions
+            # /inheritance:r = Remove inherited ACEs
+            # /grant:r %USERNAME%:F = Grant Full access to current user
+            username = os.environ.get("USERNAME")
+            if username:
+                from yamlr.core.logging_config import mask_path
+                cmd = ["icacls", str(path), "/inheritance:r", "/grant:r", f"{username}:F"]
+                subprocess.run(cmd, capture_output=True, check=True, text=True)
+                logger.debug(f"Applied Windows ACLs to {mask_path(path)}")
+        except Exception as e:
+            from yamlr.core.logging_config import mask_path
+            logger.warning(f"Failed to apply Windows ACLs to {mask_path(path)}: {e}")
+
+    def _rotate_backups(self, backup_dir: Path, stem: str, suffix: str, keep: int = 5) -> None:
         """Auto-prunes old backups for a specific file to prevent disk bloat."""
         try:
             # Find all backups for this file: stem.<timestamp>suffix
@@ -168,7 +309,6 @@ class FileSystemManager:
                 for old in candidates[keep:]:
                     try:
                         old.unlink()
-                        logger.debug(f"Rotated backup: {old}")
                     except Exception as e:
                         logger.debug(f"Backup rotation: Failed to unlink {old}: {e}")
         except Exception as e:
@@ -190,7 +330,9 @@ class FileSystemManager:
             logger.error(f"Scan root does not exist: {root_path}")
             return
 
-        for root, dirs, files in os.walk(root_path):
+        # Use os.walk with explicit followlinks=False to prevent recursive symlink attacks
+        # CWE-674: Infinite Recursion vulnerability guard
+        for root, dirs, files in os.walk(root_path, followlinks=False):
             # Depth check
             current_depth = len(Path(root).relative_to(root_path).parts)
             if current_depth >= max_depth:

@@ -7,12 +7,17 @@ Extracts:
 - spec.template.spec.serviceAccountName (Deployment/StatefulSet)
 """
 
+from __future__ import annotations
 from typing import List
 
 from yamlr.models import ManifestIdentity, Shard
+__all__ = ['ServiceAccountExtractor']
 
 
-class ServiceAccountExtractor:
+
+from .base_extractor import BaseMetadataExtractor
+
+class ServiceAccountExtractor(BaseMetadataExtractor):
     """Extracts ServiceAccount references from workload resources."""
 
     @staticmethod
@@ -26,20 +31,13 @@ class ServiceAccountExtractor:
         """
         Extract ServiceAccount name if in Pod/workload spec.
 
-        Only applies to workload resources.
-
         Returns:
             bool: True if extraction was performed
         """
         # Only extract from workload resources
         valid_kinds = [
-            "Pod",
-            "Deployment",
-            "StatefulSet",
-            "DaemonSet",
-            "Job",
-            "CronJob",
-            "ReplicaSet",
+            "Pod", "Deployment", "StatefulSet", "DaemonSet",
+            "Job", "CronJob", "ReplicaSet",
         ]
         if identity.kind not in valid_kinds:
             return False

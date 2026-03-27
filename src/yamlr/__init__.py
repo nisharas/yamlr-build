@@ -1,4 +1,5 @@
 # Yamlr Namespace Initialization
+from __future__ import annotations
 import pkgutil
 import sys
 from pathlib import Path
@@ -13,3 +14,20 @@ if getattr(sys, "frozen", False):
     bundle_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
     if bundle_dir not in sys.path:
         sys.path.insert(0, bundle_dir)
+
+__all__ = ["YamlrEngine", "YamlrManager", "HealConfig", "HealFileResult"]
+
+def __getattr__(name: str):
+    if name == "YamlrEngine":
+        from yamlr.engine import YamlrEngine
+        return YamlrEngine
+    if name == "YamlrManager":
+        from yamlr.engine import YamlrManager
+        return YamlrManager
+    if name == "HealConfig":
+        from yamlr.models import HealConfig
+        return HealConfig
+    if name == "HealFileResult":
+        from yamlr.models import HealFileResult
+        return HealFileResult
+    raise AttributeError(f"module '{__name__}' has no attribute '{name}'")

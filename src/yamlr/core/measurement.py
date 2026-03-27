@@ -14,21 +14,22 @@ Author: Nishar A Sunkesala / Yamlr Team
 Date: 2026-02-21
 """
 
+from __future__ import annotations
 import json
 import logging
-import subprocess
 import time
 from dataclasses import dataclass, field, asdict
 from typing import Dict, List, Any, Optional
-from pathlib import Path
 
 logger = logging.getLogger("yamlr.core.measurement")
+__all__ = ['BenchResult', 'CategoryStats', 'HealingBenchmarker']
+
 
 @dataclass
 class BenchResult:
-    """
-    Why: Internal documentation policy compliance.
-    What: Auto-generated summary.
+    """Represents the multi-dimensional audit results for a single manifest file.
+    
+    Why: To provide a granular, scientific record of detection and healing efficacy.
     """
     file_path: str
     category: str
@@ -42,9 +43,9 @@ class BenchResult:
 
 @dataclass
 class CategoryStats:
-    """
-    Why: Internal documentation policy compliance.
-    What: Auto-generated summary.
+    """Aggregated statistics for a specific category of Kubernetes resources.
+    
+    Why: To identify structural weaknesses in the healing engine by resource type.
     """
     name: str
     total_files: int = 0
@@ -55,9 +56,9 @@ class CategoryStats:
     
     @property
     def has_score(self) -> float:
-        """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
+        """Calculates the overall Healing Assessment Score (HAS) for this category.
+        
+        Why: Key performance indicator for acquisition readiness and product value.
         """
         if self.total_files == 0: return 0.0
         return (self.healed / self.total_files) * 100.0
@@ -67,9 +68,9 @@ class HealingBenchmarker:
     Orchestrates the scientific audit of a manifest corpus.
     """
     def __init__(self):
-        """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
+        """Initializes the benchmarker with default settings and empty results.
+        
+        Why: Prepares the engine for a scientific audit run.
         """
         self.results: List[BenchResult] = []
         self.kubectl_path = "kubectl"
@@ -84,15 +85,17 @@ class HealingBenchmarker:
         try:
             import subprocess
             # Quick check with short timeout
+            # [Security] shell=False is default for list-based args, but making it explicit
             proc = subprocess.run(
                 [self.kubectl_path, "version", "--request-timeout=1s"],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
-                timeout=2
+                timeout=2,
+                shell=False
             )
             self._offline_mode = proc.returncode != 0
-        except Exception:
+        except (OSError, subprocess.SubprocessError):
             self._offline_mode = True
             
         return not self._offline_mode
@@ -107,10 +110,12 @@ class HealingBenchmarker:
         # 1. Use internal validator if offline
         if not self._check_connectivity():
             from yamlr.validators.schema_validator import SchemaValidator
+            from yamlr.core.utils import get_hardened_yaml
             validator = SchemaValidator()
-            import yaml
             try:
-                data = yaml.safe_load(yaml_content)
+                # [Security] Use hardened YAML to prevent Billion Laughs (VULN-008)
+                hyaml = get_hardened_yaml(typ="safe")
+                data = hyaml.load(yaml_content)
                 # If it's a list (multi-doc), validate each
                 if isinstance(data, list):
                     for doc in data:
@@ -119,23 +124,31 @@ class HealingBenchmarker:
                     return True # All documents passed
                 errors = validator.validate_full_document(data)
                 return len(errors) == 0
-            except:
+            except (yaml.YAMLError, AttributeError, TypeError):
                 return False
 
         # 2. Online validation via kubectl
+        # [Security] Using list-based arguments to prevent shell injection
         cmd = [self.kubectl_path, "apply", "--dry-run=server", "--validate=strict", "-f", "-"]
         try:
             import subprocess
-            proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            stdout, stderr = proc.communicate(input=yaml_content)
+            proc = subprocess.Popen(
+                cmd, 
+                stdin=subprocess.PIPE, 
+                stdout=subprocess.PIPE, 
+                stderr=subprocess.PIPE, 
+                text=True,
+                shell=False
+            )
+            _, _ = proc.communicate(input=yaml_content)
             return proc.returncode == 0
-        except Exception:
+        except (subprocess.SubprocessError, OSError):
             return False
 
     def record_result(self, result: BenchResult):
-        """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
+        """Records a single benchmark result and updates category-level statistics.
+        
+        Why: To build the dataset required for final report generation and telemetry.
         """
         self.results.append(result)
         
@@ -187,3 +200,61 @@ class HealingBenchmarker:
             for r in self.results:
                 f.write(json.dumps(asdict(r)) + "\n")
         logger.info(f"Local telemetry saved to {output_path}")
+class SurgicalTimer:
+    """
+    Context manager for high-precision surgical timing.
+    
+    Why: To provide millisecond-level transparency into engine performance 
+         bottlenecks across Lexer, Scanner, and Healer phases.
+    """
+    def __init__(self, name: str, parent: Optional[SurgicalTimer] = None, bootstrap_start: Optional[float] = None):
+        self.name = name
+        self.start_time: float = 0
+        self.bootstrap_start = bootstrap_start
+        self.duration_ms: float = 0
+        self.bootstrap_ms: float = 0
+        self.children: Dict[str, SurgicalTimer] = {}
+        self.parent = parent
+
+    def __enter__(self) -> SurgicalTimer:
+        self.start_time = time.perf_counter()
+        if self.bootstrap_start:
+            self.bootstrap_ms = (self.start_time - self.bootstrap_start) * 1000
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.duration_ms = (time.perf_counter() - self.start_time) * 1000
+        if self.parent:
+            self.parent.children[self.name] = self
+
+    def get_report(self) -> Dict[str, Any]:
+        """Returns a nested timing report."""
+        report = {
+            "name": self.name,
+            "duration_ms": round(self.duration_ms, 2),
+            "children": {k: v.get_report() for k, v in self.children.items()}
+        }
+        if self.bootstrap_ms > 0:
+            report["bootstrap_ms"] = round(self.bootstrap_ms, 2)
+        return report
+
+    @staticmethod
+    def print_timing_report(report: Dict[str, Any], console: Any, indent: int = 0):
+        """Prints a human-readable timing tree to the console."""
+        prefix = "  " * indent
+        name = report["name"]
+        duration = report["duration_ms"]
+        
+        # Color coding based on latency
+        color = "green"
+        if duration > 500: color = "red"
+        elif duration > 100: color = "yellow"
+        
+        console.print(f"{prefix}• [bold]{name}[/bold]: [{color}]{duration}ms[/{color}]")
+        
+        if report.get("bootstrap_ms"):
+            b_ms = report["bootstrap_ms"]
+            console.print(f"{prefix}  [dim]↳ Bootstrap (Imports/OS): {b_ms}ms[/dim]")
+
+        for child in report["children"].values():
+            SurgicalTimer.print_timing_report(child, console, indent + 1)

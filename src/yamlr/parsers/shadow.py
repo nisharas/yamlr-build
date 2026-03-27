@@ -19,16 +19,21 @@ Author: Nishar A Sunkesala / Yamlr Team
 Date: 2026-01-22
 """
 
+from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union, TYPE_CHECKING
+if TYPE_CHECKING:
+    from yamlr.parsers.physicist import IndentationPhysicist
 
 # Internal imports
 from yamlr.models import Shard
-from yamlr.parsers.lexer import KubeLexer
+from yamlr.parsers.lexer import YamlrLexer
 
 logger = logging.getLogger("yamlr.shadow")
+__all__ = ['Gap', 'ShadowMetadata', 'YamlrShadow']
+
 
 
 @dataclass
@@ -60,14 +65,13 @@ class YamlrShadow:
         Uses KubeLexer logic to ensure quote-aware comment splitting.
         """
         # Share the logic with the Lexer to ensure quote/escape awareness
-        self._lexer_logic = KubeLexer()
+        self._lexer_logic = YamlrLexer()
         self.comment_map: Dict[int, ShadowMetadata] = {}
         self.orphans: List[Union[str, Gap]] = []
         self._orphans_anchored: bool = False
 
-        # OSS-1: Indentation Physics state
-        self.detected_indents: List[int] = []
-        self.majority_indent: int = 2
+        # OSS-1: Indentation Physics state (Delegated to Physicist)
+        self.physicist: Optional["IndentationPhysicist"] = None
 
     def reset(self) -> None:
         """
@@ -77,8 +81,6 @@ class YamlrShadow:
         self.comment_map.clear()
         self.orphans.clear()
         self._orphans_anchored = False
-        self.detected_indents.clear()
-        self.majority_indent = 2
         logger.debug("Shadow engine state reset.")
 
     def _get_indent_level(self, line: str) -> int:
@@ -132,8 +134,8 @@ class YamlrShadow:
                 current_shard = shard_lookup[i]
 
                 # OSS-1: Track indentation for majority-based normalization
-                if current_indent > 0:
-                    self.detected_indents.append(current_indent)
+                if self.physicist and current_indent > 0:
+                    self.physicist.track_indent(current_indent)
 
                 inline_part: Optional[str] = None
                 # Use lexer logic to correctly find '#' that isn't inside a quoted string
@@ -154,21 +156,7 @@ class YamlrShadow:
                     timeline_buffer.clear()
                 # If it IS a boundary, keep buffer intact for orphan processing
 
-        # Determine majority indentation (OSS-1 Physics)
-        if self.detected_indents:
-            # Simple heuristic: find the most frequent non-zero indentation step
-            diffs = [
-                self.detected_indents[i] - self.detected_indents[i - 1]
-                for i in range(1, len(self.detected_indents))
-                if self.detected_indents[i] > self.detected_indents[i - 1]
-            ]
-            if diffs:
-                self.majority_indent = max(set(diffs), key=diffs.count)
-            else:
-                self.majority_indent = (
-                    min(self.detected_indents) if self.detected_indents else 2
-                )
-
+        # Calculation moved to Physicist.calculate_majority_indent()
         # Any leftover comments or gaps at the end of the file are 'orphans'
         self.orphans = timeline_buffer
 
@@ -217,26 +205,22 @@ class YamlrShadow:
                         target_shard = candidate
                         break
 
-                # Anchor to the found target (or fallback to current shard if all are boundaries)
-                anchor_target = target_shard if target_shard else shard
+                # Anchor as TRAILING to the found target (or fallback to the very last shard if all are boundaries)
+                anchor_target = target_shard if target_shard else shards[-1]
 
-                if not hasattr(anchor_target, "layout_sequence"):
-                    anchor_target.layout_sequence = []
+                if not hasattr(anchor_target, "trailing_layout_sequence"):
+                    anchor_target.trailing_layout_sequence = []
 
-                anchor_target.layout_sequence.extend(self.orphans)
+                # [HARDENED] Ensure we don't duplicate orphans if apply is called twice
+                for orphan in self.orphans:
+                    if orphan not in anchor_target.trailing_layout_sequence:
+                        anchor_target.trailing_layout_sequence.append(orphan)
+                
                 self._orphans_anchored = True
-
-                logger.debug(
-                    f"Orphan anchoring: Attached {len(self.orphans)} orphans to "
-                    f"line {anchor_target.line_no} (skipped {len(shards) - reverse_idx - 1} boundaries)"
-                )
+                logger.debug(f"EOF Hardening: Attached {len(self.orphans)} trailing orphans to line {anchor_target.line_no}")
 
         logger.debug(
             f"Layout metadata grafted onto {len(shards)} shards. "
-            f"Majority Indent detected: {self.majority_indent}"
         )
 
 
-# Namespaced Alias for Yamlr compatibility
-# Ensures the pipeline can call KubeShadow directly without import errors.
-KubeShadow = YamlrShadow

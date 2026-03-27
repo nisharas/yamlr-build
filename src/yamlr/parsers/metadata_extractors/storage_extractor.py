@@ -6,11 +6,16 @@ Extracts:
 - PersistentVolumeClaim.spec.storageClassName
 """
 
+from __future__ import annotations
 from typing import List
 from yamlr.models import Shard, ManifestIdentity
+__all__ = ['StorageExtractor']
 
 
-class StorageExtractor:
+
+from .base_extractor import BaseMetadataExtractor
+
+class StorageExtractor(BaseMetadataExtractor):
     """Extracts StorageClass references."""
     
     @staticmethod
@@ -25,9 +30,6 @@ class StorageExtractor:
         Extract storageClassName if present in spec.
         """
         if key == "storageClassName":
-            if val:
-                if val not in identity.storage_class_refs:
-                    identity.storage_class_refs.append(val)
-            return True
+            return StorageExtractor._apply_list_extraction(shard, key, val, identity, "storage_class_refs")
             
         return False

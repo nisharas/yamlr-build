@@ -1,7 +1,16 @@
-from typing import List, Dict, Any, Tuple
+from __future__ import annotations
+
 import logging
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
+
+from yamlr.core.k8s_utils import extract_containers
+
+if TYPE_CHECKING:
+    from yamlr.core.context import HealContext
 
 logger = logging.getLogger("yamlr.healers.resources")
+__all__ = ['ResourcesHealer']
+
 
 class ResourcesHealer:
     """
@@ -24,6 +33,14 @@ class ResourcesHealer:
             "limits": {"cpu": "10m", "memory": "16Mi"}
         }
     }
+
+    def __init__(self, profiles: Optional[Dict[str, Any]] = None, vpa_targets: Optional[List[str]] = None):
+        """
+        Why: Support dynamic policy injection. [Phase 8]
+        """
+        self.resource_profiles = profiles if profiles else self.CONTEXT_DEFAULTS
+        self.vpa_targets = vpa_targets or []
+
     
     def _detect_context(self, container_name: str, image: str = "") -> str:
         """Heuristically detects the container context."""
@@ -41,106 +58,154 @@ class ResourcesHealer:
             
         return "app"
 
-    def heal_doc(self, doc: Dict[str, Any], structurer: Any = None, enforce_defaults: bool = False) -> bool:
+    def heal_doc(
+        self, 
+        doc: Dict[str, Any], 
+        enforce_defaults: bool = False,
+        context: Optional[HealContext] = None
+    ) -> bool:
         """
         Injects resource limits into the document in-place.
-        Args:
-            doc: The manifest dictionary.
-            structurer: Optional structurer for normalization.
-            enforce_defaults: If True, injects default values for missing requests/limits.
-        Returns:
-            True if changes were made.
+        Returns: True if changes were made.
         """
         modified = False
-        kind = (doc or {}).get("kind") or ""
-        spec = (doc or {}).get("spec") or {}
-
-        if kind.lower() == "pod":
-            pod_spec = spec
-        else:
-            tmpl = (spec.get("template") or {})
-            pod_spec = (tmpl.get("spec") or {})
-
-        containers = pod_spec.get("containers") or []
-        init_containers = pod_spec.get("initContainers") or []
+        kind = doc.get("kind", "unknown")
+        name = doc.get("metadata", {}).get("name", "unknown")
         
-        all_containers = [("containers", containers), ("initContainers", init_containers)]
+        # Determine if we have findings that require a fix
+        has_finding_requests = False
+        has_finding_limits = False
+        
+        if context:
+            from yamlr.analyzers.rules import Rules
+            has_finding_requests = any(f.rule_id == Rules.RESOURCE_REQUESTS and f.resource_name == name for f in context.findings)
+            has_finding_limits = any(f.rule_id == Rules.RESOURCE_LIMITS and f.resource_name == name for f in context.findings)
 
-        for key, container_list in all_containers:
-            for idx, c in enumerate(container_list):
-                if not isinstance(c, dict):
-                    continue
+        # [PARITY] Run structural normalization first
+        all_containers = context.container_context if context and context.container_context else extract_containers(doc, kind)
+        
+        for c in all_containers:
+            if self.normalize_structure(c, context):
+                modified = True
 
-                # 1) Fix bad nesting (ports/resources/probes under envFrom items)
-                cleaned = self._normalize_container_spec(c)
+        should_fix = enforce_defaults or has_finding_requests or has_finding_limits
+        if not should_fix:
+            return modified
 
-                # 2) Normalize resources structure (one mapping, not list)
-                if structurer:
-                    if "resources" in cleaned or enforce_defaults:
-                        structurer.normalize_resources(cleaned)
+        for c in all_containers:
+            if not isinstance(c, dict) and not (hasattr(c, "is_map") and c.is_map):
+                continue
 
-                res = cleaned.get("resources") or {}
-                req = res.get("requests") or {}
-                lim = res.get("limits") or {}
-
-                # 3) Apply Smart Defaults (Pro Logic)
-                local_mod = False
+            container_name = c.get("name", "")
+            res = c.get("resources") or {}
+            if not isinstance(res, dict): res = {}
+            
+            req = res.get("requests") or {}
+            lim = res.get("limits") or {}
+            local_mod = False
+            
+            ctx = self._detect_context(container_name, c.get("image", ""))
+            profiles = getattr(self, "resource_profiles", self.CONTEXT_DEFAULTS)
+            defaults = profiles.get(ctx, profiles.get("app", self.CONTEXT_DEFAULTS["app"]))
+            
+            if "cpu" not in req and (enforce_defaults or has_finding_requests):
+                req["cpu"] = defaults["requests"]["cpu"]
+                local_mod = True
+            if "memory" not in req and (enforce_defaults or has_finding_requests):
+                req["memory"] = defaults["requests"]["memory"]
+                local_mod = True
                 
-                if enforce_defaults:
-                    context = self._detect_context(cleaned.get("name", ""), cleaned.get("image", ""))
-                    defaults = self.CONTEXT_DEFAULTS.get(context, self.CONTEXT_DEFAULTS["app"])
-                    
-                    if "cpu" not in req:
-                        req["cpu"] = defaults["requests"]["cpu"]
-                        local_mod = True
-                    if "memory" not in req:
-                        req["memory"] = defaults["requests"]["memory"]
-                        local_mod = True
-                        
-                    if "cpu" not in lim:
-                        lim["cpu"] = defaults["limits"]["cpu"]
-                        local_mod = True
-                    if "memory" not in lim:
-                        lim["memory"] = defaults["limits"]["memory"]
-                        local_mod = True
+            if "cpu" not in lim and (enforce_defaults or has_finding_limits):
+                lim["cpu"] = defaults["limits"]["cpu"]
+                local_mod = True
+            if "memory" not in lim and (enforce_defaults or has_finding_limits):
+                lim["memory"] = defaults["limits"]["memory"]
+                local_mod = True
 
-                if local_mod or cleaned != c:
-                    res["requests"] = req
-                    res["limits"] = lim
-                    cleaned["resources"] = res
-                    
-                    # Final safeguard: if resources is empty and wasn't there, kill it
-                    if not req and not lim and "resources" not in c:
-                         del cleaned["resources"]
+            if local_mod:
+                res["requests"] = req
+                res["limits"] = lim
+                c["resources"] = res
+                modified = True
+                if context:
+                    from yamlr.core.stages.boundaries import MutationScope
+                    from yamlr.models import HealAction
+                    context.prescribe(HealAction(
+                        stage="Shield",
+                        action_type="harden",
+                        target=f"{kind}/{name}.spec.containers[{container_name}].resources",
+                        description=f"Injected default resource limits for container '{container_name}'",
+                        rationale="Containers without resource limits can cause cluster-wide instability and OOM kills.",
+                        suggestion="Define explicit CPU and Memory requests/limits for all containers.",
+                        severity="warning",
+                        rule_id="rule/resource-limits",
+                        scope=MutationScope.SPEC_RESOURCES
+                    ))
 
-                    container_list[idx] = cleaned
-                    modified = True
-
-        if modified:
-             if kind.lower() == "pod":
-                 doc["spec"] = pod_spec
-             else:
-                 doc["spec"]["template"]["spec"] = pod_spec
-             
         return modified
 
-    def _normalize_container_spec(self, container: Dict[str, Any]) -> Dict[str, Any]:
+    def normalize_structure(self, container: Dict[str, Any], context: Optional[HealContext] = None) -> bool:
         """
-        Fix common structural corruption in Container specs.
+        Canonicalize container.resources structure by moving misnested cpu/memory into requests.
+        
+        Why: Standardizes common user errors where resources are specified as flat keys 
+             instead of nested under 'requests' or 'limits'.
         """
         if not isinstance(container, dict):
-            return container
+            return False
 
-        cleaned = dict(container)  # shallow copy
+        res = container.get("resources")
+        if res is None:
+            return False
 
-        env_from = cleaned.get("envFrom")
-        if isinstance(env_from, list):
-            for item in env_from:
-                if not isinstance(item, dict):
-                    continue
+        modified = False
+        if not isinstance(res, dict):
+            if isinstance(res, list) and len(res) > 0 and isinstance(res[0], dict):
+                res = res[0]
+                container["resources"] = res
+                modified = True
+            else:
+                res = {}
+                container["resources"] = res
+                modified = True
 
-                for key in ["ports", "readinessProbe", "livenessProbe", "resources"]:
-                    if key in item and key not in cleaned:
-                        cleaned[key] = item.pop(key)
+        requests = res.get("requests")
+        if not isinstance(requests, dict):
+            requests = {}
+            res["requests"] = requests
+            # We don't mark 'modified' yet unless we actually move something
 
-        return cleaned
+        if "cpu" in res:
+            modified = True
+            if context:
+                from yamlr.core.stages.boundaries import MutationScope
+                from yamlr.models import HealAction
+                context.prescribe(HealAction(
+                    stage="Shield",
+                    action_type="repair",
+                    target="resources.cpu",
+                    description="Structural Cleanup: Moved misnested 'cpu' into resources.requests",
+                    rationale="Kubernetes requires 'cpu' to be nested under requests or limits.",
+                    suggestion="Ensure resource requests/limits are properly nested.",
+                    rule_id="rule/structural-fix",
+                    scope=MutationScope.STRUCTURAL
+                ))
+        if "memory" in res:
+            requests.setdefault("memory", res.pop("memory"))
+            modified = True
+            if context:
+                from yamlr.core.stages.boundaries import MutationScope
+                from yamlr.models import HealAction
+                context.prescribe(HealAction(
+                    stage="Shield",
+                    action_type="repair",
+                    target="resources.memory",
+                    description="Structural Cleanup: Moved misnested 'memory' into resources.requests",
+                    rationale="Kubernetes requires 'memory' to be nested under requests or limits.",
+                    suggestion="Ensure resource requests/limits are properly nested.",
+                    rule_id="rule/structural-fix",
+                    scope=MutationScope.STRUCTURAL
+                ))
+
+        return modified
+

@@ -5,27 +5,35 @@ Yamlr Epistemic Reconstruction Stage
 Handles structural repairs (Stage 6.2) like Type Casting and missing roots.
 """
 
-from typing import Any, Dict
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, Dict
+
+if TYPE_CHECKING:
+    from yamlr.parsers.structurer import YamlrStructurer
 from yamlr.core.context import HealContext
 from yamlr.core.stages.transformation import PipelineStage
+
+__all__ = ['StageSixTwoEpistemicRepair']
+
 
 class StageSixTwoEpistemicRepair(PipelineStage):
     """
     Stage 6.2: Epistemic Reconstruction.
     Responsible for structural mutations that require schema intelligence.
     """
-    def __init__(self, structurer: Any):
+    def __init__(self, name: str, structurer: "YamlrStructurer"):
+        """Initializes the epistemic repair stage.
+        
+        Why: To handle structural mutations that require Kubernetes schema awareness.
         """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
-        """
-        super().__init__("Stage 6.2: Epistemic Reconstruction")
+        super().__init__(name)
         self.structurer = structurer
 
-    def run(self, context: HealContext):
-        """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
+    def run(self, context: HealContext) -> Dict[str, Any]:
+        """Audits structural repairs performed during reconstruction.
+        
+        Why: To track the depth of healing and provide feedback on structural drift.
         """
         # Tracking metrics for the dashboard
         repair_count = 0

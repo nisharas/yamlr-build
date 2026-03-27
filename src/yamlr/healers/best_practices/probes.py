@@ -1,7 +1,16 @@
-from typing import List, Dict, Any, Tuple, Optional
+from __future__ import annotations
+
 import logging
+from typing import TYPE_CHECKING, Any, Dict, Optional
+
+from yamlr.core.k8s_utils import extract_containers
+
+if TYPE_CHECKING:
+    from yamlr.core.context import HealContext
 
 logger = logging.getLogger("yamlr.healers.probes")
+__all__ = ['ProbeHealer']
+
 
 class ProbeHealer:
     """
@@ -12,46 +21,51 @@ class ProbeHealer:
     
     DEFAULT_PORT = 8080
     
-    def heal_doc(self, doc: Dict[str, Any], enforce_probes: bool = False) -> bool:
+    def heal_doc(
+        self, 
+        doc: Dict[str, Any], 
+        enforce_probes: bool = False,
+        context: Optional[HealContext] = None
+    ) -> bool:
         """
         Detects and optionally fixes missing probes.
-        Returns True if changes were made.
+        Returns: True if changes were made.
         """
-        if not enforce_probes:
+        has_finding_liveness = False
+        has_finding_readiness = False
+        
+        if context:
+            from yamlr.analyzers.rules import Rules
+            has_finding_liveness = any(f.rule_id == Rules.MISSING_LIVENESS for f in context.findings)
+            has_finding_readiness = any(f.rule_id == Rules.MISSING_READINESS for f in context.findings)
+
+        should_fix = enforce_probes or has_finding_liveness or has_finding_readiness
+
+        if not should_fix:
             return False
 
         modified = False
-        kind = (doc or {}).get("kind") or ""
-        spec = (doc or {}).get("spec") or {}
-
-        # Usually only Deployments/StatefulSets/DaemonSets/Pods need probes
-        if kind.lower() not in ["deployment", "statefulset", "daemonset", "pod", "job", "cronjob"]:
-            return False
-
-        if kind.lower() == "pod":
-            pod_spec = spec
-        elif kind.lower() == "cronjob":
-             # JobTemplate -> Spec -> Template -> Spec
-             job_tmpl = spec.get("jobTemplate") or {}
-             job_spec = job_tmpl.get("spec") or {}
-             tmpl = job_spec.get("template") or {}
-             pod_spec = tmpl.get("spec") or {}
-        else:
-            tmpl = spec.get("template") or {}
-            pod_spec = tmpl.get("spec") or {}
-
-        containers = pod_spec.get("containers") or []
+        # Use cached containers if context is available
+        containers = context.container_context if context else extract_containers(doc)
+        
         for c in containers:
             if not isinstance(c, dict):
                 continue
 
-            changed = self._ensure_probes(c)
+            changed = self._ensure_probes(c, enforce_probes, has_finding_liveness, has_finding_readiness, context)
             if changed:
                 modified = True
 
         return modified
 
-    def _ensure_probes(self, container: Dict[str, Any]) -> bool:
+    def _ensure_probes(
+        self, 
+        container: Dict[str, Any], 
+        enforce_all: bool, 
+        liveness_finding: bool, 
+        readiness_finding: bool,
+        context: Optional[HealContext] = None
+    ) -> bool:
         """Injects default probes if missing."""
         modified = False
         
@@ -99,16 +113,42 @@ class ProbeHealer:
             "failureThreshold": 3
         }
 
-        # 3. Check Liveness
-        if "livenessProbe" not in container:
+        if "livenessProbe" not in container and (enforce_all or liveness_finding):
             container["livenessProbe"] = default_probe.copy()
             modified = True
+            if context:
+                from yamlr.core.stages.boundaries import MutationScope
+                from yamlr.models import HealAction
+                context.prescribe(HealAction(
+                    stage="Shield",
+                    action_type="harden",
+                    target=f"containers[{container.get('name', 'unknown')}].livenessProbe",
+                    description=f"Injected default livenessProbe ({protocol})",
+                    rationale="Liveness probes ensure that the container is restarted if it enters an unhealthy state.",
+                    suggestion="Define liveness probes for all production containers.",
+                    severity="warning",
+                    rule_id="rule/missing-liveness",
+                    scope=MutationScope.SPEC_PROBES
+                ))
             logger.info(f"Injected default livenessProbe ({protocol}) for container {container.get('name', 'unknown')}")
 
-        # 4. Check Readiness
-        if "readinessProbe" not in container:
+        if "readinessProbe" not in container and (enforce_all or readiness_finding):
             container["readinessProbe"] = default_probe.copy()
             modified = True
+            if context:
+                from yamlr.core.stages.boundaries import MutationScope
+                from yamlr.models import HealAction
+                context.prescribe(HealAction(
+                    stage="Shield",
+                    action_type="harden",
+                    target=f"containers[{container.get('name', 'unknown')}].readinessProbe",
+                    description=f"Injected default readinessProbe ({protocol})",
+                    rationale="Readiness probes ensure that the container only receives traffic when it is ready to handle it.",
+                    suggestion="Define readiness probes for all production containers.",
+                    severity="warning",
+                    rule_id="rule/missing-readiness",
+                    scope=MutationScope.SPEC_PROBES
+                ))
             logger.info(f"Injected default readinessProbe ({protocol}) for container {container.get('name', 'unknown')}")
 
         return modified

@@ -12,3 +12,4 @@ Modules:
     help_utils.py    — catalog, version, explain, auth, init, restore,
                        demo, welcome, completion, status, rules, stats, manual
 """
+from __future__ import annotations

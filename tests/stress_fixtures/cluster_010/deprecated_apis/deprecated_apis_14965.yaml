@@ -1,9 +1,0 @@
-apiVersion: policy/v1
-kind: PodDisruptionBudget
-metadata:
-  name: pdb-beta-i2041
-spec:
-  minAvailable: '1'
-  selector:
-    matchLabels:
-      app: legacy

@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-685
+  labels:
+    app: ms-685
+    dependency: ms-686
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-685
+  template:
+    metadata:
+      labels:
+        app: ms-685
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-686

@@ -11,14 +11,17 @@ Metadata:
     - Pattern: Singleton / Registry
 """
 
+from __future__ import annotations
+
 import logging
-from typing import Dict, List, Type
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Type
 
 from yamlr.analyzers.base import BaseAnalyzer
-from yamlr.analyzers.content.missing_configmap_target import \
-    MissingConfigMapTargetAnalyzer
+from yamlr.analyzers.content.missing_configmap_target import MissingConfigMapTargetAnalyzer
 
 logger = logging.getLogger("yamlr.analyzers.registry")
+__all__ = ['AnalyzerRegistry']
+
 
 
 class AnalyzerRegistry:
@@ -84,16 +87,19 @@ class AnalyzerRegistry:
         """
         # Import inside method to avoid circular deps or early loading
         try:
-            from yamlr.analyzers.best_practices import (ImageAnalyzer,
-                                                        NetworkPolicyAnalyzer,
-                                                        ProbeAnalyzer,
-                                                        ResourceAnalyzer,
-                                                        ServiceAnalyzer,
-                                                        ApiDeprecationAnalyzer)
-            from yamlr.analyzers.security import SecurityAnalyzer
-            from yamlr.analyzers.registry_enforcement import RegistryAnalyzer
+            from yamlr.analyzers.best_practices import (
+                ApiDeprecationAnalyzer,
+                ImageAnalyzer,
+                NetworkPolicyAnalyzer,
+                ProbeAnalyzer,
+                ResourceAnalyzer,
+                ServiceAnalyzer,
+            )
+            from yamlr.analyzers.compliance import NamespaceEnforcementAnalyzer
             from yamlr.analyzers.cross_resource import CrossResourceAnalyzer
+            from yamlr.analyzers.registry_enforcement import RegistryAnalyzer
             from yamlr.analyzers.schema import SchemaAnalyzer
+            from yamlr.analyzers.security import SecurityAnalyzer
 
             cls.register(CrossResourceAnalyzer)
             cls.register(ResourceAnalyzer)
@@ -106,6 +112,7 @@ class AnalyzerRegistry:
             cls.register(ApiDeprecationAnalyzer)
             cls.register(RegistryAnalyzer)
             cls.register(ServiceAnalyzer)
+            cls.register(NamespaceEnforcementAnalyzer)
 
             cls._defaults_registered = True
             logger.debug(f"Registered {len(cls._analyzers)} default analyzers")
@@ -113,7 +120,7 @@ class AnalyzerRegistry:
             logger.error(f"Failed to register default analyzers: {e}")
 
     @classmethod
-    def get_all_analyzers(cls) -> List[BaseAnalyzer]:
+    def get_all_analyzers(cls, catalog: Optional[Dict[str, Any]] = None) -> List[BaseAnalyzer]:
         """
         Returns a list of instantiated analyzer objects ready for execution.
         Instantiates them lazily if not already created.
@@ -127,7 +134,13 @@ class AnalyzerRegistry:
         for class_name, analyzer_cls in cls._analyzers.items():
             if class_name not in cls._instances:
                 try:
-                    instance = analyzer_cls()
+                    # [ROUND-10] Handle catalog-aware vs legacy initialization
+                    import inspect
+                    sig = inspect.signature(analyzer_cls.__init__)
+                    if "catalog" in sig.parameters:
+                        instance = analyzer_cls(catalog=catalog)
+                    else:
+                        instance = analyzer_cls()
                     cls._instances[class_name] = instance
                 except Exception as e:
                     logger.error(f"Could not instantiate analyzer {class_name}: {e}")

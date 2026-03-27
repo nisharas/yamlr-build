@@ -1,3 +1,4 @@
+from __future__ import annotations
 #!/usr/bin/env python3
 """
 YAMLR LEXER FUZZER
@@ -24,7 +25,8 @@ console = Console()
 
 
 def run_fuzz():
-    corpus_dir = Path("d:/yamlr/tests/corpus")
+    root = Path(__file__).resolve().parent.parent
+    corpus_dir = root / "tests/corpus"
     files = glob.glob(str(corpus_dir / "**/*.yaml"), recursive=True)
 
     if not files:

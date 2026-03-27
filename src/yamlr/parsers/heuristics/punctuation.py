@@ -1,3 +1,4 @@
+from __future__ import annotations
 import logging
 import re
 from typing import Any, Dict, Set
@@ -5,59 +6,47 @@ from typing import Any, Dict, Set
 from .base import BaseHeuristic
 
 logger = logging.getLogger("yamlr.lexer.heuristics")
+__all__ = ['MagicColonHeuristic', 'QuoteBalancingHeuristic', 'SpacingHeuristic']
 
 
 class MagicColonHeuristic(BaseHeuristic):
     """
-    Injects missing colons in 'key value' patterns.
-    Safe against English text via stopword filtering.
+    Injects missing colons in 'key value' patterns (e.g., 'image nginx' -> 'image: nginx').
+    
+    Why: High-speed developer typing often omits colons. This heuristic recovers 
+    intent by identifying known K8s keywords followed by whitespace and a value.
+    
+    Stopword Filtering: Essential to prevent false-positives in English comments 
+    or descriptions (e.g., 'This is a test' shouldn't become 'This: is a test').
     """
 
     COMMON_ENGLISH_STOPWORDS: Set[str] = {
-        "This",
-        "The",
-        "A",
-        "An",
-        "It",
-        "If",
-        "When",
-        "Then",
-        "For",
-        "To",
-        "Note",
-        "But",
-        "And",
-        "Or",
+        "This", "The", "A", "An", "It", "If", "When", "Then", "For", "To", "Note", "But", "And", "Or",
     }
 
     @property
     def name(self) -> str:
-        """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
+        """Returns the internal name of the magic colon heuristic.
+        
+        Why: To uniquely identify the heuristic in logs and performance traces.
         """
         return "magic_colon"
 
     @property
     def description(self) -> str:
-        """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
+        """Returns a human-readable description of the magic colon heuristic.
+        
+        Why: To explain the heuristic's purpose in diagnostic outputs and reports.
         """
         return "Injects missing colons (key value -> key: value)"
 
     def apply(self, line: str, context: Dict[str, Any]) -> str:
+        """Applies magic colon injection to a line of YAML code.
+        
+        Why: To recover developer intent when colons are accidentally omitted during rapid editing.
         """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
-        """
-        # Don't touch lines that already have colons (mostly)
-        # Exception: "image: nginx:latest" has colons.
-        # But we look for "image nginx".
-
-        # We work on the stripped code part, but we must return full line
-        # This is tricky because Heuristic expects line -> line
-        # We need to preserve indent.
+        if context.get("skip_punctuation_healing"):
+            return line
 
         indent_len = len(line) - len(line.lstrip())
         indent_str = line[:indent_len]
@@ -66,14 +55,7 @@ class MagicColonHeuristic(BaseHeuristic):
         if not code_part or code_part.startswith("#"):
             return line
 
-        # If colon exists in the "key" position (first word), skip
-        # Logic from lexer.py
-        first_colon_idx = code_part.find(":")
-
         # Regex to find "(dash?) key space value"
-        # Group 1: Optional dash prefix "- "
-        # Group 2: Key
-        # Group 3: Value
         match = re.match(r"^(-\s+)?([a-zA-Z0-9_\-\.]+)\s+(.+)$", code_part)
 
         if match:
@@ -81,7 +63,6 @@ class MagicColonHeuristic(BaseHeuristic):
             key = match.group(2)
             val = match.group(3)
 
-            # Safety checks
             if (
                 key != "-"
                 and not key.startswith("_")
@@ -100,89 +81,86 @@ class MagicColonHeuristic(BaseHeuristic):
 
 
 class QuoteBalancingHeuristic(BaseHeuristic):
-    """
-    Why: Internal documentation policy compliance.
-    What: Auto-generated summary.
+    """Automatically closes unclosed quotes at the end of YAML values.
+    
+    Why: To prevent lexing failures when a developer forgets to type the closing quote.
     """
     @property
     def name(self) -> str:
-        """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
+        """Returns the internal name of the quote balancing heuristic.
+        
+        Why: To uniquely identify the heuristic in logs and performance traces.
         """
         return "quote_balancing"
 
     @property
     def description(self) -> str:
-        """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
+        """Returns a human-readable description of the quote balancing heuristic.
+        
+        Why: To explain the heuristic's purpose in diagnostic outputs and reports.
         """
         return "Closes unclosed quotes"
 
     def apply(self, line: str, context: Dict[str, Any]) -> str:
+        """Balances quotes on a single line of YAML code.
+        
+        Why: To ensure that string values are correctly terminated before they are sharded.
         """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
-        """
-        # Simplistic version of the complex logic in lexer.py
-        # We can copy the _balance_quotes logic but we need to extract value first.
-        # This is hard on a full line.
-        # Heuristics might need to be applied *after* splitting key/value?
-        # But the Lexer uses `repair_line` *before* semantics.
+        if context.get("skip_punctuation_healing"):
+            return line
 
-        # Let's target specific "key: value" lines where value is unclosed
         if ":" not in line:
             return line
 
-        k, sep, v = line.partition(":")
+        _, _, v = line.partition(":")
         v_stripped = v.strip()
 
         if not v_stripped:
             return line
 
-        # Quote fixing logic
         if len(v_stripped) >= 1:
             first = v_stripped[0]
             if first in ('"', "'"):
-                if not v_stripped.endswith(first):
-                    # Fix it
-                    # append quote to the REAL line (preserving trailing spaces?)
-                    # Usually safe to rstrip and add quote
-                    return line.rstrip() + first
-
+                quote_count = v_stripped.count(first)
+                if quote_count == 1 or (quote_count % 2 != 0 and not v_stripped.endswith(first)):
+                    new_line = line.rstrip() + first
                     if "stats" in context:
                         context["stats"]["quote_repairs"] += 1
+                    logger.debug(f"QuoteBalancing: Balanced unclosed {first} in line: {line.strip()}")
+                    return new_line
 
         return line
 
 
 class SpacingHeuristic(BaseHeuristic):
-    """
-    Why: Internal documentation policy compliance.
-    What: Auto-generated summary.
+    """Injects mandatory spaces after YAML structural markers ('-' and ':').
+    
+    Why: YAML requires a space after certain markers; omitting them is a common syntax error.
     """
     @property
     def name(self) -> str:
-        """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
+        """Returns the internal name of the spacing heuristic.
+        
+        Why: To uniquely identify the heuristic in logs and performance traces.
         """
         return "spacing_fix"
 
     @property
     def description(self) -> str:
-        """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
+        """Returns a human-readable description of the spacing heuristic.
+        
+        Why: To explain the heuristic's purpose in diagnostic outputs and reports.
         """
         return "Fixes '-item' and 'key:value' spacing"
 
     def apply(self, line: str, context: Dict[str, Any]) -> str:
+        """Standardizes spacing around markers on a single line of YAML code.
+        
+        Why: To ensure the lexer can correctly identify structural boundaries.
         """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
-        """
+        if context.get("skip_punctuation_healing"):
+            return line
+
         stripped = line.lstrip()
         indent = len(line) - len(stripped)
         indent_str = line[:indent]
@@ -196,10 +174,8 @@ class SpacingHeuristic(BaseHeuristic):
 
         # 2. Colon spacing "key:value" -> "key: value"
         if ":" in stripped:
-            k, sep, v = stripped.partition(":")
-            if v and not v.startswith(" ") and not v.strip() == "":
-                # Only if value exists and no space
-                # "key:value"
+            k, _, v = stripped.partition(":")
+            if v and not v.startswith(" ") and v.strip():
                 new_content = f"{k}: {v}"
                 if "stats" in context:
                     context["stats"]["spacing_fixes"] += 1

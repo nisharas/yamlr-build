@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-359
+  labels:
+    app: ms-359
+    dependency: ms-360
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-359
+  template:
+    metadata:
+      labels:
+        app: ms-359
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-360

@@ -18,7 +18,6 @@ Download the latest executable for your platform. No Python required.
 | **Linux** | `amd64` | [yamlr-linux-amd64](https://github.com/yamlr/yamlr/releases/latest/download/yamlr-linux-amd64) |
 | **macOS** | `amd64` | [yamlr-darwin-amd64](https://github.com/yamlr/yamlr/releases/latest/download/yamlr-darwin-amd64) |
 | **macOS** | `arm64` | [yamlr-darwin-arm64](https://github.com/yamlr/yamlr/releases/latest/download/yamlr-darwin-arm64) |
-| **macOS** | `arm64` | [yamlr-darwin-arm64](https://github.com/yamlr/yamlr/releases/latest/download/yamlr-darwin-arm64) |
 
 ### ⚡ Quick Start (Windows)
 1.  Download `yamlr.exe`.

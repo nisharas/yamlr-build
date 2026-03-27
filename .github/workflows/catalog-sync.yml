@@ -1,0 +1,33 @@
+name: Catalog Sync
+on:
+  schedule:
+    - cron: '0 0 * * 0' # Weekly on Sunday
+  workflow_dispatch:
+
+jobs:
+  sync-catalog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # Add any dependencies needed for distiller here
+          
+      - name: Distill Latest K8s Catalog
+        run: |
+          python scripts/catalog_distiller.py --version latest --output src/yamlr/core/data/catalog.json
+          
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore: update kubernetes catalog to latest"
+          title: "chore: automated kubernetes catalog sync"
+          body: "Automated update of the Kubernetes schema catalog from official OpenAPI specs."
+          branch: auto-catalog-sync

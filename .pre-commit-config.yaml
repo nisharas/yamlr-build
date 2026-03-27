@@ -33,6 +33,16 @@ repos:
     hooks:
       - id: isort
 
+  # Yamlr Safety Checks (Habit Trigger)
+  - repo: local
+    hooks:
+      - id: yamlr-scan
+        name: Yamlr Safety Audit
+        entry: yamlr scan
+        language: python
+        files: \.(yaml|yml)$
+        args: ["--fail-on", "error"]
+
   # Custom 
   - repo: local
     hooks:

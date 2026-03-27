@@ -1,16 +1,54 @@
+from __future__ import annotations
 import argparse
 import sys
 import os
 import shutil
 import datetime
 from pathlib import Path
-from typing import Dict, List, Any, Optional, Tuple
+from typing import List, Optional
+__all__ = ['generate_powershell', 'generate_bash', 'generate_fish', 'ShellInstaller', 'get_runtime_suggestions', 'handle_completion_command', 'handle_fast_completion']
+
+
+def handle_fast_completion() -> bool:
+    """Ultra-fast path for shell completion requests.
+    
+    Why: Bypasses full parser initialization to respond in <50ms.
+    """
+    word = _extract_word_from_args()
+    if word is None:
+        return False
+
+    # Minimalist suggestions
+    commands = [
+        "scan", "heal", "restore", "explain", "rules", "init", 
+        "status", "welcome", "completion", "catalog", "version", 
+        "auth", "check", "diagnose", "upgrade", "secure"
+    ]
+    
+    if word.startswith("-"):
+        flags = ["--help", "--version", "--kube-version", "--catalog", "--verbose", "--summary-only", "-h", "-v", "-s"]
+        for f in [f for f in flags if f.startswith(word)]:
+            sys.stdout.write(f + "\n")
+    else:
+        for cmd in [c for c in commands if c.startswith(word)]:
+            sys.stdout.write(cmd + "\n")
+    return True
+
+
+def _extract_word_from_args() -> Optional[str]:
+    """Helper to extract the --word argument from sys.argv."""
+    for i, arg in enumerate(sys.argv):
+        if arg.startswith("--word="):
+            return arg.split("=", 1)[1]
+        if arg == "--word" and i + 1 < len(sys.argv):
+            return sys.argv[i+1]
+    return None
 
 
 def generate_powershell() -> str:
-    """
-    Why: Internal documentation policy compliance.
-    What: Auto-generated summary.
+    """Generates the hybrid PowerShell completion script.
+    
+    Why: To provide a seamless, native autocomplete experience in PowerShell and pwsh.
     """
     return """
 # Yamlr PowerShell Completion (Hybrid)
@@ -45,7 +83,7 @@ $Script:YamlrCoreLogic = {
                     [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
                 }
             }
-        } catch { }
+        } catch (System.Management.Automation.CommandNotFoundException, System.UnauthorizedAccessException) { }
     }
     return $null
 }
@@ -72,9 +110,9 @@ Register-ArgumentCompleter -Native -CommandName "yamlr.exe" -ScriptBlock $Script
 
 
 def generate_bash() -> str:
-    """
-    Why: Internal documentation policy compliance.
-    What: Auto-generated summary.
+    """Generates the Bash completion script.
+    
+    Why: To support the standard Linux/macOS shell for CI and local development.
     """
     return """
 # Yamlr Bash Completion
@@ -90,9 +128,9 @@ complete -F _yamlr_completions Yamlr
 
 
 def generate_fish() -> str:
-    """
-    Why: Internal documentation policy compliance.
-    What: Auto-generated summary.
+    """Generates the Fish completion script.
+    
+    Why: To support modern, user-friendly shell environments.
     """
     return """
 # Yamlr Fish Completion
@@ -106,16 +144,14 @@ class ShellInstaller:
     """Handles safe installation of completion scripts into user profiles."""
     
     def __init__(self, console):
-        """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
+        """Initializes the shell installer.
+        
+        Why: To manage the automated deployment of completion hooks.
         """
         self.console = console
 
     def detect_shell(self) -> str:
         """Best-effort shell detection."""
-        # Check parent process logic or env vars
-        # This is tricky in Python, checking SHELL env is reasonable fallback
         shell_path = os.environ.get("SHELL", "").lower()
         if "bash" in shell_path: return "bash"
         if "zsh" in shell_path: return "zsh"
@@ -123,50 +159,55 @@ class ShellInstaller:
         
         # Windows check
         if sys.platform == "win32":
-            # Assume PowerShell if on Windows primarily, unless in Git Bash (which sets SHELL)
             return "powershell"
-            
+        return "bash"
+
     def generate_script(self, shell: str) -> str:
         """Generates the completion script for the target shell."""
         if shell == "bash": return generate_bash()
-        if shell == "zsh": return generate_zsh()
+        if shell == "zsh": return generate_bash() # Zsh uses bash emulation for this
         if shell == "fish": return generate_fish()
         if shell == "powershell": return generate_powershell()
         return ""
 
     def get_profile_path(self, shell: str) -> Optional[Path]:
-        """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
+        """Resolves the user's profile or configuration path for the target shell.
+        
+        Why: To ensure that completion hooks are installed in a persistent, discoverable location.
         """
         home = Path.home()
         if shell == "bash":
             return home / ".bashrc"
-        elif shell == "zsh":
+        if shell == "zsh":
             return home / ".zshrc"
-        elif shell == "fish":
+        if shell == "fish":
             return home / ".config" / "fish" / "completions" / "yamlr.fish"
-        elif shell == "powershell":
-            # Best way: Query the shell itself
-            import subprocess
-            for exe in ["pwsh", "powershell"]:
-                try:
-                    res = subprocess.run([exe, "-NoProfile", "-Command", "Write-Output $PROFILE"], capture_output=True, text=True, timeout=2)
-                    if res.returncode == 0 and res.stdout.strip():
-                        # res.stdout might contain other output? Use last line.
-                        path_str = res.stdout.strip().splitlines()[-1]
-                        return Path(path_str)
-                except:
-                    continue
-            
-            # Fallback (legacy logic)
-            if sys.platform == "win32":
-                 documents = home / "Documents"
-                 return documents / "WindowsPowerShell" / "Microsoft.PowerShell_profile.ps1"
-            else:
-                 # PowerShell Core on Linux/Mac
-                 return home / ".config" / "powershell" / "Microsoft.PowerShell_profile.ps1"
+        if shell == "powershell":
+            return self._query_powershell_profile()
         return None
+
+    def _query_powershell_profile(self) -> Optional[Path]:
+        """Helper to query the PowerShell profile path."""
+        import subprocess
+        for exe in ["pwsh", "powershell"]:
+            try:
+                res = subprocess.run(
+                    [exe, "-NoProfile", "-Command", "Write-Output $PROFILE"], 
+                    capture_output=True, 
+                    text=True, 
+                    timeout=2,
+                    shell=False
+                )
+                if res.returncode == 0 and res.stdout.strip():
+                    return Path(res.stdout.strip().splitlines()[-1])
+            except (subprocess.SubprocessError, OSError):
+                continue
+        
+        # Fallback
+        home = Path.home()
+        if sys.platform == "win32":
+             return home / "Documents" / "WindowsPowerShell" / "Microsoft.PowerShell_profile.ps1"
+        return home / ".config" / "powershell" / "Microsoft.PowerShell_profile.ps1"
 
     def get_bin_info(self):
         """Checks if yamlr is in persistent PATH and returns current binary info."""
@@ -177,12 +218,7 @@ class ShellInstaller:
         path_segments = [Path(p).resolve() for p in os.environ.get("PATH", "").split(os.pathsep) if p]
         in_path = any(bin_dir == p for p in path_segments)
         
-        # If it's not in the path segments, check if it's a standard system-wide tool
-        # (Already handled by the segment check, but we can be extra sure)
         if not in_path:
-            import shutil
-            # On Windows, shutil.which might find it in cwd. We want to know if it's GLOBALLY found.
-            # So we check if shutil.which returns something that is NOT in the current dir.
             where = shutil.which("yamlr") or shutil.which("yamlr.exe")
             if where:
                 where_path = Path(where).resolve()
@@ -192,9 +228,9 @@ class ShellInstaller:
         return in_path, current_bin
 
     def install(self, shell: str):
-        """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
+        """Installs the completion script into the user's shell profile.
+        
+        Why: To maximize developer productivity by enabling 'yamlr' command discovery automatically.
         """
         profile_path = self.get_profile_path(shell)
         if not profile_path:
@@ -203,43 +239,64 @@ class ShellInstaller:
 
         self.console.print(f"Target Profile: [bold]{profile_path}[/bold]")
         
-        # Ensure parent dirs exist
         if not profile_path.parent.exists():
             try:
                 profile_path.parent.mkdir(parents=True, exist_ok=True)
-            except Exception as e:
+            except OSError as e:
                  self.console.print(f"[red]Failed to create config directory: {e}[/red]")
                  return 1
 
-        # Backup
+        self._create_profile_backup(profile_path)
+        
+        # Deterministic Block
+        marker_start = "# >>> YAMLR START >>>"
+        marker_end = "# <<< YAMLR END <<<"
+        new_block = self._build_completion_block(shell, marker_start, marker_end)
+        
+        try:
+            content = profile_path.read_text(encoding="utf-8", errors="ignore") if profile_path.exists() else ""
+            
+            import re
+            pattern = rf"{re.escape(marker_start)}.*?{re.escape(marker_end)}"
+            if re.search(pattern, content, re.DOTALL):
+                content = re.sub(pattern, new_block.strip() + "\n", content, flags=re.DOTALL)
+                self.console.print(f"[yellow]Updated existing Yamlr configuration in {shell} profile.[/yellow]")
+            else:
+                content = content.strip() + "\n" + new_block
+            
+            profile_path.write_text(content.strip() + "\n", encoding="utf-8")
+            self.console.print(f"[bold green]✔ Successfully installed completion for {shell}![/bold green]")
+            self.console.print("[dim]Restart your shell to apply changes.[/dim]")
+            
+        except OSError as e:
+            self.console.print(f"[red]Installation failed: {e}[/red]")
+            return 1
+            
+        return 0
+
+    def _create_profile_backup(self, profile_path: Path):
+        """Helper to create a backup of the shell profile."""
         if profile_path.exists():
             timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             backup_path = profile_path.parent / (profile_path.name + f".{timestamp}.bak")
             try:
                 shutil.copy2(profile_path, backup_path)
                 self.console.print(f"[yellow]Backup created:[/yellow] {backup_path}")
-            except Exception as e:
+            except OSError as e:
                 self.console.print(f"[dim yellow]Warning: Backup failed ({e}), proceeding anyway...[/dim yellow]")
-        
-        # Deterministic Block Markers
-        marker_start = "# >>> YAMLR START >>>"
-        marker_end = "# <<< YAMLR END <<<"
-        
+
+    def _build_completion_block(self, shell: str, marker_start: str, marker_end: str) -> str:
+        """Helper to build the completion configuration block."""
         in_path, current_bin = self.get_bin_info()
         bin_dir = current_bin.parent
-        
-        # Construct the new block
         lines = [marker_start]
         
-        # 1. Path Injection (if binary is not global)
         if not in_path:
-            self.console.print(f"[cyan]Info: 'yamlr' not found in persistent PATH. Adding {bin_dir} to your profile...[/cyan]")
             if shell == "powershell":
                 lines.append(f'$env:PATH += ";{bin_dir}"')
             elif shell in ["bash", "zsh"]:
                 lines.append(f'export PATH="$PATH:{bin_dir}"')
 
-        # 2. Universal Hook
         if shell == "bash":
             lines.append('if command -v yamlr >/dev/null 2>&1; then source <(yamlr completion bash); fi')
         elif shell == "zsh":
@@ -248,154 +305,96 @@ class ShellInstaller:
             lines.append('if (Get-Command yamlr -ErrorAction SilentlyContinue) { yamlr completion powershell | Out-String | Invoke-Expression }')
         
         lines.append(marker_end)
-        new_block = "\n" + "\n".join(lines) + "\n"
-        
-        try:
-            content = ""
-            if profile_path.exists():
-                content = profile_path.read_text(encoding="utf-8", errors="ignore")
-            
-            # Deterministic Replacement logic
-            import re
-            pattern = rf"{re.escape(marker_start)}.*?{re.escape(marker_end)}"
-            if re.search(pattern, content, re.DOTALL):
-                content = re.sub(pattern, new_block.strip() + "\n", content, flags=re.DOTALL)
-                self.console.print(f"[yellow]Updated existing Yamlr configuration in {shell} profile.[/yellow]")
-            else:
-                # Add to bottom, ensure newline
-                content = content.strip() + "\n" + new_block
-            
-            profile_path.write_text(content.strip() + "\n", encoding="utf-8")
-            self.console.print(f"[bold green]✔ Successfully installed completion for {shell}![/bold green]")
-            self.console.print("[dim]Restart your shell to apply changes.[/dim]")
-            
-        except Exception as e:
-            self.console.print(f"[red]Installation failed: {e}[/red]")
-            return 1
-            
-        return 0
-
-    def generate_suggestions(self, word: str):
-        """Standard suggestion logic for the fast-path."""
-        # Simple command set for fast response. 
-        # For full flag completion, we'd need the full parser, 
-        # but the first word is usually a subcommand.
-        commands = ["scan", "heal", "restore", "explain", "rules", "init", "status", "welcome", "completion", "catalog", "version", "auth", "check", "diagnose", "upgrade", "secure"]
-        
-        if word.startswith("-"):
-            # Global flags
-            flags = ["--help", "--version", "--kube-version", "--k8s-version", "--catalog", "--verbose", "--summary-only", "-h", "-v", "-s"]
-            for f in flags:
-                if f.startswith(word):
-                    print(f)
-        else:
-            for cmd in commands:
-                if cmd.startswith(word):
-                    print(cmd)
+        return "\n" + "\n".join(lines) + "\n"
 
 
 def get_runtime_suggestions(parser: argparse.ArgumentParser, word: str) -> List[str]:
-    """
-    Returns a list of suggestions based on the word being typed.
+    """Returns a list of suggestions based on the word being typed.
+    
+    Why: To provide interactive, context-aware autocompletion for subcommands and flags.
     """
     matches = []
     is_flag = word.startswith("-")
     
     # 1. Subcommands
-    if not is_flag:
-        if parser._subparsers:
-            for action in parser._subparsers._actions:
-                if isinstance(action, argparse._SubParsersAction):
-                    for cmd in action.choices.keys():
-                        if cmd.startswith(word):
-                            matches.append(cmd)
+    if not is_flag and parser._subparsers:
+        for action in [a for a in parser._subparsers._actions if isinstance(a, argparse._SubParsersAction)]:
+            matches.extend([cmd for cmd in action.choices.keys() if cmd.startswith(word)])
     
     # 2. Flags
-    # If the user started a flag or we found no subcommands, suggest all flags
     if is_flag or not matches:
-        all_flags = set()
-        for action in parser._actions:
-            all_flags.update(action.option_strings)
-        
-        if parser._subparsers:
-            for action in parser._subparsers._actions:
-                if isinstance(action, argparse._SubParsersAction):
-                    for sub in action.choices.values():
-                        for sub_act in sub._actions:
-                            all_flags.update(sub_act.option_strings)
-        
-        for f in all_flags:
-            if f.startswith(word):
-                matches.append(f)
+        all_flags = _collect_all_flags(parser)
+        matches.extend([f for f in all_flags if f.startswith(word)])
             
-    return sorted(list(set(matches)))
+    return sorted(all_flags)
+
+
+def _collect_all_flags(parser: argparse.ArgumentParser) -> set[str]:
+    """Helper to collect all possible flags from the parser and its sub-parsers."""
+    all_flags = set()
+    for action in parser._actions:
+        all_flags.update(action.option_strings)
+    
+    if parser._subparsers:
+        for action in [a for a in parser._subparsers._actions if isinstance(a, argparse._SubParsersAction)]:
+            for sub in action.choices.values():
+                for sub_act in sub._actions:
+                    all_flags.update(sub_act.option_strings)
+    return all_flags
 
 
 def handle_completion_command(args, parser: argparse.ArgumentParser, console):
+    """Outputs the shell completion script dynamically generated from the current parser.
+    
+    Why: To enable users to set up their environment for the most productive CLI experience.
     """
-    Outputs the shell completion script dynamically generated from the current parser.
-    """
-    # 1. Runtime Callback Handling
     if getattr(args, "word", None) is not None:
-        suggestions = get_runtime_suggestions(parser, args.word)
-        for s in suggestions:
-            print(s)
+        for s in get_runtime_suggestions(parser, args.word):
+            sys.stdout.write(s + "\n")
         return 0
 
-    # Auto-Install Logic
     if getattr(args, "install", False):
-        installer = ShellInstaller(console)
-        shell = args.shell or installer.detect_shell()
-        
-        # Fish specific handling for install (overwrite file instead of append)
-        if shell == "fish":
-            path = installer.get_profile_path("fish")
-            if not path: return 1
-            
-            console.print(f"Target: [bold]{path}[/bold]")
-            if path.exists():
-                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                backup = path.with_suffix(f".{timestamp}.bak")
-                shutil.copy2(path, backup)
-                console.print(f"[yellow]Backup created:[/yellow] {backup}")
-            
-            # Ensure dir
-            path.parent.mkdir(parents=True, exist_ok=True)
-            
-            content = generate_fish()
-            path.write_text(content, encoding="utf-8")
-            
-            console.print(f"[bold green]✔ Successfully installed completion for Fish![/bold green]")
-            return 0
-            
-        return installer.install(shell)
+        return _handle_install_completion(args, console)
 
-    shell = args.shell
-    if shell:
-        shell = shell.lower()
-
+    shell = (args.shell or "").lower()
     if not shell:
-        console.print("[bold]Autocompletion Generator[/bold]")
-        console.print("Please specify a shell to generate the script for:\n")
-        console.print("  [cyan]yamlr completion powershell[/cyan]")
-        console.print("  [cyan]yamlr completion bash[/cyan]")
-        console.print("  [cyan]yamlr completion zsh[/cyan]")
-        console.print("  [cyan]yamlr completion fish[/cyan]")
-        console.print("\n[bold green]--install[/bold green] : Automatically install to your shell profile")
+        _display_completion_help(console)
         return 1
 
-    if shell == "powershell":
-        print(generate_powershell().strip())
-    elif shell == "bash":
-        print(generate_bash().strip())
-    elif shell == "zsh":
-        # Reuse bash with preamble
-        bash_script = generate_bash().strip()
-        print(f"autoload -U +X bashcompinit && bashcompinit\n{bash_script}")
-    elif shell == "fish":
-        print(generate_fish().strip())
-    else:
+    script = ShellInstaller(console).generate_script(shell)
+    if not script:
         console.print(f"[red]Unsupported shell: {shell}[/red]")
         return 1
-
+        
+    sys.stdout.write(script.strip() + "\n")
     return 0
+
+
+def _handle_install_completion(args, console) -> int:
+    """Helper to handle the --install path."""
+    installer = ShellInstaller(console)
+    shell = args.shell or installer.detect_shell()
+    
+    if shell == "fish":
+        path = installer.get_profile_path("fish")
+        if not path: return 1
+        
+        console.print(f"Target: [bold]{path}[/bold]")
+        installer._create_profile_backup(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(generate_fish(), encoding="utf-8")
+        console.print("[bold green]✔ Successfully installed completion for Fish![/bold green]")
+        return 0
+        
+    return installer.install(shell)
+
+
+def _display_completion_help(console):
+    """Helper to display help for the completion command."""
+    console.print("[bold]Autocompletion Generator[/bold]")
+    console.print("Please specify a shell to generate the script for:\n")
+    console.print("  [cyan]yamlr completion powershell[/cyan]")
+    console.print("  [cyan]yamlr completion bash[/cyan]")
+    console.print("  [cyan]yamlr completion zsh[/cyan]")
+    console.print("  [cyan]yamlr completion fish[/cyan]")
+    console.print("\n[bold green]--install[/bold green] : Automatically install to your shell profile")

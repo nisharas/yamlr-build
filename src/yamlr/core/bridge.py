@@ -9,27 +9,112 @@ Author: Nishar A Sunkesala / Yamlr Team
 Date: 2026-02-13
 """
 
+from __future__ import annotations
 import importlib
 import logging
 import os
 import sys
 from pathlib import Path
-from typing import Any, Optional, Tuple, List
+from typing import Any, Optional, Tuple
 
 from yamlr.core.license_manager import LicenseManager, ProStatus
 
 logger = logging.getLogger("yamlr.bridge")
+__all__ = ['YamlrBridge']
+
+
+
+class CapabilityShield:
+    """
+    A strict, policy-only interface for discovering tiered capabilities.
+    
+    Why: To centralize Pro vs Free behavior without leaking IO/Logging into 
+    decision checkpoints.
+    """
+
+    @staticmethod
+    def can_auto_fix_refs() -> bool:
+        """Determines if cross-resource auto-remediation is allowed."""
+        return YamlrBridge.is_pro_enabled()
+
+    @staticmethod
+    def can_harden_security() -> bool:
+        """Determines if PSS-style hardening is allowed."""
+        return YamlrBridge.is_pro_enabled()
+
+    @staticmethod
+    def can_enforce_resource_limits() -> bool:
+        """Determines if automatic resource limit injection is allowed."""
+        return YamlrBridge.is_pro_enabled()
+
+    @staticmethod
+    def can_use_sovereign_sorting() -> bool:
+        """Determines if Enterprise-grade field sorting is allowed."""
+        return YamlrBridge.is_pro_enabled()
+
+    @staticmethod
+    def can_use_advanced_probes() -> bool:
+        """Determines if smart Liveness/Readiness probe injection is allowed."""
+        return YamlrBridge.is_pro_enabled()
+
+    @staticmethod
+    def can_use_opa_bundles() -> bool:
+        """Determines if remote OPA policy bundles are allowed."""
+        return YamlrBridge.is_pro_enabled()
+
+    @staticmethod
+    def produces_evidence_receipts() -> bool:
+        """Determines if DNA-signed compliance receipts are allowed."""
+        return YamlrBridge.is_pro_enabled()
+
+    @staticmethod
+    def can_export_format(fmt: str) -> bool:
+        """Determines if a specific export format (e.g., Sarif) is allowed."""
+        if fmt in ["sarif", "prometheus", "backstage", "sovereign"]:
+            return YamlrBridge.is_pro_enabled()
+        return True # Text/JSON are free
+
+    @staticmethod
+    def get_healing_limit() -> int:
+        """Returns the maximum number of files that can be healed per day."""
+        if YamlrBridge.is_pro_enabled():
+            return 999999
+        return 5
+
+    @staticmethod
+    def can_heal(files_count: int) -> Tuple[bool, int, str]:
+        """Policy: Is healing allowed for this batch size?"""
+        if YamlrBridge.is_pro_enabled():
+            return True, 0, "Unlimited Pro"
+        
+        limit = CapabilityShield.get_healing_limit()
+        if files_count > limit:
+            return False, limit, f"Free Tier healing is capped at {limit} files/day."
+        
+        # Mechanics of tracking still handled by LicenseManager/UsageLimiter
+        return LicenseManager.is_healing_allowed(files_count)
+
+    @staticmethod
+    def is_fast_scan_allowed() -> bool:
+        """Determines if the high-performance native scanner is enabled."""
+        return YamlrBridge.is_pro_enabled()
+
 
 class YamlrBridge:
     """
     Orchestrates capabilities and identity across Yamlr tiers.
     """
+    
+    # Capability Accessor
+    capabilities = CapabilityShield
 
     @staticmethod
     def is_pro_enabled() -> bool:
         """Simple boolean check for Enterprise enablement."""
         status, _ = LicenseManager.check_pro_status()
         return status.is_usable()
+
+    # ... (remaining methods ... I'll use replace_file_content to insert the shield before YamlrBridge)
 
     @staticmethod
     def check_pro_status() -> Tuple[ProStatus, str]:
@@ -47,7 +132,7 @@ class YamlrBridge:
         is_pro_binary = YamlrBridge.get_invoked_command() == "yamlr_pro"
         default_label = "Free Tier" if is_pro_binary else "OSS"
         
-        map = {
+        status_map = {
             ProStatus.NOT_INSTALLED: (default_label, "Yamlr Free Version active", "cyan"),
             ProStatus.VALID: ("PRO ✓", message, "green"),
             ProStatus.TRIAL_ACTIVE: ("TRIAL", message, "yellow"),
@@ -57,7 +142,7 @@ class YamlrBridge:
             ProStatus.INSTALLATION_CORRUPT: ("ERROR", "Installation Corrupt", "red"),
             ProStatus.NETWORK_ERROR: (default_label, "Offline / Mode: Safe", "yellow"),
         }
-        return map.get(status, (default_label, "Yamlr Free Version active", "cyan"))
+        return status_map.get(status, (default_label, "Yamlr Free Version active", "cyan"))
 
     @staticmethod
     def get_invoked_command() -> str:
@@ -91,37 +176,53 @@ class YamlrBridge:
     @staticmethod
     def get_shield() -> Optional[Any]:
         """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
+        Retrieves the Shield Engine instance (Pro only).
+        
+        Why: Centralized access to the enterprise hardening engine.
         """
         module = YamlrBridge.get_pro_module("shield")
-        return module.ShieldEngine() if module and hasattr(module, "ShieldEngine") else None
+        if module and hasattr(module, "ShieldEngine"):
+            try:
+                return module.ShieldEngine()
+            except Exception as e:
+                logger.error(f"Failed to instantiate ShieldEngine: {e}")
+        return None
 
     @staticmethod
     def get_validator() -> Optional[Any]:
-        """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
-        """
+        """Retrieves the OPA-based analyzer (Pro)."""
         module = YamlrBridge.get_pro_module("opa_adapter")
         return module.OpaAnalyzer() if module and hasattr(module, "OpaAnalyzer") else None
 
     @staticmethod
-    def get_exporter() -> Optional[Any]:
+    def get_judge(catalog: dict) -> Optional[Any]:
         """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
+        Retrieves the Enterprise Judge (Safety Verdict Engine).
+        Part of VAL-02-8 Heritage Port.
+        """
+        # Judge is in validators (OSS accessible but Pro-level logic)
+        try:
+            from yamlr.validators.judge import KubeJudge
+            return KubeJudge(catalog)
+        except ImportError:
+            return None
+
+    @staticmethod
+    def get_exporter(catalog: dict) -> Optional[Any]:
+        """Retrieves the Enterprise JSON/Sarif Exporter (Pro).
+        
+        Why: To provide machine-readable output formats for enterprise pipelines.
         """
         module = YamlrBridge.get_pro_module("exporter")
-        return module.Exporter() if module and hasattr(module, "Exporter") else None
+        return module.Exporter(catalog=catalog) if module and hasattr(module, "Exporter") else None
 
     @staticmethod
     def has_pro_license_file() -> bool:
+        """Verifies if a pro license key file exists on the local machine.
+        
+        Why: Quick filesystem check to determine if Pro features should be considered.
         """
-        Why: Internal documentation policy compliance.
-        What: Auto-generated summary.
-        """
-        return (Path.home() / ".Yamlr" / "license.key").exists()
+        return (Path.home() / ".yamlr" / "license.key").exists()
 
     @staticmethod
     def is_offline_mode() -> bool:
@@ -143,3 +244,56 @@ class YamlrBridge:
             return True
         
         return False
+
+    @staticmethod
+    def get_remediation_command(file_path: str) -> str:
+        """
+        Generates a suggested CLI command to repair the manifest.
+        
+        Why: To provide immediate, actionable remediation steps in the UI.
+        """
+        invoked_as = YamlrBridge.get_invoked_command()
+        return f"{invoked_as} heal {file_path} --diff"
+
+    _cached_id: Optional[str] = None
+
+    @staticmethod
+    def get_machine_id() -> str:
+        """
+        Returns a stable, unique machine identifier for attribution.
+        
+        Why: To provide reliable conversion tracking for M&A and affiliate audits.
+             Uses Windows Registry for sub-millisecond results on first run.
+        """
+        if YamlrBridge._cached_id:
+            return YamlrBridge._cached_id
+
+        machine_id = "unknown"
+        try:
+            if sys.platform == "win32":
+                import winreg
+                key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Cryptography")
+                machine_id, _ = winreg.QueryValueEx(key, "MachineGuid")
+            else:
+                import uuid
+                machine_id = str(uuid.getnode())
+        except Exception:
+            try:
+                import platform
+                machine_id = f"{platform.node()}-{platform.machine()}"
+            except Exception:
+                machine_id = "fallback-id"
+
+        import hashlib
+        YamlrBridge._cached_id = hashlib.sha256(machine_id.encode()).hexdigest()[:12]
+        return YamlrBridge._cached_id
+
+    @staticmethod
+    def get_checkout_url() -> str:
+        """
+        Returns the Pro upgrade checkout URL with machine-level attribution.
+        
+        Why: To ensure consistent attribution for conversions originating from the CLI.
+        """
+        machine_id = YamlrBridge.get_machine_id()
+        return f"https://yamlr.dev/checkout?utm_source=yamlr_cli&utm_medium=version_tip&attr={machine_id}"

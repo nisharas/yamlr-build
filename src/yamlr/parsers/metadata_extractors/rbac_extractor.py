@@ -7,11 +7,16 @@ Extracts:
 - ClusterRoleBinding.roleRef.name
 """
 
+from __future__ import annotations
 from typing import List
 from yamlr.models import Shard, ManifestIdentity
+__all__ = ['RBACExtractor']
 
 
-class RBACExtractor:
+
+from .base_extractor import BaseMetadataExtractor
+
+class RBACExtractor(BaseMetadataExtractor):
     """Extracts Role and ClusterRole references from RBAC resources."""
     
     @staticmethod
@@ -30,13 +35,9 @@ class RBACExtractor:
             
         # Check for roleRef.name
         if key == "name" and "roleRef" in path_keys:
-            if val:
-                if identity.kind == "RoleBinding":
-                    if val not in identity.role_refs:
-                        identity.role_refs.append(val)
-                else: # ClusterRoleBinding
-                    if val not in identity.cluster_role_refs:
-                        identity.cluster_role_refs.append(val)
-            return True
+            if identity.kind == "RoleBinding":
+                return RBACExtractor._apply_list_extraction(shard, key, val, identity, "role_refs")
+            else: # ClusterRoleBinding
+                return RBACExtractor._apply_list_extraction(shard, key, val, identity, "cluster_role_refs")
             
         return False

@@ -9,8 +9,8 @@ Author: Nishar A Sunkesala / Yamlr Team
 Date: 2026-02-13
 """
 
+from __future__ import annotations
 import os
-import sys
 import json
 import logging
 import platform
@@ -21,13 +21,16 @@ from yamlr.core.config import ConfigManager
 from yamlr.core.io import FileSystemManager
 from yamlr.core.context import HealContext
 from yamlr.core.catalog_manager import CatalogManager
+from yamlr.core.k8s_versions import MATRIX
 
 logger = logging.getLogger("yamlr.manager")
 
-# [MAGIC MOMENT] Embedded Minimal Catalog Fallback
-# Why: Ensures the engine NEVER fails to start, even if assets are missing.
-MINIMAL_CATALOG_JSON = {
-    "version": "v1.31.0-embedded",
+__all__ = ["YamlrManager"]
+
+# [MAGIC MOMENT] Core Resource Catalog (Bundled Safety)
+# Why: Ensures the engine ALWAYS has basic schema knowledge for K8s essentials.
+CORE_CATALOG_JSON = {
+    "version": f"v{MATRIX.default_recommended}-core",
     "definitions": {
         "io.k8s.api.core.v1.Pod": {"properties": {"kind": {"type": "string"}}},
         "io.k8s.api.apps.v1.Deployment": {"properties": {"kind": {"type": "string"}}},
@@ -83,8 +86,24 @@ class YamlrManager:
         )
         self._init_cluster_context(cluster_version)
 
-        # 4. Load Catalog
-        self.catalog = self._load_catalog(catalog_path)
+        # 4. Store Catalog Path (Deferred Loading)
+        self._catalog_override_path = catalog_path
+        self._catalogs: Dict[str, Any] = {}
+        self._is_closed = False
+
+    @property
+    def catalog(self) -> Dict[str, Any]:
+        """Lazy-loaded catalog for the current cluster version."""
+        v = self.cluster_version
+        if v not in self._catalogs:
+            self._catalogs[v] = self._load_catalog(v, self._catalog_override_path)
+        return self._catalogs[v]
+
+    def get_catalog_for_version(self, version: str) -> Dict[str, Any]:
+        """Retrieves or loads a catalog for a specific K8s version."""
+        if version not in self._catalogs:
+            self._catalogs[version] = self._load_catalog(version, self._catalog_override_path)
+        return self._catalogs[version]
 
     def _init_security_context(self, allowed_host_paths: Optional[List[str]]):
         """Sets up the operational security context for hostPath validation."""
@@ -111,12 +130,23 @@ class YamlrManager:
 
     def _init_cluster_context(self, cluster_version: Optional[str]):
         """Standardizes cluster version across the engine."""
-        if cluster_version:
-            self.cluster_version = HealContext.set_cluster_version(cluster_version)
-        elif self.config.kubernetes_version:
-             self.cluster_version = HealContext.set_cluster_version(self.config.kubernetes_version)
+        final_version = None
+        
+        # 1. Explicit Flag (Override)
+        if cluster_version and cluster_version != "auto":
+            final_version = HealContext.set_cluster_version(cluster_version)
+        
+        # 2. Config File
+        elif self.config.kubernetes_version and self.config.kubernetes_version != "auto":
+             final_version = HealContext.set_cluster_version(self.config.kubernetes_version)
+        
+        # 3. Dynamic Inference (AUTO)
         else:
-            self.cluster_version = HealContext._get_default_cluster_version()
+            from yamlr.core.inference import VersionInferenceEngine
+            engine = VersionInferenceEngine()
+            final_version = engine.infer_version(self)
+        
+        self.cluster_version = final_version
         
         # Propagate Provider Hint
         if self.provider != "auto":
@@ -124,16 +154,13 @@ class YamlrManager:
             
         logger.debug(f"Context initialized for target K8s: {self.cluster_version}")
 
-    def _load_catalog(self, catalog_path: Optional[str]) -> Dict[str, Any]:
+    def _load_catalog(self, version: str, catalog_path: Optional[str]) -> Dict[str, Any]:
         """
         Industrial-grade catalog resolution with multi-layered fallbacks.
         Uses CatalogManager for cache/upstream resolution and falls back to
         embedded assets and finally a hardcoded minimal schema.
         """
-        # Priority 1: Use CatalogManager to resolve versioned catalog (Cache > Upstream)
-        # We pass the bundled path as a fallback if the versioned one isn't cached.
-        
-        bundled_default = self._get_bundled_catalog_path()
+        # Priority 1: Use CatalogManager to resolve versioned catalog (Cache > Bundled > Remote > Adaptive)
         
         # If user provided a path, we try that first
         if catalog_path:
@@ -141,24 +168,20 @@ class YamlrManager:
             if physical_path.exists():
                 return self._read_json_catalog(physical_path)
         
-        # Resolve via CatalogManager (checks ~/.Yamlr/catalogs)
+        # Resolve via CatalogManager (Cache > Bundled > Remote > Adaptive)
         resolved_path_str = self.catalog_manager.resolve_catalog(
-            self.cluster_version, 
-            fallback_path=str(bundled_default) if bundled_default else None
+            version, 
+            intent="analysis"
         )
         
         resolved_path = Path(resolved_path_str)
         if resolved_path.exists():
             return self._read_json_catalog(resolved_path)
 
-        # Final Fallback: Hardcoded Minimal
-        logger.warning("Manager: No physical catalog found. Engaging [Embedded Magic Fallback].")
-        return MINIMAL_CATALOG_JSON
+        # Final Fallback: Hardcoded Core Essentials
+        logger.warning("Manager: No physical catalog found. Engaging [Core Safety Fallback].")
+        return CORE_CATALOG_JSON
 
-    def _get_bundled_catalog_path(self) -> Optional[Path]:
-        """Discovery logic for bundled k8s_v1_distilled.json across package/frozen environments."""
-        from yamlr.core.utils import resolve_bundled_asset
-        return resolve_bundled_asset("catalog/k8s_v1_distilled.json")
 
     def _read_json_catalog(self, path: Path) -> Dict[str, Any]:
         """Helper to safely read and parse a JSON catalog."""
@@ -167,6 +190,12 @@ class YamlrManager:
                 data = json.load(f)
             logger.debug(f"Loaded resource catalog from {path}")
             return data
-        except Exception as e:
+        except (json.JSONDecodeError, OSError, IOError) as e:
             logger.error(f"Failed to load catalog at {path}: {e}")
-            return MINIMAL_CATALOG_JSON
+            return CORE_CATALOG_JSON
+
+    def close(self):
+        """Releases infrastructure resources."""
+        if self._is_closed: return
+        # Placeholder for any explicit cleanup (e.g. closing open config locks)
+        self._is_closed = True

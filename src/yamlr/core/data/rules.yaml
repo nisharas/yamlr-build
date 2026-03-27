@@ -59,12 +59,14 @@
             cpu: "1"
             memory: "1Gi"
 
-"rule/run-as-non-root":
+"rule/run-as-root":
   name: "Container Runs as Root"
   severity: "High"
   description: "Containers should run as a non-root user."
   rationale: "Root containers increase the impact of a breakout and may be blocked by cluster Pod Security settings."
-  remediation: "Add 'securityContext.runAsNonRoot: true' at Pod or container level, and ensure the image runs correctly as a non-root UID."
+  remediation: "Set 'securityContext.runAsNonRoot: true' at the Pod or Container level."
+  impact_description: "An attacker who compromises the container gains root access on the host node, bypassing isolation."
+  risk_level: "High"
   example: |
     # Risky: no securityContext, likely runs as root
     apiVersion: apps/v1
@@ -91,12 +93,14 @@
             - name: api
               image: my-api:1.0.0
 
-"rule/no-privileged":
+"rule/privileged-container":
   name: "Privileged Container"
   severity: "Critical"
   description: "Containers should not run in privileged mode."
   rationale: "Privileged containers effectively bypass most isolation and can access the host, which is rarely required for application workloads."
   remediation: "Set 'securityContext.privileged: false' or remove the field, and use specific capabilities or host access only when strictly necessary."
+  impact_description: "A compromised container can gain full control over the host node, including access to all other Pods and secrets."
+  risk_level: "Critical"
   example: |
     # Bad: privileged container
     containers:
@@ -160,6 +164,8 @@
   description: "A Service exists but its selector matches no Pods."
   rationale: "The Service becomes a dead end for traffic, usually due to a typo in selector labels or a missing workload."
   remediation: "Verify 'service.spec.selector' matches the 'metadata.labels' in your Deployment or Pod template."
+  impact_description: "Traffic routed to this Service will have no destination, leading to 'No endpoints available' errors for clients."
+  risk_level: "Medium"
   example: |
     # Service selector does not match Deployment labels -> ghost service
     apiVersion: v1
@@ -188,6 +194,8 @@
   description: "A ConfigMap or Secret exists but is not referenced by any workload."
   rationale: "Orphan resources clutter the namespace and increase risk if sensitive data is kept around unnecessarily."
   remediation: "Delete the resource if it is unused, or reference it from workloads via 'envFrom' or 'volumes' if it should be in use."
+  impact_description: "Namespace clutter — Secret or ConfigMap is not referenced by any workload, increasing the potential blast radius of a credential leak."
+  risk_level: "Low"
   example: |
     # Orphan ConfigMap: defined but not used by any Pod
     apiVersion: v1
@@ -217,6 +225,8 @@
   description: "A Pod references a PersistentVolumeClaim (PVC) that does not exist in the workspace."
   rationale: "The Pod will remain Pending because the required storage cannot be mounted."
   remediation: "Add the missing PVC manifest to your project or fix the typo in 'volumes[].persistentVolumeClaim.claimName'."
+  impact_description: "The Pod will never start, leading to a service outage or deployment failure."
+  risk_level: "High"
   example: |
     # Pod references non-existent PVC 'app-data'
     apiVersion: v1
@@ -251,6 +261,8 @@
   description: "Service targetPort does not exist on the target Pod containers."
   rationale: "Traffic is accepted by the Service but dropped by the Pod because no process listens on the configured port."
   remediation: "Update 'service.spec.ports[].targetPort' to match a 'containerPort' defined in your workload."
+  impact_description: "External traffic reaching the Service will receive 504 Gateway Timeout or connection refused errors."
+  risk_level: "High"
   example: |
     # Mismatch: Service routes to targetPort 8080, but container listens on 8000
     apiVersion: v1
@@ -285,6 +297,8 @@
   description: "Ingress references a Service or port that does not exist."
   rationale: "External traffic reaching the Ingress controller will receive 502/503 errors because the backend service is unreachable."
   remediation: "Verify the Service name and port in the Ingress rules match an existing Service and declared Service port."
+  impact_description: "The application is unreachable from the internet, leading to a total service outage for external users."
+  risk_level: "Critical"
   example: |
     # Ingress points to non-existent Service 'web-svc'
     apiVersion: networking.k8s.io/v1
@@ -546,3 +560,120 @@
   description: "The manifest is missing one or more required labels as defined by external OPA/Rego policies."
   rationale: "Enterprise governance often requires labels like 'environment', 'owner', or 'cost-center' for resource tracking and billing."
   remediation: "Add the missing labels to the 'metadata.labels' section of the manifest."
+
+"rule/dangerous-capabilities":
+  name: "Dangerous Linux Capabilities"
+  severity: "High"
+  description: "Detects containers requesting dangerous capabilities like SYS_ADMIN, NET_ADMIN, or ALL."
+  rationale: "Capabilities allow fine-grained privilege assignment, but certain ones are equivalent to full root access and can be used to escape the container."
+  remediation: "Remove dangerous capabilities from 'securityContext.capabilities.add' and explicitly drop 'ALL' in 'securityContext.capabilities.drop'."
+
+"rule/sensitive-volume-mount":
+  name: "Sensitive Volume Mount"
+  severity: "High"
+  description: "Detects hostPath volumes mounting sensitive system directories (e.g., /etc, /root, /var/run/docker.sock)."
+  rationale: "Exposing sensitive host paths allows containers to escape their sandbox and compromise the underlying node level security."
+  remediation: "Avoid mounting sensitive host paths. Use emptyDir or specialized CSI drivers for persistent storage."
+
+"rule/host-pid":
+  name: "Host PID Namespace Exposure"
+  severity: "Error"
+  description: "Detects pods sharing the host's PID namespace (hostPID: true)."
+  rationale: "Sharing the host PID namespace allows a container to see and interact with all processes on the node, breaking process isolation."
+  remediation: "Set 'spec.hostPID: false' in the Pod specification."
+
+"rule/host-ipc":
+  name: "Host IPC Namespace Exposure"
+  severity: "Error"
+  description: "Detects pods sharing the host's IPC namespace (hostIPC: true)."
+  rationale: "Sharing the host IPC namespace allows a container to access inter-process communication on the node, potentially leaking data."
+  remediation: "Set 'spec.hostIPC: false' in the Pod specification."
+
+"rule/rbac-wildcard":
+  name: "RBAC Wildcard Verbs/Resources"
+  severity: "Critical"
+  description: "Detects the use of wildcards (*) in RBAC Roles or ClusterRoles."
+  rationale: "Wildcards grant 'God-mode' permissions, violating the principle of least privilege and making audit logs less useful."
+  remediation: "Explicitly list required verbs (e.g., get, list) and resources instead of using '*'."
+
+"rule/rbac-privilege-escalation":
+  name: "RBAC Privilege Escalation"
+  severity: "Critical"
+  description: "Detects roles that grant the ability to escalate privileges (e.g., bind/escalate verbs)."
+  rationale: "Users with these permissions can grant themselves higher privileges than they currently possess."
+  remediation: "Remove 'bind' or 'escalate' verbs from roles unless strictly required for system controllers."
+
+"rule/rbac-sensitive-resource":
+  name: "RBAC Sensitive Resource Access"
+  severity: "High"
+  description: "Detects access to sensitive resources like Secrets or Nodes."
+  rationale: "Unrestricted access to Secrets can lead to credential theft across the entire cluster."
+  remediation: "Restrict Secret access to specific resources using 'resourceNames' or dedicated ServiceAccounts."
+
+"rule/rbac-suspicious-binding":
+  name: "Suspicious RoleBinding"
+  severity: "Warning"
+  description: "Detects cluster-admin or powerful roles bound to common users or service accounts."
+  rationale: "Powerful roles should be reserved for administrators and system-level automation."
+  remediation: "Downgrade the binding to a more restrictive role like 'edit' or 'view'."
+
+"rule/ingress-tls-missing":
+  name: "Ingress TLS Missing"
+  severity: "High"
+  description: "Detects Ingress resources that serve traffic over HTTP without TLS configuration."
+  rationale: "Unencrypted traffic is susceptible to interception and tampering. Modern web standards require TLS for all public-facing services."
+  remediation: "Add a 'spec.tls' section with the appropriate 'hosts' and 'secretName'."
+
+"rule/ingress-class-missing":
+  name: "Ingress Class Missing"
+  severity: "Warning"
+  description: "Detects Ingress resources missing 'spec.ingressClassName' or the legacy 'kubernetes.io/ingress.class' annotation."
+  rationale: "Without an explicit IngressClass, the resource may not be picked up by any controller or may be handled by a non-deterministic default."
+  remediation: "Set 'spec.ingressClassName' to the target controller (e.g., 'nginx')."
+
+"rule/ingress-unsafe-annotation":
+  name: "Unsafe Ingress Annotation"
+  severity: "Critical"
+  description: "Detects dangerous snippet annotations that can be used for configuration injection or bypasses."
+  rationale: "Snippet annotations (e.g., configuration-snippet) allow arbitrary NGINX config insertion, which can be exploited to leak secrets or bypass security blocks."
+  remediation: "Remove snippet annotations and use structured Ingress features or validated controller-specific fields."
+
+"rule/ingress-insecure-tls":
+  name: "Insecure TLS Configuration"
+  severity: "High"
+  description: "Detects Ingress annotations that enable insecure TLS versions (TLS 1.0, 1.1) or weak ciphers."
+  rationale: "Weak TLS protocols are vulnerable to downgrade attacks and do not meet modern compliance standards (e.g., PCI-DSS)."
+  remediation: "Update annotations to enforce TLS 1.2+ and strong cipher suites."
+
+"rule/ingress-wildcard-host":
+  name: "Wildcard Ingress Host"
+  severity: "Warning"
+  description: "Detects Ingress rules that lack an explicit 'host' field, potentially allowing traffic for any host."
+  rationale: "Wildcard hosts can catch traffic intended for other services if not carefully managed by the controller."
+  remediation: "Define an explicit 'host' for each Ingress rule."
+
+"rule/shield-resource-starvation":
+  name: "Resource Starvation (High Impact)"
+  severity: "Warning"
+  description: "Detects high-impact workloads (top 10% blast radius) that lack CPU or memory limits."
+  rationale: "Critical services without limits can cause cluster-wide instability if they consume excessive resources during a surge."
+  remediation: "Add resources.limits to all containers in high-impact workloads."
+  example: |
+    # High Impact Service missing limits
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: checkout-api
+      annotations:
+        yamlr.io/impact: "business-critical"
+    spec:
+      template:
+        spec:
+          containers:
+            - name: api
+              image: checkout:2.0.1
+              resources:
+                requests:
+                  cpu: "2"
+                  memory: "4Gi"
+                # Missing limits!

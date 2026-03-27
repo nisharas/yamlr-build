@@ -1,5 +1,18 @@
+"""
+Yamlr COMPLIANCE RULESET
+-------------------------
+Maps internal Yamlr Rule IDs to authoritative compliance controls 
+(SOC2, CIS, HIPAA).
+
+Why: Bridges the gap between technical findings and regulatory compliance 
+     requirements, enabling auditor-ready reporting.
+"""
+
+from __future__ import annotations
 from typing import Dict, List, Optional
 from dataclasses import dataclass
+__all__ = ['ComplianceControl', 'ComplianceRegistry']
+
 
 @dataclass
 class ComplianceControl:
@@ -67,7 +80,10 @@ class ComplianceRegistry:
 
     @classmethod
     def get_controls_for_rule(cls, rule_id: str) -> Optional[ComplianceControl]:
-        """Fetch the compliance mapping for a specific rule."""
+        """Fetch the compliance mapping for a specific rule.
+        
+        Why: Standard lookup for translating rules to regulatory controls.
+        """
         return cls.MAPPING.get(rule_id)
         
     @classmethod

@@ -1,11 +1,11 @@
-import os
+from __future__ import annotations
 import pkgutil
-import sys
 import inspect
 
-import yaml
 from rich.markdown import Markdown
 from rich.panel import Panel
+
+RULES_YAML = "rules.yaml"
 
 SEVERITY_DISPLAY = {
     "critical": "Blocker",
@@ -15,12 +15,13 @@ SEVERITY_DISPLAY = {
     "mixed": "Warning",
     "info": "Note",
 }
+__all__ = ['display_severity', 'load_rules', 'handle_explain_command']
 
 
 def display_severity(raw: str) -> str:
-    """
-    Why: Internal documentation policy compliance.
-    What: Auto-generated summary.
+    """Transforms raw severity into a human-friendly display label.
+    
+    Why: To provide clear, non-technical indicators of risk levels.
     """
     return SEVERITY_DISPLAY.get(raw.lower(), raw)
 
@@ -30,26 +31,27 @@ def load_rules():
     from yamlr.core.utils import resolve_bundled_asset
     
     # Try the most common locations for the rules database
-    rules_path = resolve_bundled_asset("core/data/rules.yaml") or resolve_bundled_asset("rules.yaml")
+    rules_path = resolve_bundled_asset(f"core/data/{RULES_YAML}") or resolve_bundled_asset(RULES_YAML)
     
     if rules_path and rules_path.exists():
         with open(rules_path, "r", encoding="utf-8") as f:
+            from yamlr.core.utils import get_hardened_yaml
             try:
-                return yaml.safe_load(f) or {}
-            except Exception:
+                # [Security] Use hardened YAML to prevent Billion Laughs (VULN-008)
+                hyaml = get_hardened_yaml(typ="safe")
+                return hyaml.load(f) or {}
+            except Exception: # Hardened YAML throws standard errors
                 return {}
 
     # Try pkgutil as a last-resort fallback
     try:
-        data = pkgutil.get_data("yamlr.core.data", "rules.yaml") or pkgutil.get_data("yamlr.core.entrypoints", "rules.yaml")
+        data = pkgutil.get_data("yamlr.core.data", RULES_YAML) or pkgutil.get_data("yamlr.core.entrypoints", RULES_YAML)
         if data:
-            return yaml.safe_load(data) or {}
-    except:
+            from yamlr.core.utils import get_hardened_yaml
+            hyaml = get_hardened_yaml(typ="safe")
+            return hyaml.load(data) or {}
+    except (AttributeError, KeyError, ImportError, OSError):
         pass
-
-    return {}
-
-    return {}
 
     return {}
 
@@ -59,16 +61,14 @@ RULE_DB = RULEDB
 
 
 def handle_explain_command(args, console):
-    """
-    Explains a specific rule or lists available rules.
+    """Explains a specific rule or lists available rules.
+    
+    Why: To provide the user with deep technical context and remediation steps for any safety rule.
     """
     rule_id = args.rule_id
 
     if not rule_id:
-        console.print("[bold cyan]Available Rules:[/bold cyan]")
-        for rid, data in RULEDB.items():
-            console.print(f" - [bold]{rid}[/bold]: {data.get('name', 'Unknown')}")
-        console.print("\n[dim]Usage: yamlr explain <rule_id>[/dim]")
+        _display_rule_list(console)
         return 0
 
     # Special Case: Config Documentation
@@ -76,21 +76,7 @@ def handle_explain_command(args, console):
         return _explain_config(rule_id, console)
 
     # 🛡 Robust Resolution: Check for prefix-less match across all known namespaces
-    data = RULEDB.get(rule_id)
-    if not data:
-        # Search for any rule that ends with the requested slug
-        # e.g. 'validation-error' -> 'schema/validation-error'
-        # e.g. 'required-labels' -> 'policy.rego/required-labels'
-        candidates = [rid for rid in RULEDB.keys() if rid.endswith(f"/{rule_id}") or rid == rule_id]
-        
-        if len(candidates) == 1:
-            rule_id = candidates[0]
-            data = RULEDB.get(rule_id)
-        elif len(candidates) > 1:
-            # Ambiguity: prefer 'rule/' prefix if available as it's the most common
-            preferred = next((c for c in candidates if c.startswith("rule/")), candidates[0])
-            rule_id = preferred
-            data = RULEDB.get(rule_id)
+    data, resolved_id = _resolve_rule_data(rule_id)
 
     if not data:
         console.print(f"[red]❌ Unknown rule or config ID: {rule_id}[/red]")
@@ -99,6 +85,41 @@ def handle_explain_command(args, console):
         )
         return 1
 
+    _render_rule_panel(resolved_id, data, console)
+    return 0
+
+
+def _display_rule_list(console):
+    """Helper to display the list of all available rules."""
+    console.print("[bold cyan]Available Rules:[/bold cyan]")
+    for rid, data in RULEDB.items():
+        console.print(f" - [bold]{rid}[/bold]: {data.get('name', 'Unknown')}")
+    console.print("\n[dim]Usage: yamlr explain <rule_id>[/dim]")
+
+
+def _resolve_rule_data(rule_id: str) -> tuple[dict | None, str]:
+    """Helper to resolve rule data with fuzzy prefix matching."""
+    data = RULEDB.get(rule_id)
+    if data:
+        return data, rule_id
+
+    # Search for any rule that ends with the requested slug
+    candidates = [rid for rid in RULEDB.keys() if rid.endswith(f"/{rule_id}") or rid == rule_id]
+    
+    if not candidates:
+        return None, rule_id
+        
+    if len(candidates) == 1:
+        resolved_id = candidates[0]
+        return RULEDB.get(resolved_id), resolved_id
+    
+    # Ambiguity: prefer 'rule/' prefix if available
+    preferred = next((c for c in candidates if c.startswith("rule/")), candidates[0])
+    return RULEDB.get(preferred), preferred
+
+
+def _render_rule_panel(rule_id: str, data: dict, console):
+    """Helper to render the formatted rule panel."""
     raw_severity = data.get("severity", "")
     shown_severity = display_severity(raw_severity)
 
@@ -107,32 +128,17 @@ def handle_explain_command(args, console):
     remediation = (data.get("remediation", "") or "").strip()
     example = data.get("example")
 
-    content_parts = []
-
-    content_parts.append(f"**Severity:** {shown_severity}\n")
+    content_parts = [f"**Severity:** {shown_severity}\n"]
 
     if description:
-        content_parts.append("### Description")
-        content_parts.append(description)
-        content_parts.append("")
-
+        content_parts.extend(["### Description", description, ""])
     if rationale:
-        content_parts.append("### Rationale")
-        content_parts.append(rationale)
-        content_parts.append("")
-
+        content_parts.extend(["### Rationale", rationale, ""])
     if remediation:
-        content_parts.append("### Remediation")
-        content_parts.append(remediation)
-        content_parts.append("")
+        content_parts.extend(["### Remediation", remediation, ""])
 
     if example:
-        content_parts.append("### Example")
-        # Wrap as fenced code block so Rich preserves formatting
-        content_parts.append("```yaml")
-        content_parts.append(example.rstrip())
-        content_parts.append("```")
-        content_parts.append("")
+        content_parts.extend(["### Example", "```yaml", example.rstrip(), "```", ""])
 
     content = "\n".join(content_parts).rstrip() + "\n"
 
@@ -143,8 +149,6 @@ def handle_explain_command(args, console):
             border_style="magenta",
         )
     )
-
-    return 0
 
 
 def _explain_config(topic_id: str, console) -> int:
@@ -172,7 +176,7 @@ Run `yamlr init` to generate a starter file.
 - `config/security`: Trusted registries and allowed paths.
 - `config/kubernetes`: Force specific K8s versions.
 - `config/logging`: Debug settings.
-- `config/plugins`: Experimental plugin paths.
+- `config/plugins`: (Coming Soon) Experimental plugin paths.
 - `config/cicd`: CI/CD gates and exit code enforcement.
 - `config/scale`: Ultra-scale streaming and performance.
 - `config/healing`: Auto-injection and deprecation auditing.
@@ -239,7 +243,7 @@ A: Run `yamlr init --force`.
 A: `yamlr scan . --output sarif` (Exit code 1 on failure).
 
 **Q: Inline Ignores?**
-A: Not yet. Use `rules.ignore` in config.
+A: (Coming Soon). Use `rules.ignore` in config.
 
 **Q: Pro vs Free Version?**
 A: Basic scanning is free. Security hardening is Pro.
@@ -317,12 +321,14 @@ logging:
   level: "DEBUG"
   file: ".yamlr/debug.log"
 ```
+> [!NOTE]
+> Config-based logging is a **Roadmap Feature**. Use `--verbose` for now.
         """,
         "config/plugins": """
 # 🔌 Plugins (Experimental)
 Load custom rules from local paths.
 
-> **Status:** Roadmap Feature.
+> **Status:** (Coming Soon) Roadmap Feature.
 
 ```yaml
 plugins:

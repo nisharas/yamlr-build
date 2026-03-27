@@ -7,12 +7,17 @@ Extracts:
 - spec.selector (Service)
 """
 
+from __future__ import annotations
 from typing import List
 
 from yamlr.models import ManifestIdentity, Shard
+__all__ = ['SelectorExtractor']
 
 
-class SelectorExtractor:
+
+from .base_extractor import BaseMetadataExtractor
+
+class SelectorExtractor(BaseMetadataExtractor):
     """Extracts selector fields for Service/Deployment matching."""
 
     @staticmethod
@@ -30,23 +35,11 @@ class SelectorExtractor:
             bool: True if extraction was performed
         """
         # Skip structural keys
-        if key in ("selector", "matchLabels", "spec"):
+        if not shard.is_flow_style and key in ("selector", "matchLabels", "spec"):
             return False
 
         # Check if we're inside spec.selector
         if "spec" in path_keys and "selector" in path_keys:
-            if identity.selector is None:
-                identity.selector = {}
-            if shard.is_flow_style:
-                import yaml
-                try:
-                    parsed = yaml.safe_load(val)
-                    if isinstance(parsed, dict):
-                        identity.selector.update(parsed)
-                except Exception:
-                    pass
-            else:
-                identity.selector[key] = val
-            return True
+            return SelectorExtractor._apply_dict_extraction(shard, key, val, identity, "selector")
 
         return False

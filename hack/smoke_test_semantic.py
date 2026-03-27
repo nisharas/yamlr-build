@@ -1,3 +1,4 @@
+from __future__ import annotations
 
 """
 Smoke Test for Semantic Healing Flags

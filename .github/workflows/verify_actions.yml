@@ -6,7 +6,10 @@ on:
 
 jobs:
   test-actions:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       
@@ -15,10 +18,28 @@ jobs:
         with:
           python-version: '3.12'
           
-      - name: Run Schema Compliance Gate
+      - name: Install dependencies
         run: |
-          pip install -r requirements.txt
-          python -m unittest tests/test_schema_compliance_unittest.py
+          pip install .[dev]
+          
+      - name: Run Core Verification (with Coverage Gate)
+        run: |
+          pytest --cov=src/yamlr --cov-report=term-missing --cov-fail-under=50 tests/
+          
+      - name: Run Performance Regression Check
+        # Only run on Linux to avoid env-specific variance in CI comparison
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          python scripts/benchmark.py > bench.txt
+          cat bench.txt
+          # Failure logic: If "Throughput" < 0.03 MB/s (Low bar for CI VMs)
+          grep "Throughput" bench.txt | awk '{if ($2 < 0.03) exit 1}'
+          
+      - name: Run Zero-Regression Parity Guard
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          export PYTHONPATH=$PYTHONPATH:$(pwd)/src
+          python tests/verify_rust_parity.py --baseline "python -m yamlr scan" --candidate "python tests/stubs/rust_scanner_stub.py" --target tests/fixtures
       
       - name: Test Scan Action
         uses: ./.github/actions/scan

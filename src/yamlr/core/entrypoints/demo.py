@@ -1,12 +1,14 @@
 """
-DEMO COMMAND - The "Magic Moment"
+DEMO COMMAND - The Safety Engine Showcase
 ----------------------------------
 Scaffolds a sample directory with purposeful errors to demonstrate Yamlr's power.
 """
-import os
+from __future__ import annotations
 from pathlib import Path
 from rich.console import Console
 from rich.panel import Panel
+__all__ = ['handle_demo_command']
+
 
 def handle_demo_command(args, engine, console: Console):
     """
@@ -20,7 +22,7 @@ def handle_demo_command(args, engine, console: Console):
         
         # 1. Scaffolding malformed sample.yaml
         sample_path = demo_dir / "sample.yaml"
-        sample_content = """# Yamlr Demo: The "Magic Moment"
+        sample_content = """# Yamlr Demo: Safety Engine Showcase
 # 1. Mismatched Indentation (Lexer demo)
 # 2. Ghost Service (Selector mismatch)
 # 3. Missing Probes (Best practice demo)
@@ -70,7 +72,7 @@ spec:
 
     # Instructions
     instructions = (
-        "[bold cyan]Try these magic moments to see Yamlr's Safety Engine in action:[/bold cyan]\n\n"
+        "[bold cyan]Try these core capabilities to see Yamlr's Safety Engine in action:[/bold cyan]\n\n"
         "1. [white bold]yamlr scan yamlr-demo[/white bold]\n"
         "   [dim]Detect the 'Ghost Service' caused by the selector typo.[/dim]\n\n"
         "2. [white bold]yamlr heal yamlr-demo --fix-refs[/white bold] [blue](Yamlr Pro)[/blue]\n"

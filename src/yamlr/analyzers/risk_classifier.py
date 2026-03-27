@@ -23,6 +23,8 @@ Author: Nishar A Sunkesala / Yamlr Team
 Date: 2026-02-28
 """
 
+from __future__ import annotations
+
 import logging
 from dataclasses import dataclass, field
 from typing import List, Optional
@@ -56,6 +58,8 @@ CATEGORY_DISRUPTION = "Disruption Tolerance Risk"
 CATEGORY_IMAGE = "Image Pull Failure Risk"
 CATEGORY_CRD = "CRD Dependency Risk"
 CATEGORY_REPLICA = "Replica Configuration Risk"
+__all__ = ['RiskAssessment', 'RiskClassifier']
+
 
 
 @dataclass
@@ -166,204 +170,78 @@ class RiskClassifier:
     # =====================================================================
 
     def _categorize(self, finding: AnalysisResult) -> str:
-        """Determine the risk category from finding attributes.
-
-        Why: Category drives the "safety-audit tone" in CLI output.
-             "Traffic Routing Failure" is more actionable than "ERROR".
-
-        Heuristic: Match on analyzer_name, rule_id, and resource_kind.
-        """
+        """Determine the risk category from finding attributes via mapping."""
         analyzer = (finding.analyzer_name or "").lower()
         rule_id = (finding.rule_id or "").lower()
         kind = (finding.resource_kind or "").lower()
         message = (finding.message or "").lower()
 
-        # --- SPECIFIC RESOURCE CHECKS FIRST ---
-        # (Must precede generic "selector" traffic catch-all)
+        # 1. Exact Kind Matches
+        kind_map = {
+            "networkpolicy": CATEGORY_NETWORK_ISOLATION,
+            "poddisruptionbudget": CATEGORY_DISRUPTION,
+            "priorityclass": CATEGORY_SCHEDULING,
+            "runtimeclass": CATEGORY_SCHEDULING,
+            "customresourcedefinition": CATEGORY_CRD,
+        }
+        if kind in kind_map:
+            return kind_map[kind]
 
-        # Network isolation (NetworkPolicy uses selectors but isn't traffic)
-        if "networkpolicy" in rule_id or "network_policy" in rule_id:
-            return CATEGORY_NETWORK_ISOLATION
-        if kind == "networkpolicy":
-            return CATEGORY_NETWORK_ISOLATION
+        # 2. Rule ID Keyword Matches (Priority Order)
+        kw_mappings = [
+            (["networkpolicy", "network_policy"], CATEGORY_NETWORK_ISOLATION),
+            (["pdb", "disruption"], CATEGORY_DISRUPTION),
+            (["image", "pull", "registry", "tag"], CATEGORY_IMAGE),
+            (["ghost", "selector", "port", "ingress", "gateway", "httproute"], CATEGORY_TRAFFIC),
+            (["orphan"], CATEGORY_ORPHAN),
+            (["replica", "replicas", "scale"], CATEGORY_REPLICA),
+            (["priorityclass", "runtimeclass", "toleration", "nodeselector", "affinity"], CATEGORY_SCHEDULING),
+            (["crd", "customresource"], CATEGORY_CRD),
+            (["configmap", "secret", "pvc", "volume"], CATEGORY_DATA),
+            (["limit", "resource", "cpu", "memory"], CATEGORY_RESOURCE),
+            (["probe", "liveness", "readiness", "hpa"], CATEGORY_AVAILABILITY),
+            (["security", "privilege", "capabilities", "pss", "shd"], CATEGORY_SECURITY),
+            (["rbac", "role", "binding", "serviceaccount"], CATEGORY_RBAC),
+            (["deprecated", "migration", "version", "api"], CATEGORY_VERSION),
+        ]
+        
+        for kws, cat in kw_mappings:
+            if any(kw in rule_id for kw in kws):
+                return cat
 
-        # Disruption tolerance (PDB uses selectors but isn't traffic)
-        if "pdb" in rule_id or "disruption" in rule_id:
-            return CATEGORY_DISRUPTION
-        if kind == "poddisruptionbudget":
-            return CATEGORY_DISRUPTION
-
-        # Image pull failure (check before data dependency)
-        if any(kw in rule_id for kw in ("image", "pull", "registry", "tag")):
-            return CATEGORY_IMAGE
-        if "imagepull" in message or "image pull" in message:
-            return CATEGORY_IMAGE
-
-        # --- GENERIC TRAFFIC CHECK ---
-        if any(kw in rule_id for kw in ("ghost", "selector", "port", "ingress")):
-            return CATEGORY_TRAFFIC
-        if kind in ("service", "ingress", "httproute") and "mismatch" in message:
-            return CATEGORY_TRAFFIC
-        if "gateway" in rule_id or "httproute" in rule_id:
-            return CATEGORY_TRAFFIC
-
-        # Orphan/hygiene (check BEFORE data dependency — "orphan_configmap"
-        # must match orphan, not configmap)
-        if "orphan" in rule_id or "orphan" in message:
-            return CATEGORY_ORPHAN
-
-        # Replica configuration
-        if any(kw in rule_id for kw in ("replica", "replicas", "scale")):
-            return CATEGORY_REPLICA
-        if "replicas" in message and ("zero" in message or "0" in message):
-            return CATEGORY_REPLICA
-
-        # Scheduling
-        if any(kw in rule_id for kw in (
-            "priorityclass", "priority_class", "runtimeclass",
-            "runtime_class", "toleration", "nodeselector", "affinity",
-        )):
-            return CATEGORY_SCHEDULING
-        if kind in ("priorityclass", "runtimeclass"):
-            return CATEGORY_SCHEDULING
-
-        # CRD dependency
-        if any(kw in rule_id for kw in ("crd", "customresource", "custom_resource")):
-            return CATEGORY_CRD
-        if kind == "customresourcedefinition":
-            return CATEGORY_CRD
-
-        # Data dependency
-        if any(kw in rule_id for kw in ("configmap", "secret", "pvc", "volume")):
-            return CATEGORY_DATA
-        if "missing" in message and kind in ("configmap", "secret"):
-            return CATEGORY_DATA
-
-        # Resource exhaustion
-        if any(kw in rule_id for kw in ("limit", "resource", "cpu", "memory")):
-            return CATEGORY_RESOURCE
-
-        # Availability
-        if any(kw in rule_id for kw in ("probe", "liveness", "readiness", "hpa")):
-            return CATEGORY_AVAILABILITY
-
-        # Security
-        if any(kw in rule_id for kw in ("security", "privilege", "capabilities", "pss")):
-            return CATEGORY_SECURITY
-        if "harden" in analyzer or "security" in analyzer:
-            return CATEGORY_SECURITY
-
-        # RBAC
-        if any(kw in rule_id for kw in ("rbac", "role", "binding", "serviceaccount")):
-            return CATEGORY_RBAC
-
-        # Version
-        if any(kw in rule_id for kw in ("deprecated", "migration", "version", "api")):
-            return CATEGORY_VERSION
-        if "deprecat" in message:
-            return CATEGORY_VERSION
-
-        # Default
+        # 3. Message/Analyzer Backups
+        if "deprecat" in message: return CATEGORY_VERSION
+        if "harden" in analyzer or "security" in analyzer: return CATEGORY_SECURITY
+        if "orphan" in message: return CATEGORY_ORPHAN
+        
         return CATEGORY_HYGIENE
 
-    def _score_risk(
-        self, finding: AnalysisResult, assessment: RiskAssessment
-    ) -> str:
-        """Apply priority-ordered heuristic rules to determine risk level.
-
-        Why: Explainable scoring. Each rule is documented and auditable.
-             No hidden weights or ML black-box decisions.
-
-        Rules (priority order — first match wins):
-            1. Ingress/HTTPRoute-affecting → HIGH
-            2. Multi-workload impact (scope ≥ 3) → HIGH
-            3. Traffic category + any scope → HIGH
-            4. Data category + scope > 0 → HIGH
-            5. Security with ERROR severity → HIGH
-            6. Network isolation category → HIGH
-            7. Image pull failure → HIGH
-            8. Gateway/HTTPRoute traffic-facing → HIGH
-            9. Single workload impact → MEDIUM
-            10. Resource/availability/version/scheduling → MEDIUM
-            11. Disruption tolerance + scope > 0 → MEDIUM
-            12. CRD dependency → MEDIUM
-            13. Replica config → MEDIUM
-            14. Cosmetic/hygiene → LOW
-        """
+    def _score_risk(self, finding: AnalysisResult, assessment: RiskAssessment) -> str:
+        """Heuristic risk level determination with simplified logic."""
         severity = (finding.severity or "").upper()
         category = assessment.category
         scope = assessment.scope_count
+        kind = (finding.resource_kind or "").lower()
 
-        # Rule 1: Ingress/HTTPRoute-affecting
-        if category == CATEGORY_TRAFFIC and (
-            "ingress" in (finding.resource_kind or "").lower()
-            or "httproute" in (finding.resource_kind or "").lower()
-            or any("Ingress" in r or "HTTPRoute" in r for r in assessment.affected_resources)
-        ):
-            return "HIGH"
+        # HIGH Risk Conditions
+        is_high = any([
+            scope >= 3,
+            category == CATEGORY_NETWORK_ISOLATION,
+            category == CATEGORY_IMAGE,
+            category == CATEGORY_TRAFFIC and scope > 0,
+            category == CATEGORY_TRAFFIC and (kind in ("ingress", "httproute", "gateway")),
+            category == CATEGORY_DATA and scope > 0,
+            category == CATEGORY_SECURITY and severity in ("ERROR", "CRITICAL"),
+            finding.risk_level == "HIGH"
+        ])
+        if is_high: return "HIGH"
 
-        # Rule 2: Multi-workload impact
-        if scope >= 3:
-            return "HIGH"
-
-        # Rule 3: Traffic category with any scope
-        if category == CATEGORY_TRAFFIC and scope > 0:
-            return "HIGH"
-
-        # Rule 4: Data dependency with scope
-        if category == CATEGORY_DATA and scope > 0:
-            return "HIGH"
-
-        # Rule 5: Security with ERROR severity
-        if category == CATEGORY_SECURITY and severity == "ERROR":
-            return "HIGH"
-
-        # Rule 6: Network isolation = always HIGH (security incident)
-        if category == CATEGORY_NETWORK_ISOLATION:
-            return "HIGH"
-
-        # Rule 7: Image pull failure = always HIGH (100% deployment failure)
-        if category == CATEGORY_IMAGE:
-            return "HIGH"
-
-        # Rule 8: Gateway/HTTPRoute traffic-facing (same risk as Ingress)
-        if category == CATEGORY_TRAFFIC and (
-            "gateway" in (finding.rule_id or "").lower()
-            or "httproute" in (finding.rule_id or "").lower()
-        ):
-            return "HIGH"
-
-        # Rule 9: Single workload impact
-        if scope >= 1:
+        # MEDIUM Risk Conditions
+        medium_cats = {CATEGORY_RESOURCE, CATEGORY_AVAILABILITY, CATEGORY_VERSION, 
+                       CATEGORY_RBAC, CATEGORY_SCHEDULING, CATEGORY_CRD, CATEGORY_REPLICA}
+        if scope >= 1 or category in medium_cats:
             return "MEDIUM"
 
-        # Rule 10: Resource/availability/version/scheduling
-        if category in (
-            CATEGORY_RESOURCE,
-            CATEGORY_AVAILABILITY,
-            CATEGORY_VERSION,
-            CATEGORY_RBAC,
-            CATEGORY_SCHEDULING,
-        ):
-            return "MEDIUM"
-
-        # Rule 11: Disruption tolerance with scope
-        if category == CATEGORY_DISRUPTION:
-            return "MEDIUM"
-
-        # Rule 12: CRD dependency (silent failure)
-        if category == CATEGORY_CRD:
-            return "MEDIUM"
-
-        # Rule 13: Replica configuration (may be intentional)
-        if category == CATEGORY_REPLICA:
-            return "MEDIUM"
-
-        # Rule 14: traffic/data/security without scope data
-        if category in (CATEGORY_TRAFFIC, CATEGORY_DATA, CATEGORY_SECURITY):
-            return "MEDIUM"
-
-        # Default: Cosmetic/hygiene
         return "LOW"
 
     def _describe_impact(
@@ -373,9 +251,15 @@ class RiskClassifier:
 
         Why: Impact descriptions transform "Missing field" into
              "Service will not route traffic." This is the identity shift.
+        
+        Note: [Phase 9] Prioritize high-fidelity context from Rule DB if available.
 
         Strategy: Category-driven templates with scope injection.
         """
+        # [PHASE-9-FIX] Prioritize explicit high-fidelity impact from Rule DB
+        if finding.impact_description and finding.impact_description not in (None, "None", ""):
+            return finding.impact_description
+
         scope = assessment.scope_count
         category = assessment.category
         kind = finding.resource_kind or "resource"
