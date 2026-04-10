@@ -1,6 +1,8 @@
 import os
-import pytest
 from pathlib import Path
+
+import pytest
+
 from yamlr.core.engine import YamlrEngine
 
 # [QA-12-01] Enterprise Stress Test Suite
@@ -9,17 +11,19 @@ from yamlr.core.engine import YamlrEngine
 FIXTURES_DIR = Path("tests/fixtures")
 STRESS_FIXTURE = Path("tests/corpus/stress/benchmark_large.yaml")
 
+
 @pytest.fixture
 def stress_engine():
     engine = YamlrEngine(workspace_path=".")
     yield engine
     engine.close()
 
+
 def test_gauntlet_healing_efficiency(stress_engine):
     """
     GAUNTLET: Proves Yamlr can heal at least 80% of known broken manifests.
-    
-    Why: To ensure enterprise-grade reliability and prevent regressions in 
+
+    Why: To ensure enterprise-grade reliability and prevent regressions in
          the core healing engine during complex refactors.
     """
     broken_files = [
@@ -28,9 +32,9 @@ def test_gauntlet_healing_efficiency(stress_engine):
         "test_invalid_configmap.yaml",
         "broken_networkpolicy.yaml",
         "deprecated_resources.yaml",
-        "phase9_insecure.yaml"
+        "phase9_insecure.yaml",
     ]
-    
+
     results = []
     for f in broken_files:
         p = FIXTURES_DIR / f
@@ -40,11 +44,12 @@ def test_gauntlet_healing_efficiency(stress_engine):
 
     total_files = len(results)
     healed_files = sum(1 for r in results if r.success)
-    
+
     efficiency = healed_files / total_files if total_files > 0 else 0
     print(f"\n[STRESS] Healing Efficiency: {efficiency:.2%} ({healed_files}/{total_files})")
-    
+
     assert efficiency >= 0.8, f"Healing Efficiency {efficiency:.2%} is below the 80% enterprise threshold!"
+
 
 def test_large_manifest_stress(stress_engine):
     """
@@ -52,23 +57,25 @@ def test_large_manifest_stress(stress_engine):
     """
     if not STRESS_FIXTURE.exists():
         pytest.skip("Stress fixture benchmark_large.yaml not found.")
-        
+
     res = stress_engine.audit_and_heal_file(str(STRESS_FIXTURE), dry_run=True)
     assert res.success, f"Failed to process large manifest: {res.error}"
     assert res.processing_time_seconds < 10.0, "Large manifest processing took too long (>10s)"
 
+
 def test_crash_detection_automation(stress_engine):
     """
     [QA-12-05] CRASH DETECTION: Verifies CLI reports exit code 2 on internal failure.
-    
-    Why: To ensure CI pipelines fail appropriately when the engine crashes, 
+
+    Why: To ensure CI pipelines fail appropriately when the engine crashes,
          preventing "silent failures" in automated environments.
     """
-    from unittest.mock import patch, MagicMock
+    from unittest.mock import MagicMock, patch
+
     from yamlr.models import HealFileResult
-    
+
     # We mock batch_heal to simulate an ENGINE_ERROR result
-    with patch.object(YamlrEngine, 'batch_heal') as mock_batch:
+    with patch.object(YamlrEngine, "batch_heal") as mock_batch:
         mock_batch.return_value = [
             HealFileResult(
                 file_path="crash.yaml",
@@ -80,13 +87,13 @@ def test_crash_detection_automation(stress_engine):
                 findings=[],
                 dna_integrity_score=0,
                 identities=[],
-                error="Simulated Engine Crash"
+                error="Simulated Engine Crash",
             )
         ]
-        
+
         # Simulate the CLI entrypoint check (what [QA-12-05] is about)
         from yamlr.core.entrypoints.scan import handle_scan_command
-        
+
         args = MagicMock()
         args.path = [str(FIXTURES_DIR)]
         args.output = "text"
@@ -106,9 +113,9 @@ def test_crash_detection_automation(stress_engine):
         args.stream_to = None
         args.verbose = False
         args.summary_only = False
-        
+
         formatter = MagicMock()
-        
+
         # handle_scan_command should return 2 directly based on our changes in scan.py
         exit_code = handle_scan_command(args, stress_engine)
         assert exit_code == 2, f"Expected exit code 2 on ENGINE_ERROR, got {exit_code}"

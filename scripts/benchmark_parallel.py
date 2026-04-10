@@ -1,7 +1,8 @@
-import time
 import os
 import shutil
+import time
 from pathlib import Path
+
 from yamlr.core.engine import YamlrEngine
 
 # Paths
@@ -38,11 +39,12 @@ spec:
             memory: "128Mi"
 """
 
+
 def setup_corpus(count: int, size_kb: int):
     if TEST_CORPUS.exists():
         shutil.rmtree(TEST_CORPUS)
     TEST_CORPUS.mkdir(parents=True)
-    
+
     print(f"Generating {count} files of ~{size_kb}KB each...")
     for f in range(count):
         file_path = TEST_CORPUS / f"manifest_{f}.yaml"
@@ -53,8 +55,10 @@ def setup_corpus(count: int, size_kb: int):
                 i += 1
     print("Corpus ready.")
 
+
 def run_parallel_benchmark():
     import argparse
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--fast", action="store_true", help="Use native fast-path")
     parser.add_argument("--count", type=int, default=FILE_COUNT)
@@ -62,30 +66,26 @@ def run_parallel_benchmark():
     args = parser.parse_args()
 
     setup_corpus(args.count, args.size)
-    
+
     print("\nInitializing Engine...")
     engine = YamlrEngine(
         workspace_path=str(ROOT_DIR),
-        catalog_path=None # Use default distilled
+        catalog_path=None,  # Use default distilled
     )
     # Set concurrency
     engine.concurrency = 4
-    
+
     print(f"Starting Parallel Batch Heal on {args.count} files (fast={args.fast})...")
     start_time = time.time()
-    
+
     results = engine.batch_heal(
-        root_path=str(TEST_CORPUS),
-        extensions=[".yaml"],
-        dry_run=True,
-        fast=args.fast,
-        task_label="Benchmarking"
+        root_path=str(TEST_CORPUS), extensions=[".yaml"], dry_run=True, fast=args.fast, task_label="Benchmarking"
     )
-    
+
     duration = time.time() - start_time
     total_size_mb = sum(p.stat().st_size for p in TEST_CORPUS.glob("*.yaml")) / (1024 * 1024)
     throughput = total_size_mb / duration
-    
+
     print("\nRESULTS (Parallel):")
     print("--------------------------------------------------")
     print(f"Files Processed: {len(results)}")
@@ -93,8 +93,9 @@ def run_parallel_benchmark():
     print(f"Duration:        {duration:.4f} seconds")
     print(f"Throughput:      {throughput:.2f} MB/s")
     print("--------------------------------------------------")
-    
+
     # shutil.rmtree(TEST_CORPUS)
+
 
 if __name__ == "__main__":
     run_parallel_benchmark()

@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-9303
+  labels:
+    app: ms-9303
+    dependency: ms-9304
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-9303
+  template:
+    metadata:
+      labels:
+        app: ms-9303
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-9304

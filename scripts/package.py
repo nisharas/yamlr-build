@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 #!/usr/bin/env python3
 """
 Yamlr Packaging Script
@@ -14,13 +15,14 @@ Orchestrates the full build and packaging process:
 
 import argparse
 import os
+import platform
 import shutil
 import subprocess
 import sys
-import platform
-import zipfile
 import tarfile
+import zipfile
 from pathlib import Path
+
 from version_helper import get_version
 
 # Paths
@@ -28,6 +30,7 @@ ROOT_DIR = Path(__file__).parent.parent.resolve()
 DIST_DIR = ROOT_DIR / "dist"
 SCRIPTS_DIR = ROOT_DIR / "scripts"
 DOCS_DIR = ROOT_DIR / "docs"
+
 
 def run_step(description, command, env=None):
     print(f"\n📦 [STEP] {description}...")
@@ -38,10 +41,11 @@ def run_step(description, command, env=None):
         print(f"   ❌ Failed: {e}")
         sys.exit(1)
 
+
 def create_archive(base_name, items, format="zip"):
     archive_path = DIST_DIR / f"{base_name}.{format}"
     print(f"\n📦 [STEP] Creating Archive: {archive_path.name}...")
-    
+
     if format == "zip":
         with zipfile.ZipFile(archive_path, "w", zipfile.ZIP_DEFLATED) as zf:
             for item_path, arc_name in items:
@@ -53,13 +57,14 @@ def create_archive(base_name, items, format="zip"):
                             zf.write(full_path, Path(arc_name) / rel_path)
                 else:
                     zf.write(item_path, arc_name)
-    else: # tar.gz
+    else:  # tar.gz
         with tarfile.open(archive_path, "w:gz") as tf:
             for item_path, arc_name in items:
-                 tf.add(item_path, arcname=arc_name)
+                tf.add(item_path, arcname=arc_name)
 
     print("   ✅ Archive created.")
     return archive_path
+
 
 def render_template(src: Path, dst: Path, vars: dict):
     """Renders a template file by replacing @KEY@ with value."""
@@ -69,6 +74,7 @@ def render_template(src: Path, dst: Path, vars: dict):
         text = text.replace(f"@{k}@", str(v))
     dst.write_text(text, encoding="utf-8")
     print("   ✅ Done.")
+
 
 def main():
     parser = argparse.ArgumentParser(description="Yamlr Packager")
@@ -81,16 +87,13 @@ def main():
     DIST_DIR.mkdir()
 
     # 1. Generate Man Pages
-    run_step(
-        "Generating Man Pages", 
-        [sys.executable, str(DOCS_DIR / "scripts" / "generate_man_pages.py")]
-    )
+    run_step("Generating Man Pages", [sys.executable, str(DOCS_DIR / "scripts" / "generate_man_pages.py")])
 
     # 2. Build Binary
     build_cmd = [sys.executable, str(SCRIPTS_DIR / "build_nuitka.py")]
     if args.pro:
         build_cmd.append("--pro")
-    
+
     # Pass environment variables correctly
     env = os.environ.copy()
     run_step("Compiling Native Binary", build_cmd, env=env)
@@ -98,13 +101,13 @@ def main():
     # 3. Define Archive Contents
     app_name = "yamlr_pro" if args.pro else "yamlr"
     binary_name = f"{app_name}.exe" if sys.platform == "win32" else app_name
-    
+
     # Determine OS/Arch for naming
     os_name = platform.system().lower()
     machine = platform.machine().lower()
     version = get_version()
     archive_name = f"{app_name}-{version}-{os_name}-{machine}"
-    
+
     # 3.5 Render Manifest Templates
     template_vars = {"VERSION": version}
     for t_name in ["yamlr.nuspec", "yamlr.rb", "install.ps1", "install.sh"]:
@@ -118,7 +121,7 @@ def main():
         (DOCS_DIR / "man" / "man1", "man/man1"),
         (ROOT_DIR / "README.md", "README.md"),
     ]
-    
+
     if (ROOT_DIR / "LICENSE").exists():
         items_to_archive.append((ROOT_DIR / "LICENSE", "LICENSE"))
 
@@ -127,6 +130,7 @@ def main():
     create_archive(archive_name, items_to_archive, format=archive_format)
 
     print(f"\n✨ Packaging Complete! Artifacts in {DIST_DIR}")
+
 
 if __name__ == "__main__":
     main()

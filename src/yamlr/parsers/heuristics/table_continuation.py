@@ -7,10 +7,12 @@ Ported from legacy KubeCuro for high-gravity healing.
 """
 
 from __future__ import annotations
-from typing import List, TYPE_CHECKING
+
+from typing import TYPE_CHECKING, List
 
 if TYPE_CHECKING:
     from yamlr.models import Shard
+
 
 class TableContinuationHeuristic:
     """
@@ -21,12 +23,7 @@ class TableContinuationHeuristic:
     """
 
     @staticmethod
-    def is_continuation(
-        previous_shards: List[Shard],
-        indent: int,
-        is_list: bool,
-        is_doc: bool
-    ) -> bool:
+    def is_continuation(previous_shards: List[Shard], indent: int, is_list: bool, is_doc: bool) -> bool:
         """
         Determines if the current line is a continuation of the previous list item.
 
@@ -44,7 +41,7 @@ class TableContinuationHeuristic:
 
         last_shard = previous_shards[-1]
 
-        # Heuristic: Previous was a list item, current has identical indent, 
-        # but current lacks its own bullet. This is often a "Table Row" 
+        # Heuristic: Previous was a list item, current has identical indent,
+        # but current lacks its own bullet. This is often a "Table Row"
         # in legacy ConfigMaps.
         return last_shard.is_list_item and indent == last_shard.indent

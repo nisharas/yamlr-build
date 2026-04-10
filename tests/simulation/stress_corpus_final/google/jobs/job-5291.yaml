@@ -1,0 +1,28 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: google-job-5291
+  namespace: prod
+  uid: "uid-job-5291"
+spec:
+  template:
+    spec:
+      containers:
+      - name: worker
+        image: gcr.io/google-containers/worker:v1
+      restartPolicy: OnFailure
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: google-job-5291-pod
+  namespace: prod
+  ownerReferences:
+  - apiVersion: batch/v1
+    kind: Job
+    name: google-job-5291
+    uid: "uid-job-5291"
+spec:
+  containers:
+  - name: worker
+    image: gcr.io/google-containers/worker:v1

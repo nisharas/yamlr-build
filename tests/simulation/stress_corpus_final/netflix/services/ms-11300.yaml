@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-11300
+  labels:
+    app: ms-11300
+    dependency: ms-11301
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-11300
+  template:
+    metadata:
+      labels:
+        app: ms-11300
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-11301

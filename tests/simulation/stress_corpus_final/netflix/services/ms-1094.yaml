@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-1094
+  labels:
+    app: ms-1094
+    dependency: ms-1095
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-1094
+  template:
+    metadata:
+      labels:
+        app: ms-1094
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-1095

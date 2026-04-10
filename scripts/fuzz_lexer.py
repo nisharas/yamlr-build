@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 #!/usr/bin/env python3
 """
 YAMLR LEXER FUZZER
@@ -33,9 +34,7 @@ def run_fuzz():
         console.print("[red]No corpus files found![/red]")
         return
 
-    console.print(
-        f"[bold cyan]🚀 Starting Fuzz Test on {len(files)} files...[/bold cyan]"
-    )
+    console.print(f"[bold cyan]🚀 Starting Fuzz Test on {len(files)} files...[/bold cyan]")
 
     lexer = YamlrLexer()
     results = []
@@ -65,15 +64,11 @@ def run_fuzz():
                     if s.key == "country" and s.value != "NO":
                         status = "WARN (Norway)"
                         norway_issues += 1
-                        console.print(
-                            f"[yellow]⚠️ Norway Problem Detected: 'country' parsed as {s.value!r}[/yellow]"
-                        )
+                        console.print(f"[yellow]⚠️ Norway Problem Detected: 'country' parsed as {s.value!r}[/yellow]")
                     elif s.key == "on_flag" and s.value != "ON":
                         status = "WARN (Norway)"
                         norway_issues += 1
-                        console.print(
-                            f"[yellow]⚠️ Norway Problem Detected: 'on_flag' parsed as {s.value!r}[/yellow]"
-                        )
+                        console.print(f"[yellow]⚠️ Norway Problem Detected: 'on_flag' parsed as {s.value!r}[/yellow]")
 
             results.append(
                 {
@@ -128,9 +123,7 @@ def run_fuzz():
     console.print(table)
 
     if crashes > 0:
-        console.print(
-            f"\n[bold red]❌ Fuzzing Failed: {crashes} crashes detected.[/bold red]"
-        )
+        console.print(f"\n[bold red]❌ Fuzzing Failed: {crashes} crashes detected.[/bold red]")
         sys.exit(1)
     elif norway_issues > 0:
         console.print(
@@ -138,9 +131,7 @@ def run_fuzz():
         )
         sys.exit(0)
     else:
-        console.print(
-            "\n[bold green]✅ Fuzzing Complete: 0 Crashes, 0 Norway Issues.[/bold green]"
-        )
+        console.print("\n[bold green]✅ Fuzzing Complete: 0 Crashes, 0 Norway Issues.[/bold green]")
         sys.exit(0)
 
 

@@ -5,7 +5,7 @@ Yamlr DISK-BACKED INDEX
 Provides a memory-efficient SQLite-backed indexing strategy for ultra-scale
 Kubernetes repositories (>100k manifests).
 
-Why: To eliminate OOM crashes in the master process by avoiding the collection 
+Why: To eliminate OOM crashes in the master process by avoiding the collection
      of all manifest identities into a single Python list.
 """
 
@@ -14,18 +14,19 @@ import logging
 import os
 import sqlite3
 import tempfile
-from typing import TYPE_CHECKING, Dict, Generator, List, Optional, Set
+from typing import TYPE_CHECKING, Any, Dict, Generator, List, Optional, Set, Union
 
 if TYPE_CHECKING:
     from yamlr.models import ManifestIdentity
 
 logger = logging.getLogger("yamlr.analyzer.disk_index")
 
+
 class DiskIndex:
     """
     SQLite-backed index for resource lookup.
     """
-    
+
     def __init__(self, db_path: Optional[str] = None):
         if db_path is None:
             self.temp_dir = tempfile.TemporaryDirectory(prefix="yamlr_index_")
@@ -33,65 +34,90 @@ class DiskIndex:
         else:
             self.db_path = db_path
             self.temp_dir = None
-            
+
         self.conn = sqlite3.connect(self.db_path)
         self.cursor = self.conn.cursor()
         self._init_db()
-        
+
     def _init_db(self):
         self.cursor.execute("PRAGMA journal_mode=WAL")
         self.cursor.execute("PRAGMA synchronous=OFF")
+
+        # [SCHEMA-GUARD] Audit existing table for 'payload' column
+        self.cursor.execute("PRAGMA table_info(resources)")
+        columns = [row[1] for row in self.cursor.fetchall()]
+        if columns and "payload" not in columns:
+            logger.info("🛠️  Outdated DiskIndex schema detected. Purging and resyncing...")
+            self.cursor.execute("DROP TABLE resources")
+
         self.cursor.execute("CREATE TABLE IF NOT EXISTS resources (kind TEXT, namespace TEXT, name TEXT, payload TEXT)")
         self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_lookup ON resources (kind, namespace, name)")
         self.conn.commit()
-        
+
     def clear(self):
         """Removes all entries from the index."""
         self.cursor.execute("DELETE FROM resources")
         self.conn.commit()
-        
+
     def add_identity(self, identity: "ManifestIdentity"):
         """Adds a complete identity to the disk index."""
         payload = json.dumps(identity.to_dict())
         self.cursor.execute(
-            "INSERT INTO resources VALUES (?, ?, ?, ?)", 
-            (identity.kind, identity.namespace or "default", identity.name, payload)
+            "INSERT INTO resources VALUES (?, ?, ?, ?)",
+            (identity.kind, identity.namespace or "default", identity.name, payload),
         )
-        
-    def add_all(self, identities: List["ManifestIdentity"]):
+
+    def add_all(self, identities: List[Union["ManifestIdentity", Dict[str, Any]]]):
         """Batch inserts multiple identities with full payloads."""
-        data = [
-            (i.kind, i.namespace or "default", i.name, json.dumps(i.to_dict())) 
-            for i in identities
-        ]
-        self.cursor.executemany("INSERT INTO resources VALUES (?, ?, ?, ?)", data)
-        self.conn.commit()
+        from yamlr.models import ManifestIdentity
+
+        processed_data = []
+        for i in identities:
+            if isinstance(i, ManifestIdentity):
+                kind = i.kind
+                ns = i.namespace or "default"
+                name = i.name
+                payload = json.dumps(i.to_dict())
+            elif isinstance(i, dict):
+                kind = i.get("kind")
+                ns = i.get("namespace") or "default"
+                name = i.get("name")
+                payload = json.dumps(i)
+            else:
+                continue
+
+            if kind and name:
+                processed_data.append((kind, ns, name, payload))
+
+        if processed_data:
+            self.cursor.executemany("INSERT INTO resources VALUES (?, ?, ?, ?)", processed_data)
+            self.conn.commit()
 
     def get_all(self) -> Generator["ManifestIdentity", None, None]:
         """Retrieves all identities as a generator of ManifestIdentity objects."""
         from yamlr.models import ManifestIdentity
+
         self.cursor.execute("SELECT payload FROM resources")
         while True:
             row = self.cursor.fetchone()
             if row is None:
                 break
             yield ManifestIdentity.from_dict(json.loads(row[0]))
-        
+
     def commit(self):
         """Finalizes the index."""
         self.conn.commit()
-        
+
     def exists(self, kind: str, namespace: str, name: str) -> bool:
         """Checks if a resource exists in the index."""
         self.cursor.execute(
-            "SELECT 1 FROM resources WHERE kind=? AND namespace=? AND name=? LIMIT 1",
-            (kind, namespace, name)
+            "SELECT 1 FROM resources WHERE kind=? AND namespace=? AND name=? LIMIT 1", (kind, namespace, name)
         )
         return self.cursor.fetchone() is not None
 
     def get_filenames(self) -> List[str]:
         """Retrieves list of files indexed (legacy placeholder)."""
-        self.cursor.execute("SELECT DISTINCT kind FROM resources") # Kind used as proxy if file_path missing
+        self.cursor.execute("SELECT DISTINCT kind FROM resources")  # Kind used as proxy if file_path missing
         return [r[0] for r in self.cursor.fetchall()]
 
     def close(self):
@@ -102,7 +128,7 @@ class DiskIndex:
 
     def __enter__(self):
         return self
-        
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
 

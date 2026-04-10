@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-1
+  labels:
+    app: ms-1
+    dependency: ms-2
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-1
+  template:
+    metadata:
+      labels:
+        app: ms-1
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-2

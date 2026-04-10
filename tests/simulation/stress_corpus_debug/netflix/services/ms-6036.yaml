@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-6036
+  labels:
+    app: ms-6036
+    dependency: ms-6037
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-6036
+  template:
+    metadata:
+      labels:
+        app: ms-6036
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-6037

@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-4289
+  labels:
+    app: ms-4289
+    dependency: ms-4290
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-4289
+  template:
+    metadata:
+      labels:
+        app: ms-4289
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-4290

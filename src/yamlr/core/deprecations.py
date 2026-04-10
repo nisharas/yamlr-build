@@ -11,8 +11,9 @@ Why: Version intelligence is a core Safety Engine pillar.
 """
 
 from __future__ import annotations
-import logging
+
 import json
+import logging
 import os
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
@@ -21,14 +22,16 @@ logger = logging.getLogger("yamlr.deprecations")
 
 __all__ = ["DeprecationInfo", "DeprecationChecker"]
 
+
 @dataclass(frozen=True)
 class DeprecationInfo:
     """
     Metadata describing a deprecated or removed Kubernetes API.
 
-    Why: Encapsulates regulatory versioning data used by both the 
+    Why: Encapsulates regulatory versioning data used by both the
          analyzer (for detection) and the UI (for remediation advice).
     """
+
     deprecated_api: str
     replacement_api: str
     deprecated_in_version: str
@@ -37,6 +40,7 @@ class DeprecationInfo:
     severity: str  # WARNING | REMOVED
     migration_notes: str
     strategy: str = "NONE"
+
 
 class DeprecationChecker:
     """Kubernetes API deprecation and field-level change detector.
@@ -59,7 +63,7 @@ class DeprecationChecker:
             data_path = os.path.join(os.path.dirname(__file__), "..", "data", "k8s_deprecations.json")
             with open(data_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                
+
                 # Load APIs
                 for item in data.get("apis", []):
                     # Default values for missing fields to ensure compatibility
@@ -74,15 +78,15 @@ class DeprecationChecker:
                             kind=kind,
                             severity=item.get("severity", "WARNING"),
                             migration_notes=item.get("migration_notes", ""),
-                            strategy=item.get("strategy", "NONE")
+                            strategy=item.get("strategy", "NONE"),
                         )
-                
+
                 # Load Fields
                 fields_data = data.get("fields", {})
                 for kind, paths in fields_data.items():
                     for path, info in paths.items():
                         self._deprecated_fields[(kind, path)] = info
-                        
+
         except (IOError, json.JSONDecodeError) as e:
             logger.error(f"Failed to load deprecation data: {e}")
 
@@ -113,16 +117,28 @@ class DeprecationChecker:
         for info in self._deprecated_apis.values():
             removed_version = info.removed_in_version
             if info.severity == "REMOVED":
-                if (self._compare_versions(removed_version, from_version) > 0 and 
-                    self._compare_versions(removed_version, to_version) <= 0):
+                if (
+                    self._compare_versions(removed_version, from_version) > 0
+                    and self._compare_versions(removed_version, to_version) <= 0
+                ):
                     removals.append(info)
             elif info.severity == "WARNING":
                 dep_version = info.deprecated_in_version
-                if (self._compare_versions(dep_version, from_version) > 0 and 
-                    self._compare_versions(dep_version, to_version) <= 0):
+                if (
+                    self._compare_versions(dep_version, from_version) > 0
+                    and self._compare_versions(dep_version, to_version) <= 0
+                ):
                     warnings.append(info)
 
-        risk_level = "HIGH" if len(removals) >= 3 else "MEDIUM" if len(removals) >= 1 else "LOW" if len(warnings) >= 1 else "NONE"
+        risk_level = (
+            "HIGH"
+            if len(removals) >= 3
+            else "MEDIUM"
+            if len(removals) >= 1
+            else "LOW"
+            if len(warnings) >= 1
+            else "NONE"
+        )
 
         return {
             "from_version": from_version,
@@ -130,8 +146,12 @@ class DeprecationChecker:
             "risk_level": risk_level,
             "removal_count": len(removals),
             "warning_count": len(warnings),
-            "removals": [{"api": r.deprecated_api, "kind": r.kind, "removed_in": r.removed_in_version} for r in removals],
-            "warnings": [{"api": w.deprecated_api, "kind": w.kind, "deprecated_in": w.deprecated_in_version} for w in warnings],
+            "removals": [
+                {"api": r.deprecated_api, "kind": r.kind, "removed_in": r.removed_in_version} for r in removals
+            ],
+            "warnings": [
+                {"api": w.deprecated_api, "kind": w.kind, "deprecated_in": w.deprecated_in_version} for w in warnings
+            ],
         }
 
     def _compare_versions(self, v1: str, v2: str) -> int:

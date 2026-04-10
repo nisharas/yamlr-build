@@ -8,12 +8,16 @@ Extracts:
 """
 
 from __future__ import annotations
+
 from typing import List
+
 from yamlr.models import ManifestIdentity, Shard
-__all__ = ['MountExtractor']
+
+__all__ = ["MountExtractor"]
 
 
 from .base_extractor import BaseMetadataExtractor
+
 
 class MountExtractor(BaseMetadataExtractor):
     """Extracts VolumeMount information from Pod specs."""
@@ -34,7 +38,8 @@ class MountExtractor(BaseMetadataExtractor):
                 return False
 
             if shard.is_list_item:
-                if identity.volume_mounts is None: identity.volume_mounts = []
+                if identity.volume_mounts is None:
+                    identity.volume_mounts = []
                 identity.volume_mounts.append({})
 
             if not identity.volume_mounts:
@@ -44,7 +49,7 @@ class MountExtractor(BaseMetadataExtractor):
                 identity.volume_mounts[-1]["name"] = val
             elif key == "mountPath":
                 identity.volume_mounts[-1]["path"] = val
-            
+
             return True
 
         return False

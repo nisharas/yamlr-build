@@ -10,14 +10,15 @@ Clinical Output requirements:
 """
 
 import os
-import sys
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
+
 def run_simulation():
     print("Starting Argo CD 'Clinical Output' Simulation...")
-    
+
     # 1. Create a dummy broken manifest
     broken_yaml = """
 apiVersion: v1
@@ -34,7 +35,7 @@ spec:
     with tempfile.TemporaryDirectory() as tmpdir:
         manifest_path = Path(tmpdir) / "service.yaml"
         manifest_path.write_text(broken_yaml)
-        
+
         # 2. Set Argo CD Environment Variables
         env = os.environ.copy()
         env["ARGOCD_APP_NAME"] = "yamlr-integration-test"
@@ -42,18 +43,18 @@ spec:
         project_root = Path(__file__).parent.parent.parent
         src_path = str(project_root / "src")
         env["PYTHONPATH"] = f"{src_path}{os.pathsep}{env.get('PYTHONPATH', '')}"
-        
+
         # 3. Execution: yamlr heal <path>
         # We use 'python -m yamlr.cli.main' to ensure we use the current source
         cmd = [sys.executable, "-m", "yamlr.cli.main", "heal", str(manifest_path)]
-        
+
         print(f"Executing: {' '.join(cmd)}")
         result = subprocess.run(cmd, env=env, capture_output=True, text=True)
-        
+
         # 4. Verification
         stdout = result.stdout
         stderr = result.stderr
-        
+
         print("\n--- STDOUT ANALYSIS ---")
         if not stdout.strip():
             print("FAIL: stdout is empty. Expected healed manifest.")
@@ -62,7 +63,7 @@ spec:
                 print("PASS: Valid YAML detected in stdout.")
             else:
                 print("FAIL: stdout does not look like a Kubernetes manifest.")
-            
+
             # Check for escape codes or Rich noise
             if "[" in stdout and "m" in stdout:
                 print("FAIL: ANSI escape codes detected in stdout (Output is not plain).")
@@ -77,9 +78,10 @@ spec:
 
         # 5. Exit Code Logic
         if result.returncode == 0:
-            print(f"\nPASS: Exit code 0 (Success)")
+            print("\nPASS: Exit code 0 (Success)")
         else:
             print(f"\nFAIL: Exit code {result.returncode}")
+
 
 if __name__ == "__main__":
     run_simulation()

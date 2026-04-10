@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 from pathlib import Path
+
 from yamlr.core.context import HealContext
 
 __all__ = ["handle_init_command"]
@@ -37,16 +39,14 @@ def handle_init_command(console, force: bool = False):
     target = Path(".yamlr.yaml")
 
     if target.exists() and not force:
-        console.print(
-            "[yellow]⚠️  Configuration file .yamlr.yaml already exists.[/yellow]"
-        )
+        console.print("[yellow]⚠️  Configuration file .yamlr.yaml already exists.[/yellow]")
         console.print("[dim]Use --force to overwrite.[/dim]")
         return 1
 
     try:
         if target.exists() and force:
             console.print("[yellow]Overwriting existing configuration...[/yellow]")
-        
+
         # Smart Detect: Get Connected Cluster Version
         # This prevents the "Mismatched Version" warning for day-1 users
         detected_version = HealContext._get_default_cluster_version() or "v1.31"
@@ -56,16 +56,12 @@ def handle_init_command(console, force: bool = False):
         config_content = DEFAULT_CONFIG_TEMPLATE.format(cluster_version=detected_version)
 
         target.write_text(config_content, encoding="utf-8")
-        console.print(
-            f"[green]✅ Created configuration file: [bold]{target.absolute()}[/bold][/green]"
-        )
-        console.print(
-            "[dim]Tip: Edit this file to customize rule thresholds and file ignores.[/dim]"
-        )
+        console.print(f"[green]✅ Created configuration file: [bold]{target.absolute()}[/bold][/green]")
+        console.print("[dim]Tip: Edit this file to customize rule thresholds and file ignores.[/dim]")
         console.print(
             "[bold magenta]🚀 Ready to go![/bold magenta] Run [cyan]yamlr demo[/cyan] to test your setup with samples."
         )
-        
+
         # 3. Smart Onboarding Suggestions
         _suggest_integrations(console)
 
@@ -81,7 +77,7 @@ def _suggest_integrations(console):
     Detects the environment and suggests high-value integrations.
     """
     cwd = Path.cwd()
-    
+
     # 1. Pre-Commit
     if (cwd / ".pre-commit-config.yaml").exists():
         console.print("\n[bold cyan]⚡ Detected pre-commit configuration[/bold cyan]")
@@ -103,7 +99,7 @@ def _suggest_integrations(console):
             "[dim]"
             '  "yaml.schemas": {\n'
             '    "https://raw.githubusercontent.com/yannh/kubernetes-json-schema/master/v1.31.0-standalone-strict/all.json": "/*.yaml"\n'
-            '  }\n'
+            "  }\n"
             "[/dim]"
         )
 
@@ -111,10 +107,4 @@ def _suggest_integrations(console):
     if (cwd / ".github" / "workflows").is_dir():
         console.print("\n[bold white]🤖 Detected GitHub Actions[/bold white]")
         console.print("Run Yamlr in CI with the official action:")
-        console.print(
-            "[dim]"
-            "  - name: Run Yamlr Guardrails\n"
-            "    uses: yamlr/yamlr-action@v1\n"
-            "[/dim]"
-        )
-
+        console.print("[dim]  - name: Run Yamlr Guardrails\n    uses: yamlr/yamlr-action@v1\n[/dim]")

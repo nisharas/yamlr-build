@@ -8,14 +8,16 @@ Extracts:
 """
 
 from __future__ import annotations
+
 from typing import List
 
 from yamlr.models import ManifestIdentity, Shard
-__all__ = ['SelectorExtractor']
 
+__all__ = ["SelectorExtractor"]
 
 
 from .base_extractor import BaseMetadataExtractor
+
 
 class SelectorExtractor(BaseMetadataExtractor):
     """Extracts selector fields for Service/Deployment matching."""

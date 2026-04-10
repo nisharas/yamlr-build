@@ -3,15 +3,20 @@ MANUAL COMMAND - Local Documentation Viewer
 -------------------------------------------
 Renders the full USER_GUIDE.md or specific command manuals directly in the terminal.
 """
+
 from __future__ import annotations
-import os
+
 import glob
+import os
+
 from rich.markdown import Markdown
 from rich.table import Table
-from yamlr.core.entrypoints.display import print_custom_header
-from yamlr.core.entrypoints.base import get_console
+
 from yamlr.core.bridge import YamlrBridge
-__all__ = ['handle_manual_command', 'print_toc']
+from yamlr.core.entrypoints.base import get_console
+from yamlr.core.entrypoints.display import print_custom_header
+
+__all__ = ["handle_manual_command", "print_toc"]
 
 
 def handle_manual_command(args):
@@ -22,13 +27,13 @@ def handle_manual_command(args):
     invoked_as = YamlrBridge.get_invoked_command()
     is_pro = YamlrBridge.is_pro_enabled()
     topic = getattr(args, "topic", None)
-    
+
     # 1. Base Directory Discovery
     # Priority: ENV > Standard Discovery
     from yamlr.core.utils import resolve_bundled_asset
-    
+
     docs_root = os.getenv("Yamlr_DOCS_PATH")
-    
+
     if not docs_root or not os.path.exists(docs_root):
         # Use robust discovery for the User Guide and derive the root
         ug_path = resolve_bundled_asset("docs/USER_GUIDE.md")
@@ -50,7 +55,7 @@ def handle_manual_command(args):
     if topic:
         # Normalize topic name (dashes to underscores) for file matching
         topic = topic.replace("-", "_")
-        
+
         # Special Case: config -> CONFIGURATION.md
         if topic == "config":
             config_guide = os.path.join(docs_root, "CONFIGURATION.md")
@@ -79,23 +84,30 @@ def handle_manual_command(args):
 
     # 3. Rendering
     print_custom_header(invoked_as, is_pro, center=True)
-    
+
     try:
         with open(target_file, "r", encoding="utf-8") as f:
             content = f.read()
         console.print(Markdown(content))
-        
+
         # If it was the main user guide, add a nudge to explore topics
         if not topic:
-            console.print("[bold cyan]💡 TIP:[/bold cyan] View specific command manuals using: [bold]yamlr manual <command>[/bold]")
-            console.print("[dim](e.g., yamlr manual scan, yamlr manual config, yamlr manual rules, yamlr manual heal)[/dim]")
-            console.print("[bold cyan]🔎 DISCOVERY:[/bold cyan] For deep dives into specific rules or scaling, run: [bold]yamlr explain config/discovery[/bold]\n")
-            
+            console.print(
+                "[bold cyan]💡 TIP:[/bold cyan] View specific command manuals using: [bold]yamlr manual <command>[/bold]"
+            )
+            console.print(
+                "[dim](e.g., yamlr manual scan, yamlr manual config, yamlr manual rules, yamlr manual heal)[/dim]"
+            )
+            console.print(
+                "[bold cyan]🔎 DISCOVERY:[/bold cyan] For deep dives into specific rules or scaling, run: [bold]yamlr explain config/discovery[/bold]\n"
+            )
+
     except Exception as e:
         console.print(f"[red]❌ Error reading documentation: {e}[/red]")
         return 1
 
     return 0
+
 
 def print_toc(console, cli_docs_dir):
     """Prints a table of available manual topics."""
@@ -109,24 +121,33 @@ def print_toc(console, cli_docs_dir):
     table.add_column("Command", style="green")
 
     # [EPIC-13] Strategic Tiering: Define Pro/Executive commands
-    PRO_COMMANDS = {"secure", "dna", "evidence", "roi", "stats", "audit", "migrate", "graph", "idp_export", "pulse", "mcp"}
+    PRO_COMMANDS = {
+        "secure",
+        "dna",
+        "evidence",
+        "roi",
+        "stats",
+        "audit",
+        "graph",
+        "idp_export",
+        "pulse",
+        "mcp",
+        "rollback",
+    }
 
     # Get all yamlr_*.md files
     files = glob.glob(os.path.join(cli_docs_dir, "yamlr_*.md"))
     topics = []
     for f in sorted(files):
         name = os.path.basename(f).replace("yamlr_", "").replace(".md", "")
-        if name not in ["manual"]: # manual.md is meta
+        if name not in ["manual"]:  # manual.md is meta
             topics.append(name)
-            
+
     if "config" not in topics:
         topics.append("config")
-    
+
     # Tiered Sorting: Free first, then Pro
-    sorted_topics = sorted(
-        topics,
-        key=lambda x: (x in PRO_COMMANDS, x)
-    )
+    sorted_topics = sorted(topics, key=lambda x: (x in PRO_COMMANDS, x))
 
     # Grid layout for the TOC
     for t in sorted_topics:

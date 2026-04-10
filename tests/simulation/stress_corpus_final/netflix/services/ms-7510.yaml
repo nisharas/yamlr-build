@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-7510
+  labels:
+    app: ms-7510
+    dependency: ms-7511
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-7510
+  template:
+    metadata:
+      labels:
+        app: ms-7510
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-7511

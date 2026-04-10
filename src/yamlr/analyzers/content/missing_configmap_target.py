@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Set
 from yamlr.analyzers.base import AnalysisResult, BaseAnalyzer
 from yamlr.analyzers.rules import Rules
 
-__all__ = ['MissingConfigMapTargetAnalyzer']
+__all__ = ["MissingConfigMapTargetAnalyzer"]
 
 
 class MissingConfigMapTargetAnalyzer(BaseAnalyzer):
@@ -13,11 +13,11 @@ class MissingConfigMapTargetAnalyzer(BaseAnalyzer):
     Detect references to ConfigMaps (envFrom/env/volumes) that
     are not defined in the current manifest set.
     """
-   
+
     @property
     def name(self) -> str:
         """Returns the internal name of the missing ConfigMap target analyzer.
-        
+
         Why: To uniquely identify the analyzer in reports and rule registries.
         """
         return "missing-configmap-target"
@@ -25,16 +25,16 @@ class MissingConfigMapTargetAnalyzer(BaseAnalyzer):
     @property
     def analyzer_type(self) -> str:
         """Returns the type category of the analyzer.
-        
+
         Why: To group analyzers by their operational domain (e.g., content, structural).
         """
         return "content"
 
-    def analyze(self, docs: List[Dict[str, Any]], **kwargs) -> List[AnalysisResult]:
-        """Performs cross-resource analysis to detect missing ConfigMap references.
-        
-        Why: To identify potential runtime failures before deployment into a cluster.
-        """
+    def analyze(self, docs: Any, **kwargs) -> List[AnalysisResult]:
+        """Performs cross-resource analysis to detect missing ConfigMap references."""
+        if not isinstance(docs, list):
+            return []
+
         results: List[AnalysisResult] = []
         defined_cm_names = self._collect_configmaps(docs)
 
@@ -47,9 +47,7 @@ class MissingConfigMapTargetAnalyzer(BaseAnalyzer):
     def _is_workload(self, doc: Dict[str, Any]) -> bool:
         """Determines if a document represents a Kubernetes workload."""
         kind = (doc.get("kind") or "").lower()
-        return kind in {
-            "deployment", "statefulset", "daemonset", "job", "cronjob", "replicaset"
-        }
+        return kind in {"deployment", "statefulset", "daemonset", "job", "cronjob", "replicaset"}
 
     def _analyze_workload(self, doc: Dict[str, Any], defined_cm_names: Set[str], results: List[AnalysisResult]):
         """Helper to analyze a single workload document."""
@@ -79,7 +77,7 @@ class MissingConfigMapTargetAnalyzer(BaseAnalyzer):
 
     def _collect_configmaps(self, docs: List[Dict[str, Any]]) -> Set[str]:
         """Scans the manifest set to index all defined ConfigMap names.
-        
+
         Why: To provide a lookup table for validating whether a reference has a corresponding target.
         """
         names: Set[str] = set()
@@ -99,20 +97,17 @@ class MissingConfigMapTargetAnalyzer(BaseAnalyzer):
         field_path: str,
     ) -> AnalysisResult:
         """Factory method for creating structured results for missing ConfigMap findings.
-        
+
         Why: To ensure consistent reporting and actionable feedback for the user.
         """
         meta = doc.get("metadata") or {}
         obj_name = meta.get("name", "<unknown>")
 
-        message = (
-            f'ConfigMap "{cm_name}" is not defined in the supplied manifests '
-            f'(referenced at {field_path}).'
-        )
+        message = f'ConfigMap "{cm_name}" is not defined in the supplied manifests (referenced at {field_path}).'
         suggestion = (
             f'Create a ConfigMap named "{cm_name}" in this file/set, or update the '
-            f'reference to an existing ConfigMap, or mark it as optional: true '
-            f'if it is intentionally absent.'
+            f"reference to an existing ConfigMap, or mark it as optional: true "
+            f"if it is intentionally absent."
         )
 
         return AnalysisResult(
@@ -123,10 +118,9 @@ class MissingConfigMapTargetAnalyzer(BaseAnalyzer):
             resource_name=obj_name,
             resource_kind=doc.get("kind", ""),
             file_path="unknown",
-            line_number=0,
+            line_no=0,
             suggestion=suggestion,
         )
-
 
     def _check_container_envfrom(
         self,
@@ -136,7 +130,7 @@ class MissingConfigMapTargetAnalyzer(BaseAnalyzer):
         results: List[AnalysisResult],
     ) -> None:
         """Inspects envFrom blocks for missing ConfigMap references.
-        
+
         Why: To catch bulk environment variable injection failures.
         """
         env_from = container.get("envFrom")
@@ -153,10 +147,7 @@ class MissingConfigMapTargetAnalyzer(BaseAnalyzer):
             if not isinstance(name, str) or not name:
                 continue
             if name not in defined_cm_names:
-                field_path = (
-                    f"spec.template.spec.containers[*].envFrom[{idx}]."
-                    f"configMapRef.name"
-                )
+                field_path = f"spec.template.spec.containers[*].envFrom[{idx}].configMapRef.name"
                 results.append(self._make_result(doc, name, field_path))
 
     def _check_container_env(
@@ -167,7 +158,7 @@ class MissingConfigMapTargetAnalyzer(BaseAnalyzer):
         results: List[AnalysisResult],
     ) -> None:
         """Inspects env blocks for missing ConfigMapKeyRef references.
-        
+
         Why: To catch individual environment variable source failures.
         """
         env = container.get("env")
@@ -187,10 +178,7 @@ class MissingConfigMapTargetAnalyzer(BaseAnalyzer):
             if not isinstance(name, str) or not name:
                 continue
             if name not in defined_cm_names:
-                field_path = (
-                    f"spec.template.spec.containers[*].env[{idx}]."
-                    f"valueFrom.configMapKeyRef.name"
-                )
+                field_path = f"spec.template.spec.containers[*].env[{idx}].valueFrom.configMapKeyRef.name"
                 results.append(self._make_result(doc, name, field_path))
 
     def _check_volumes(
@@ -201,7 +189,7 @@ class MissingConfigMapTargetAnalyzer(BaseAnalyzer):
         results: List[AnalysisResult],
     ) -> None:
         """Inspects pod volumes for missing ConfigMap mounts.
-        
+
         Why: To catch filesystem-based configuration binding failures.
         """
         for idx, vol in enumerate(volumes):
@@ -214,7 +202,5 @@ class MissingConfigMapTargetAnalyzer(BaseAnalyzer):
             if not isinstance(name, str) or not name:
                 continue
             if name not in defined_cm_names:
-                field_path = (
-                    f"spec.template.spec.volumes[{idx}].configMap.name"
-                )
+                field_path = f"spec.template.spec.volumes[{idx}].configMap.name"
                 results.append(self._make_result(doc, name, field_path))

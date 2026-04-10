@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-5493
+  labels:
+    app: ms-5493
+    dependency: ms-5494
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-5493
+  template:
+    metadata:
+      labels:
+        app: ms-5493
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-5494

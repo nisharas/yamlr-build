@@ -4,7 +4,7 @@ from typing import Any, Dict, List
 
 from yamlr.analyzers.base import AnalysisResult, BaseAnalyzer
 
-__all__ = ['SecurityAnalyzer']
+__all__ = ["SecurityAnalyzer"]
 
 
 class SecurityAnalyzer(BaseAnalyzer):
@@ -12,29 +12,28 @@ class SecurityAnalyzer(BaseAnalyzer):
 
     @property
     def name(self) -> str:
-        """Returns the unique identifier for the security analyzer.
-        """
+        """Returns the unique identifier for the security analyzer."""
         return "security-check"
 
     @property
     def analyzer_type(self) -> str:
-        """Returns the type of analysis performed (content validation).
-        """
+        """Returns the type of analysis performed (content validation)."""
         return "content"
 
-    def analyze(
-        self, resources: List[Dict[str, Any]], **kwargs
-    ) -> List[AnalysisResult]:
+    def analyze(self, resources: List[Dict[str, Any]], **kwargs) -> List[AnalysisResult]:
         """Analyzes resources for security baseline compliance.
-        
+
         Why: Integrates the centralized hardening engine into the scan pipeline.
         """
         from yamlr.core.engine.security import HardeningEngine
-        
+
         results: List[AnalysisResult] = []
         engine = HardeningEngine(kwargs.get("allowed_host_paths"))
-        
+
         for resource in resources:
+            if not isinstance(resource, dict):
+                continue
+
             findings = engine.scan_manifest(resource)
             if not findings:
                 continue
@@ -44,7 +43,7 @@ class SecurityAnalyzer(BaseAnalyzer):
 
             for f in findings:
                 rule_id = f["rule_id"]
-                
+
                 results.append(
                     AnalysisResult(
                         analyzer_name=self.name,
@@ -55,7 +54,7 @@ class SecurityAnalyzer(BaseAnalyzer):
                         resource_name=r_name,
                         resource_kind=r_kind,
                         file_path="unknown",
-                        line_number=0,
+                        line_no=0,
                         # Rationale, impact, and external_url auto-fetched by AnalysisResult
                     )
                 )

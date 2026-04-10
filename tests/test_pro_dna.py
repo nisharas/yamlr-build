@@ -1,7 +1,9 @@
 import pytest
+
 from yamlr.core.pipeline import HealingPipeline
-from yamlr.models import HealConfig
 from yamlr.core.utils import get_hardened_yaml
+from yamlr.models import HealConfig
+
 
 def test_pro_width_constraint():
     """Verify that serialization width is 4096 (Pro DNA)."""
@@ -33,17 +35,16 @@ def test_validation_sampling():
         "metadata": {"name": "massive"},
         "spec": {
             "selector": {"matchLabels": {"app": "web"}},
-            "template": {
-                "metadata": {"labels": {"app": "web"}},
-                "spec": {"containers": containers}
-            }
-        }
+            "template": {"metadata": {"labels": {"app": "web"}}, "spec": {"containers": containers}},
+        },
     }
     from yamlr.validators.schema_validator import SchemaValidator
+
     validator = SchemaValidator()
     # Deep check should catch the 50 if we had a validator (just check logic here)
     sampled = validator._sample_document(doc)
     assert len(sampled["spec"]["template"]["spec"]["containers"]) == 1
+
 
 def test_dna_integrity_score_renaming():
     """Verify DNA Integrity Score calculation and naming."""
@@ -59,12 +60,7 @@ def test_dna_integrity_score_renaming():
 def test_dynamic_resource_profiles():
     """Verify dynamic resource injection with profiles."""
     raw = "apiVersion: v1\nkind: Pod\nmetadata: {name: test}\nspec: {containers: [{name: app, image: nginx}]}"
-    profiles = {
-        "app": {
-            "requests": {"cpu": "777m", "memory": "777Mi"},
-            "limits": {"cpu": "888m", "memory": "888Mi"}
-        }
-    }
+    profiles = {"app": {"requests": {"cpu": "777m", "memory": "777Mi"}, "limits": {"cpu": "888m", "memory": "888Mi"}}}
     pipeline = HealingPipeline({})
     config = HealConfig(file_path="test.yaml", enforce_limits=True, resource_profiles=profiles)
     result = pipeline.heal(raw, config)

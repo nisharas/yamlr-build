@@ -9,9 +9,11 @@ Date: 2026-03-10
 """
 
 from __future__ import annotations
+
 from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
 
 __all__ = ["ShardInterface", "HealActionInterface", "ManifestIdentityInterface"]
+
 
 @runtime_checkable
 class ShardInterface(Protocol):
@@ -30,6 +32,7 @@ class ShardInterface(Protocol):
     layout_sequence: List[Any]
     intent_tag: Optional[str]
 
+
 @runtime_checkable
 class HealActionInterface(Protocol):
     stage: str
@@ -38,8 +41,8 @@ class HealActionInterface(Protocol):
     description: str
     severity: str
 
-    def to_dict(self) -> Dict[str, Any]:
-        ...
+    def to_dict(self) -> Dict[str, Any]: ...
+
 
 @runtime_checkable
 class ManifestIdentityInterface(Protocol):
@@ -50,12 +53,9 @@ class ManifestIdentityInterface(Protocol):
     doc_index: int
     was_repaired: bool
     file_path: Optional[str]
-    
-    def is_deprecated(self) -> bool:
-        ...
-        
-    def is_complete(self) -> bool:
-        ...
-        
-    def to_dict(self) -> Dict[str, Any]:
-        ...
+
+    def is_deprecated(self) -> bool: ...
+
+    def is_complete(self) -> bool: ...
+
+    def to_dict(self) -> Dict[str, Any]: ...

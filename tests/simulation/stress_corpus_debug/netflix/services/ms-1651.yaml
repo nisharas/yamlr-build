@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-1651
+  labels:
+    app: ms-1651
+    dependency: ms-1652
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-1651
+  template:
+    metadata:
+      labels:
+        app: ms-1651
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-1652

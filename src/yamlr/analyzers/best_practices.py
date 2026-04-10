@@ -7,7 +7,7 @@ Standard Kubernetes policy checks implemented as Yamlr Analyzers.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from yamlr.analyzers.base import AnalysisResult, BaseAnalyzer
 from yamlr.analyzers.rules import Rules
@@ -16,7 +16,15 @@ from yamlr.core.k8s_utils import extract_containers
 
 logger = logging.getLogger("yamlr.analyzers.best_practices")
 
-__all__ = ['ResourceAnalyzer', 'ImageAnalyzer', 'ServiceAnalyzer', 'ProbeAnalyzer', 'NetworkPolicyAnalyzer', 'ApiDeprecationAnalyzer']
+__all__ = [
+    "ResourceAnalyzer",
+    "ImageAnalyzer",
+    "ServiceAnalyzer",
+    "ProbeAnalyzer",
+    "NetworkPolicyAnalyzer",
+    "ApiDeprecationAnalyzer",
+    "ReliabilityAnalyzer",
+]
 
 
 class ResourceAnalyzer(BaseAnalyzer):
@@ -24,23 +32,19 @@ class ResourceAnalyzer(BaseAnalyzer):
 
     @property
     def name(self) -> str:
-        """Returns the stable name of the resource analyzer.
-        """
+        """Returns the stable name of the resource analyzer."""
         return "resource-limit-check"
 
     @property
     def analyzer_type(self) -> str:
-        """Indicates this is a content-level analyzer.
-        """
+        """Indicates this is a content-level analyzer."""
         return "content"
 
-    def analyze(
-        self, resources: List[Dict[str, Any]], context: Optional[HealContext] = None, **kwargs
-    ) -> List[AnalysisResult]:
-        """Analyzes CPU and Memory specifications.
-        
-        Why: To prevent resource starvation and OOM kills in production clusters.
-        """
+    def analyze(self, resources: Any, context: Optional[HealContext] = None, **kwargs) -> List[AnalysisResult]:
+        """Analyzes CPU and Memory specifications."""
+        if not isinstance(resources, list):
+            return []
+
         results: List[AnalysisResult] = []
         # [OPTIMIZATION] Use cached container context if available
         containers = context.container_context if context else []
@@ -51,7 +55,7 @@ class ResourceAnalyzer(BaseAnalyzer):
 
         for container in containers:
             res_cfg = container.get("resources", {})
-            
+
             # Check Requests
             if not res_cfg.get("requests"):
                 results.append(
@@ -87,29 +91,31 @@ class ImageAnalyzer(BaseAnalyzer):
 
     @property
     def name(self) -> str:
-        """Returns the stable name of the image analyzer.
-        """
+        """Returns the stable name of the image analyzer."""
         return "image-tag-check"
 
     @property
     def analyzer_type(self) -> str:
-        """Indicates this is a content-level analyzer.
-        """
+        """Indicates this is a content-level analyzer."""
         return "content"
 
-    def analyze(
-        self, resources: List[Dict[str, Any]], context: Optional[HealContext] = None, **kwargs
-    ) -> List[AnalysisResult]:
-        """Validates that images are pinned to a specific tag (not 'latest').
-        
-        Why: To ensure deployment predictability and avoid rolling out untested images.
-        """
+    def analyze(self, resources: Any, context: Optional[HealContext] = None, **kwargs) -> List[AnalysisResult]:
+        """Validates that images are pinned to a specific tag (not 'latest')."""
+        if not isinstance(resources, list):
+            return []
+
         results: List[AnalysisResult] = []
         # [OPTIMIZATION] Use cached container context if available
         containers = context.container_context if context else []
         logger.debug(f"ImageAnalyzer: Found {len(containers)} containers in context")
         if not containers and resources:
             for resource in resources:
+                kind = resource.get("kind") if hasattr(resource, "get") else "Unknown"
+                name = resource.get("metadata", {}).get("name") if hasattr(resource, "get") else "Unknown"
+                # [DEBUG-V3] Trace resource ingestion
+                import sys
+                print(f"DEBUG: ImageAnalyzer auditing {kind}/{name}", file=sys.stderr)
+                
                 containers.extend(extract_containers(resource))
 
         for container in containers:
@@ -137,23 +143,19 @@ class ServiceAnalyzer(BaseAnalyzer):
 
     @property
     def name(self) -> str:
-        """Returns the stable name of the service analyzer.
-        """
+        """Returns the stable name of the service analyzer."""
         return "service-check"
 
     @property
     def analyzer_type(self) -> str:
-        """Indicates this is a content-level analyzer.
-        """
+        """Indicates this is a content-level analyzer."""
         return "content"
 
-    def analyze(
-        self, resources: List[Dict[str, Any]], **kwargs
-    ) -> List[AnalysisResult]:
-        """Checks for missing selectors in Service manifests.
-        
-        Why: To prevent orphans where traffic enters a Service but has no Pods to route to.
-        """
+    def analyze(self, resources: Any, **kwargs) -> List[AnalysisResult]:
+        """Checks for missing selectors in Service manifests."""
+        if not isinstance(resources, list):
+            return []
+
         results: List[AnalysisResult] = []
         for resource in resources:
             if resource.get("kind") != "Service":
@@ -193,23 +195,19 @@ class ProbeAnalyzer(BaseAnalyzer):
 
     @property
     def name(self) -> str:
-        """Returns the stable name of the probe analyzer.
-        """
+        """Returns the stable name of the probe analyzer."""
         return "probe-check"
 
     @property
     def analyzer_type(self) -> str:
-        """Indicates this is a content-level analyzer.
-        """
+        """Indicates this is a content-level analyzer."""
         return "content"
 
-    def analyze(
-        self, resources: List[Dict[str, Any]], context: Optional[HealContext] = None, **kwargs
-    ) -> List[AnalysisResult]:
-        """Ensures Containers have configured liveness and readiness probes.
-        
-        Why: To enable Kubernetes to automatically manage Container lifecycles and traffic readiness.
-        """
+    def analyze(self, resources: Any, context: Optional[HealContext] = None, **kwargs) -> List[AnalysisResult]:
+        """Ensures Containers have configured liveness and readiness probes."""
+        if not isinstance(resources, list):
+            return []
+
         results: List[AnalysisResult] = []
         # [OPTIMIZATION] Use cached container context if available
         containers = context.container_context if context else []
@@ -244,33 +242,139 @@ class ProbeAnalyzer(BaseAnalyzer):
                         file_path="unknown",
                     )
                 )
+
+            # [GOOGLE-SCALE] StartupProbe Enforcement
+            # Why: StartupProbes prevent slow-starting containers from being killed by liveness probes.
+            if "startupProbe" not in container:
+                results.append(
+                    AnalysisResult(
+                        analyzer_name=self.name,
+                        rule_id="reliability/missing-startup-probe",
+                        severity="INFO",
+                        message="Container is missing a startupProbe (Recommended for slow-start apps).",
+                        resource_name="unknown",
+                        resource_kind="unknown",
+                        file_path="unknown",
+                        suggestion="Add startupProbe to handle initial bootstrap latency.",
+                    )
+                )
         return results
+
+
+class ReliabilityAnalyzer(BaseAnalyzer):
+    """Enforces SRE-level reliability and termination grace periods."""
+
+    @property
+    def name(self) -> str:
+        return "reliability-audit"
+
+    @property
+    def analyzer_type(self) -> str:
+        return "content"
+
+    def analyze(self, resources: Any, **kwargs) -> List[AnalysisResult]:
+        """Audits manifests for SRE-critical reliability settings."""
+        if not isinstance(resources, list):
+            return []
+
+        results = []
+        for resource in resources:
+            if resource.get("kind") not in ["Pod", "Deployment", "StatefulSet", "DaemonSet"]:
+                continue
+
+            spec = resource.get("spec", {})
+            if resource.get("kind") != "Pod":
+                spec = spec.get("template", {}).get("spec", {})
+
+            # 1. Termination Grace Period
+            # Why: GKE/EKS recommend >= 30s to allow proper connection draining.
+            grace = spec.get("terminationGracePeriodSeconds", 30)
+            if grace < 30:
+                results.append(
+                    AnalysisResult(
+                        analyzer_name=self.name,
+                        severity="WARNING",
+                        message=f"Termination Grace Period too low ({grace}s). Recommended: >= 30s.",
+                        resource_name=resource.get("metadata", {}).get("name", "unknown"),
+                        resource_kind=resource.get("kind", "pod"),
+                        file_path="scan",
+                        suggestion="Set terminationGracePeriodSeconds: 30",
+                        rule_id="reliability/grace-period",
+                    )
+                )
+
+            # 2. [SRE-01] Readiness Gates
+            # Why: Essential for external LB readiness (GKE Ingress, AWS ALB/NLB).
+            if not spec.get("readinessGates"):
+                # Check if likely using an external service
+                results.append(
+                    AnalysisResult(
+                        analyzer_name=self.name,
+                        severity="INFO",
+                        message="Missing readinessGates. Recommended for workloads using external Cloud LBs.",
+                        resource_name=resource.get("metadata", {}).get("name", "unknown"),
+                        resource_kind=resource.get("kind", "pod"),
+                        file_path="scan",
+                        suggestion="Add readinessGates for cloud-provider integration.",
+                        rule_id="reliability/missing-readiness-gates",
+                    )
+                )
+
+            # 3. [SRE-02] Topology Spread Constraints
+            # Why: Prevents single-point-of-failure by distributing Pods across zones/nodes.
+            if not spec.get("topologySpreadConstraints"):
+                results.append(
+                    AnalysisResult(
+                        analyzer_name=self.name,
+                        severity="WARNING",
+                        message="Missing topologySpreadConstraints (HA Risk).",
+                        resource_name=resource.get("metadata", {}).get("name", "unknown"),
+                        resource_kind=resource.get("kind", "pod"),
+                        file_path="scan",
+                        suggestion="Implement topologySpreadConstraints for multi-zone distribution.",
+                        rule_id="reliability/topology-spread-missing",
+                    )
+                )
+
+            # 4. [SRE-03] Priority Class Name
+            # Why: Ensures critical workloads are not evicted before lower-priority ones.
+            if not spec.get("priorityClassName"):
+                results.append(
+                    AnalysisResult(
+                        analyzer_name=self.name,
+                        severity="INFO",
+                        message="Explicit priorityClassName is missing.",
+                        resource_name=resource.get("metadata", {}).get("name", "unknown"),
+                        resource_kind=resource.get("kind", "pod"),
+                        file_path="scan",
+                        suggestion="Set priorityClassName to prevent accidental eviction.",
+                        rule_id="reliability/priority-class-missing",
+                    )
+                )
+        return results
+
 
 class NetworkPolicyAnalyzer(BaseAnalyzer):
     """Checks for default-deny NetworkPolicies in the workspace."""
 
     @property
     def name(self) -> str:
-        """Returns the stable name of the network policy analyzer.
-        """
+        """Returns the stable name of the network policy analyzer."""
         return "network-policy-check"
 
     @property
     def analyzer_type(self) -> str:
-        """Indicates this is a content-level analyzer.
-        """
+        """Indicates this is a content-level analyzer."""
         return "content"
 
-    def analyze(
-        self, resources: List[Dict[str, Any]], **kwargs
-    ) -> List[AnalysisResult]:
-        """Detects workloads operating without a NetworkPolicy boundary.
-        
-        Why: To enforce the 'Zero Trust' principle within the cluster networking mesh.
-        """
+    def analyze(self, resources: Any, **kwargs) -> List[AnalysisResult]:
+        """Detects workloads operating without a NetworkPolicy boundary."""
+        if not isinstance(resources, list):
+            return []
+
         results: List[AnalysisResult] = []
         has_netpol = any(r.get("kind") == "NetworkPolicy" for r in resources)
-        
+
         if not has_netpol:
             for resource in resources:
                 kind = resource.get("kind")
@@ -289,24 +393,23 @@ class NetworkPolicyAnalyzer(BaseAnalyzer):
                     break
         return results
 
+
 class ApiDeprecationAnalyzer(BaseAnalyzer):
     """Surfaces SDK deprecation tracker info into visible CLI pipeline warnings."""
 
     @property
     def name(self) -> str:
-        """Returns the stable name of the API deprecation analyzer.
-        """
+        """Returns the stable name of the API deprecation analyzer."""
         return "api-deprecation-check"
 
     @property
     def analyzer_type(self) -> str:
-        """Indicates this is a metadata-level analyzer.
-        """
+        """Indicates this is a metadata-level analyzer."""
         return "metadata"
 
     def analyze(self, identities: List[Any], **kwargs) -> List[AnalysisResult]:
         """Identifies deprecated or removed API versions based on target cluster version.
-        
+
         Why: To prevent deployment failures during Kubernetes upgrades.
         """
         results: List[AnalysisResult] = []
@@ -317,7 +420,7 @@ class ApiDeprecationAnalyzer(BaseAnalyzer):
                 dep_api = dep_info.get("deprecated_api") if is_dict else dep_info.deprecated_api
                 repl_api = dep_info.get("replacement_api") if is_dict else dep_info.replacement_api
                 removed = dep_info.get("removed_in_version") if is_dict else dep_info.removed_in_version
-                
+
                 results.append(
                     AnalysisResult(
                         analyzer_name=self.name,
@@ -327,7 +430,7 @@ class ApiDeprecationAnalyzer(BaseAnalyzer):
                         resource_name=getattr(identity, "name", "unknown") or "unknown",
                         resource_kind=getattr(identity, "kind", "Unknown") or "Unknown",
                         file_path="unknown",
-                        line_number=getattr(identity, "line_number", 0)
+                        line_no=getattr(identity, "line_number", 0),
                     )
                 )
         return results

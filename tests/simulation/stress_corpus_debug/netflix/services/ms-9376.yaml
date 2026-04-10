@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-9376
+  labels:
+    app: ms-9376
+    dependency: ms-9377
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-9376
+  template:
+    metadata:
+      labels:
+        app: ms-9376
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-9377

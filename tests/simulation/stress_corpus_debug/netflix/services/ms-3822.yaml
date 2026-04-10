@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-3822
+  labels:
+    app: ms-3822
+    dependency: ms-3823
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-3822
+  template:
+    metadata:
+      labels:
+        app: ms-3822
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-3823

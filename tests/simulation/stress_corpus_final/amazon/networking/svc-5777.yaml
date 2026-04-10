@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: aws-svc-5777
+  namespace: us-east-1
+spec:
+  selector:
+    app: aws-svc-5777
+  ports:
+  - port: 80
+    targetPort: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: aws-svc-5777-ingress
+  namespace: us-east-1
+spec:
+  rules:
+  - http:
+      paths:
+      - path: /api/5777
+        pathType: Prefix
+        backend:
+          service:
+            name: aws-svc-5777
+            port:
+              number: 80

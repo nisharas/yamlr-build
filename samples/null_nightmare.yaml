@@ -1,0 +1,9 @@
+# A manifest with NO kind or apiVersion - The Ultimate Stress Test
+metadata:
+  name: null-nightmare
+spec:
+  template:
+    spec:
+      containers:
+      - name: oops
+        image: nginx

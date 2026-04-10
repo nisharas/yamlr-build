@@ -6,13 +6,14 @@ Handles exporting healing reports to external formats (PDF, HTML, SARIF).
 """
 
 from __future__ import annotations
-import logging
-from typing import List, Dict, Any, Optional
-import time
+
 import hashlib
+import logging
+import time
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("yamlr.pro.exporter")
-__all__ = ['Exporter']
+__all__ = ["Exporter"]
 
 
 class Exporter:
@@ -21,10 +22,10 @@ class Exporter:
     Supported formats: HTML, PDF, SARIF.
     High-fidelity YAML: Sovereign (Sorted) Export.
     """
-    
+
     def __init__(self, catalog: Optional[Dict[str, Any]] = None):
         """
-        Why: Catalog synchronization is required for schema-aware 
+        Why: Catalog synchronization is required for schema-aware
              sorting during enterprise-grade export.
         """
         self.catalog = catalog or {}
@@ -32,7 +33,7 @@ class Exporter:
 
     def sovereign_export(self, docs: List[Any], context: Any, compact: bool = False) -> str:
         """Performs Sovereign (Sorted) Export of manifestations.
-        
+
         Why: Enterprise aesthetics require logical field ordering (e.g., API/Kind first)
              while preserving comments surgically to maintain architectural intent.
              Sorting is now delegated to the core Structurer for consistency.
@@ -40,14 +41,14 @@ class Exporter:
         if not docs:
             return ""
         from yamlr.parsers.structurer import YamlrStructurer
-        
+
         # The structurer's serialize() handles both sorting and vacuum (compact mode)
         temp_structurer = YamlrStructurer(self.catalog)
         return temp_structurer.serialize(docs, compact=compact)
 
     def export_html(self, results: List[Any], output_path: str) -> bool:
         """Exports healing results to a rich HTML dashboard.
-        
+
         Why: To provide a stakeholder-friendly view of manifest health
              and compliance status, essential for SOC2 and internal audits.
         """
@@ -67,12 +68,13 @@ class Exporter:
 
     def export_pdf(self, results: List[Any], output_path: str) -> bool:
         """Exports healing results to a PDF evidence document.
-        
-        Why: Provides a tamper-resistant, portable format for 
+
+        Why: Provides a tamper-resistant, portable format for
              formal compliance evidence and long-term archiving.
         """
         try:
             from fpdf import FPDF
+
             from yamlr.pro.compliance.ruleset import ComplianceRegistry
         except ImportError:
             logger.error("PDF Export requires 'fpdf2'. Install it via: pip install fpdf2")
@@ -82,9 +84,9 @@ class Exporter:
             pdf = FPDF()
             pdf.add_page()
             pdf.set_font("Arial", "B", 16)
-            pdf.cell(0, 10, "Yamlr Enterprise (Pro) Compliance Audit", ln=True, align='C')
+            pdf.cell(0, 10, "Yamlr Enterprise (Pro) Compliance Audit", ln=True, align="C")
             pdf.ln(5)
-            
+
             # Determine Compliance Depth
             # Why: To ensure marketing claims are backed by technical evidence.
             has_compliance = False
@@ -94,32 +96,33 @@ class Exporter:
                     if ComplianceRegistry.get_controls_for_rule(rule_id):
                         has_compliance = True
                         break
-                if has_compliance: break
+                if has_compliance:
+                    break
 
             cert_tag = " • SOC2/HIPAA Certified Engine" if has_compliance else ""
-            
+
             pdf.set_font("Arial", "I", 8)
-            pdf.cell(0, 5, f"Generated: {time.strftime('%Y-%m-%d %H:%M:%S UTC')}", ln=True, align='R')
-            pdf.cell(0, 5, f"DNA Engine: v2.0 • Deterministic Healing{cert_tag}", ln=True, align='R')
+            pdf.cell(0, 5, f"Generated: {time.strftime('%Y-%m-%d %H:%M:%S UTC')}", ln=True, align="R")
+            pdf.cell(0, 5, f"DNA Engine: v2.0 • Deterministic Healing{cert_tag}", ln=True, align="R")
             pdf.ln(10)
-            
+
             total_findings = 0
             for res in results:
                 pdf.set_font("Arial", "B", 12)
                 path = res.get("path", "unknown")
-                
+
                 # Dynamic scoring fallback if engine didn't provide one
                 score = res.get("dna_integrity_score")
                 if score is None:
                     # Calculate: 100 - (findings * weight)
                     findings_count = len(res.get("findings", []))
                     score = max(0, 100 - (findings_count * 5))
-                
+
                 pdf.cell(0, 10, f"Resource: {path} (DNA Score: {score}%)", ln=True)
-                
+
                 findings = res.get("findings", [])
                 total_findings += len(findings)
-                
+
                 pdf.set_font("Arial", "", 10)
                 if not findings:
                     pdf.cell(0, 8, "  - No findings. Resource is compliant.", ln=True)
@@ -128,11 +131,11 @@ class Exporter:
                         rule_id = f.get("rule_id", "rule") if isinstance(f, dict) else getattr(f, "rule_id", "rule")
                         msg = f.get("message", "Finding") if isinstance(f, dict) else getattr(f, "message", "Finding")
                         risk = f.get("risk_level", "LOW") if isinstance(f, dict) else getattr(f, "risk_level", "LOW")
-                        
+
                         pdf.set_text_color(220, 50, 50) if risk.upper() == "HIGH" else pdf.set_text_color(0, 0, 0)
                         pdf.cell(0, 8, f"  [{risk}] {rule_id}: {msg}", ln=True)
                         pdf.set_text_color(0, 0, 0)
-                        
+
                         # Compliance Controls
                         controls = ComplianceRegistry.format_controls_string(rule_id)
                         if controls:
@@ -146,11 +149,11 @@ class Exporter:
             pdf.ln(10)
             pdf.set_font("Arial", "B", 10)
             pdf.cell(0, 10, f"Total Findings: {total_findings}", ln=True)
-            
+
             # Signature Footer
             sig = hashlib.sha256(str(time.time()).encode()).hexdigest()[:32]
             pdf.set_font("Courier", "I", 8)
-            pdf.cell(0, 10, f"Proof Signature: {sig}", ln=True, align='C')
+            pdf.cell(0, 10, f"Proof Signature: {sig}", ln=True, align="C")
 
             pdf.output(output_path)
             logger.info(f"PDF report written to {output_path}")
@@ -161,12 +164,13 @@ class Exporter:
 
     def export_sarif(self, results: List[Any], output_path: str) -> bool:
         """Exports results in SARIF format for GitHub Security integration.
-        
-        Why: Essential for modern CI/CD, allowing Yamlr findings to be 
+
+        Why: Essential for modern CI/CD, allowing Yamlr findings to be
              ingested natively into GitHub Code Scanning or GitLab Security.
         """
         try:
             from yamlr.core.io.sarif_formatter import SarifFormatter
+
             formatter = SarifFormatter()
             sarif_data = formatter.format(results)
             with open(output_path, "w", encoding="utf-8") as f:
@@ -179,39 +183,41 @@ class Exporter:
 
     def _generate_html_report(self, results: List[Any]) -> str:
         """Generates a standalone Glassmorphism-themed HTML dashboard string.
-        
-        Why: To provide a 'WOW' factor for stakeholders and auditors, 
+
+        Why: To provide a 'WOW' factor for stakeholders and auditors,
              positioning Yamlr as a premium enterprise asset.
         """
         from yamlr.pro.compliance.ruleset import ComplianceRegistry
-        
+
         rows = ""
         total_findings = 0
         total_score = 0
-        
+
         for res in results:
             path = res.get("path", "unknown")
             success = res.get("success", False)
             status_cls = "success" if success else "warning"
             status_icon = "✅" if success else "⚠️"
-            
+
             # Real score calculation vs hardcoded placeholder
             score = res.get("dna_integrity_score", 100)
             total_score += score
-            
+
             findings = res.get("findings", [])
             total_findings += len(findings)
-            
+
             finding_html = ""
             for f in findings:
-                rule_id = f.get("rule_id", "generic-rule") if isinstance(f, dict) else getattr(f, "rule_id", "generic-rule")
+                rule_id = (
+                    f.get("rule_id", "generic-rule") if isinstance(f, dict) else getattr(f, "rule_id", "generic-rule")
+                )
                 msg = f.get("message", "N/A") if isinstance(f, dict) else getattr(f, "message", "N/A")
                 risk = f.get("risk_level", "LOW") if isinstance(f, dict) else getattr(f, "risk_level", "LOW")
-                
+
                 # Compliance Attributions
                 controls = ComplianceRegistry.format_controls_string(rule_id)
                 control_tag = f'<div class="control-tag">{controls}</div>' if controls else ""
-                
+
                 finding_html += f"""
                 <div class="finding-item">
                     <span class="risk-{risk.lower()}">{risk}</span> 
@@ -231,7 +237,7 @@ class Exporter:
                 </td>
             </tr>
             """
-            
+
             avg_score = int(total_score / len(results)) if results else 100
 
         # Determine Compliance Depth for Branding
@@ -242,10 +248,11 @@ class Exporter:
                 if ComplianceRegistry.get_controls_for_rule(rule_id):
                     has_compliance = True
                     break
-            if has_compliance: break
+            if has_compliance:
+                break
 
         cert_tag = " • SOC2/HIPAA Certified Engine" if has_compliance else ""
-            
+
         return f"""
         <!DOCTYPE html>
         <html lang="en">

@@ -99,6 +99,10 @@ inputs:
     description: Skip deep semantic analysis for speed
     required: false
     default: 'false'
+  comment:
+    description: Automatically post anatomical findings and repairs as a PR comment
+    required: false
+    default: 'true'
 outputs:
   health-score:
     description: The overall health score of the scanned manifests
@@ -135,3 +139,4 @@ runs:
     INPUT_KYVERNO_REPORT: ${{ inputs.kyverno-report }}
     INPUT_OUTPUT: ${{ inputs.output }}
     INPUT_FAST: ${{ inputs.fast }}
+    INPUT_COMMENT: ${{ inputs.comment }}

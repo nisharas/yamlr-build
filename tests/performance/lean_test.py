@@ -1,11 +1,9 @@
-import yamlr_native
-import time
 import os
+import time
 
-files_to_test = [
-    r"d:\yamlr\tests\fixtures\healthy_manifest.yaml",
-    r"d:\yamlr\tests\fixtures\mid_style.yaml"
-]
+import yamlr_native
+
+files_to_test = [r"d:\yamlr\tests\fixtures\healthy_manifest.yaml", r"d:\yamlr\tests\fixtures\mid_style.yaml"]
 
 for file_path in files_to_test:
     if not os.path.exists(file_path):
@@ -17,7 +15,7 @@ for file_path in files_to_test:
 
     print(f"Testing {os.path.basename(file_path)} ({os.path.getsize(file_path) / 1024:.2f} KB)")
     print("-" * 10)
-    
+
     # Audit
     start = time.time()
     try:
@@ -26,7 +24,7 @@ for file_path in files_to_test:
     except Exception as e:
         print(f"Audit Failed: {e}")
     print(f"Audit took {time.time() - start:.4f}s")
-    
+
     # Parse
     start = time.time()
     try:

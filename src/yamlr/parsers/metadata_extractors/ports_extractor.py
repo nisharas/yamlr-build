@@ -8,14 +8,16 @@ Extracts:
 """
 
 from __future__ import annotations
+
 from typing import List
 
 from yamlr.models import ManifestIdentity, Shard
-__all__ = ['PortsExtractor']
 
+__all__ = ["PortsExtractor"]
 
 
 from .base_extractor import BaseMetadataExtractor
+
 
 class PortsExtractor(BaseMetadataExtractor):
     """Extracts Port information from Services and Workloads."""
@@ -34,23 +36,29 @@ class PortsExtractor(BaseMetadataExtractor):
         # 1. SERVICE PORTS
         if identity.kind == "Service":
             if "ports" in path_keys:
-                if key not in ("port", "targetPort", "name", "nodePort", "protocol"):
-                    return False
-
+                # [Hardening] Capture port details regardless of shard order
                 if shard.is_list_item:
-                    if identity.service_ports is None: identity.service_ports = []
+                    if identity.service_ports is None:
+                        identity.service_ports = []
                     identity.service_ports.append({})
 
                 if not identity.service_ports:
                     identity.service_ports = [{}]
 
-                identity.service_ports[-1][key] = val
-                return True
+                if key in ("port", "targetPort", "name", "nodePort", "protocol"):
+                    # [Forensic Sync] Ensure value is stored as a string for metadata consistency
+                    identity.service_ports[-1][key] = str(val) if val is not None else None
+                    return True
 
         # 2. WORKLOAD PORTS
         elif identity.kind in (
-            "Deployment", "StatefulSet", "DaemonSet", "Pod",
-            "Job", "CronJob", "ReplicaSet",
+            "Deployment",
+            "StatefulSet",
+            "DaemonSet",
+            "Pod",
+            "Job",
+            "CronJob",
+            "ReplicaSet",
         ):
             if "containers" in path_keys and "ports" in path_keys:
                 if key in ("containerPort", "name"):

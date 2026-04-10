@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-19031
+  labels:
+    app: ms-19031
+    dependency: ms-19032
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-19031
+  template:
+    metadata:
+      labels:
+        app: ms-19031
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-19032

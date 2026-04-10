@@ -18,7 +18,8 @@ if TYPE_CHECKING:
     from yamlr.core.context import HealContext
 
 logger = logging.getLogger("yamlr.healers.structural")
-__all__ = ['StructuralHealer']
+__all__ = ["StructuralHealer"]
+
 
 class StructuralHealer:
     """
@@ -30,18 +31,18 @@ class StructuralHealer:
         Executes structural normalization on a single document.
         """
         modified = False
-        
+
         # 1. Normalize EnvFrom blocks
         if self.normalize_envfrom(doc, context):
             modified = True
-            
+
         return modified
 
     def normalize_envfrom(self, doc: Dict[str, Any], context: Optional[HealContext] = None) -> bool:
         """
         Fix envFrom blocks and lift misnested fields.
-        
-        Why: Kubernetes users sometimes place container properties 
+
+        Why: Kubernetes users sometimes place container properties
              (like ports or resources) inside the envFrom list item.
         """
         if doc is None:
@@ -56,7 +57,7 @@ class StructuralHealer:
         pod_spec = spec if kind == "pod" else spec.get("template", {}).get("spec")
         if not pod_spec or not hasattr(pod_spec, "__getitem__"):
             return False
-        
+
         containers = pod_spec.get("containers") or []
         modified = False
 
@@ -89,26 +90,30 @@ class StructuralHealer:
         for key in ("ports", "readinessProbe", "livenessProbe", "resources"):
             if key in item and key not in container:
                 val = item.get(key)
-                is_valid = (key == "ports" and isinstance(val, (list, tuple))) or \
-                           (key in ("readinessProbe", "livenessProbe", "resources") and isinstance(val, dict))
-                
+                is_valid = (key == "ports" and isinstance(val, (list, tuple))) or (
+                    key in ("readinessProbe", "livenessProbe", "resources") and isinstance(val, dict)
+                )
+
                 if is_valid:
                     container[key] = item.pop(key)
                     modified = True
                     if context:
                         from yamlr.core.stages.boundaries import MutationScope
                         from yamlr.models import HealAction
-                        context.prescribe(HealAction(
-                            stage="Shield",
-                            action_type="repair",
-                            target=f"containers[{container.get('name', 'unknown')}].{key}",
-                            description=f"Structural Cleanup: Lifted validated field '{key}' out of envFrom",
-                            rationale=f"Kubernetes requires '{key}' to be a direct property of the container, while it was found misnested inside an envFrom block.",
-                            suggestion=f"Move '{key}' to the container level (sibling of envFrom).",
-                            severity="info",
-                            rule_id="rule/misnested-envfrom",
-                            scope=MutationScope.STRUCTURAL
-                        ))
+
+                        context.prescribe(
+                            HealAction(
+                                stage="Shield",
+                                action_type="repair",
+                                target=f"containers[{container.get('name', 'unknown')}].{key}",
+                                description=f"Structural Cleanup: Lifted validated field '{key}' out of envFrom",
+                                rationale=f"Kubernetes requires '{key}' to be a direct property of the container, while it was found misnested inside an envFrom block.",
+                                suggestion=f"Move '{key}' to the container level (sibling of envFrom).",
+                                severity="info",
+                                rule_id="rule/misnested-envfrom",
+                                scope=MutationScope.STRUCTURAL,
+                            )
+                        )
                 else:
                     logger.warning(f"Security: Blocked lifting of invalid '{key}' type from envFrom.")
         return modified
@@ -128,15 +133,18 @@ class StructuralHealer:
                     if context:
                         from yamlr.core.stages.boundaries import MutationScope
                         from yamlr.models import HealAction
-                        context.prescribe(HealAction(
-                            stage="Shield",
-                            action_type="repair",
-                            target=f"envFrom.{ref_key}",
-                            description=f"Structural Cleanup: Repaired {ref_key} structure",
-                            rationale=f"The {ref_key} block was missing its required 'name' field, which was found at the wrong nesting level.",
-                            suggestion=f"Ensure '{ref_key}' contains the resource name target correctly.",
-                            severity="info",
-                            rule_id="rule/malformed-ref",
-                            scope=MutationScope.STRUCTURAL
-                        ))
+
+                        context.prescribe(
+                            HealAction(
+                                stage="Shield",
+                                action_type="repair",
+                                target=f"envFrom.{ref_key}",
+                                description=f"Structural Cleanup: Repaired {ref_key} structure",
+                                rationale=f"The {ref_key} block was missing its required 'name' field, which was found at the wrong nesting level.",
+                                suggestion=f"Ensure '{ref_key}' contains the resource name target correctly.",
+                                severity="info",
+                                rule_id="rule/malformed-ref",
+                                scope=MutationScope.STRUCTURAL,
+                            )
+                        )
         return modified

@@ -17,77 +17,22 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, List, Optional
 
+from yamlr.core.engine.models import AnalysisResult
+
 # We iterate over ManifestIdentity objects in the pipeline
 # We need to import this carefully to avoid circular imports if possible,
 # or define a Protocol if strictly necessary. For now, we assume it's available.
 # To keep this file clean and standalone, we might use stricter typing or
 # Just 'Any' for complex objects if we want to decouple, but let's try to be precise.
-# Assuming ManifestIdentity is in yamlr.core.pipeline (based on previous context) logic,
+# ManifestIdentity is located in yamlr.core.identity
 # or yamlr.core.engine. Wait, ManifestIdentity is likely defined in pipeline or a types module.
 # Based on summary, it's used in pipeline.
 # Let's use Any for the input type signature to avoid circular dependency hell
 # until we place it in a shared types module.
-__all__ = ['AnalysisResult', 'BaseAnalyzer']
+__all__ = ["AnalysisResult", "BaseAnalyzer"]
 
 
-
-@dataclass
-class AnalysisResult:
-    """
-    Standardized result object returned by an analyzer.
-    Captures a specific issue found during analysis.
-    """
-
-    analyzer_name: str
-    severity: str  # "INFO", "WARNING", "ERROR"
-    message: str
-    resource_name: str
-    resource_kind: str
-    file_path: str
-    rule_id: Optional[str] = None  # New: For config ignores
-    line_number: Optional[int] = None
-    suggestion: Optional[str] = None
-    rationale: Optional[str] = None  # New: Explains WHY the fix is proposed
-    external_url: Optional[str] = None  # New: Link to official documentation or CVE
-    remediation_command: Optional[str] = None  # New: Exact CLI command to fix
-
-    # Metadata for potential auto-fixes (Pro feature)
-    fix_available: bool = False
-    fix_id: Optional[str] = None
-
-    # [EPIC-23] Safety Engine: Risk-oriented output fields
-    # Populated by RiskClassifier after graph-aware analysis.
-    # All defaults are backward-compatible with existing code.
-    impact_description: Optional[str] = None
-    scope_count: int = 0
-    risk_level: str = "UNKNOWN"
-    propagation_depth: int = 0
-    affected_resources: List[str] = field(default_factory=list)
-    risk_category: str = "Uncategorized"
-    
-    def __post_init__(self):
-        """Normalizes and validates finding metadata."""
-        self.message = str(self.message)
-        if not self.severity:
-            self.severity = "WARNING"
-        self.severity = self.severity.upper()
-
-        # [FIX-AUDIT-14] Automated Metadata Population
-        if self.rule_id:
-            from yamlr.core.rule_manager import RuleManager
-            rule_mgr = RuleManager()
-            rule_meta = rule_mgr.get_rule(self.rule_id)
-            if rule_meta:
-                if not self.rationale:
-                    self.rationale = rule_meta.get("rationale")
-                if not self.impact_description:
-                    self.impact_description = rule_meta.get("impact_description")
-                if not self.risk_level or self.risk_level == "UNKNOWN":
-                    self.risk_level = rule_meta.get("risk_level", "UNKNOWN")
-                if not self.severity or self.severity == "WARNING":
-                    self.severity = rule_meta.get("severity", "WARNING").upper()
-                if not self.message or self.message == "unknown":
-                    self.message = rule_meta.get("description", self.message)
+# AnalysisResult moved to yamlr.core.engine.models to break circular dependency
 
 
 class BaseAnalyzer(ABC):
@@ -119,7 +64,7 @@ class BaseAnalyzer(ABC):
         pass
 
     @abstractmethod
-    def analyze(self, identities: List[Any], **kwargs) -> List[AnalysisResult]:
+    def analyze(self, identities: List[Any], **kwargs) -> List["AnalysisResult"]:
         """
         Refactored core logic to analyze a collection of resources.
 

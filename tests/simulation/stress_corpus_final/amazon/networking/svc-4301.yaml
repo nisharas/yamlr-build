@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: aws-svc-4301
+  namespace: us-east-1
+spec:
+  selector:
+    app: aws-svc-4301
+  ports:
+  - port: 80
+    targetPort: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: aws-svc-4301-ingress
+  namespace: us-east-1
+spec:
+  rules:
+  - http:
+      paths:
+      - path: /api/4301
+        pathType: Prefix
+        backend:
+          service:
+            name: aws-svc-4301
+            port:
+              number: 80

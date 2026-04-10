@@ -1,482 +1,340 @@
 from __future__ import annotations
 
 """
-BASE ENGINE - The Heart of Yamlr
---------------------------------
-The fundamental execution layer that coordinates scanners, analyzers, 
-and healers across a workspace.
-
-Why: Refactored to leverage specialized modules (auditor, processor, security)
-to ensure 100% modularity and compliance with the <500 lines per module guardrail.
-
-### 🧩 Architectural Decision Records (Micro-ADR)
-
-1. **2026-02-10: Engine Base Abstraction**
-   - **Context**: Multiple engine variants (OSS, Pro, Native) needed a common API.
-   - **Decision**: Define a base `YamlrEngine` with mandatory auditing/healing hooks.
-   - **Consequence**: Guaranteed feature parity across execution environments.
-
-2. **2026-03-20: Integrated Telemetry Manager**
-   - **Context**: Measuring the "Yield" of Yamlr required deep data hooks.
-   - **Decision**: Embed `TelemetryManager` directly into the engine lifecycle.
-   - **Consequence**: Real-time ROI and performance tracking available via `yamlr status`.
+BASE ENGINE - The Heart of Yamlr (v4.2)
+--------------------------------------
+Production-validated orchestrator for manifest healing.
 """
 import logging
 import os
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union, TYPE_CHECKING
-if TYPE_CHECKING:
-    from yamlr.core.pipeline import HealingPipeline
-    from yamlr.models import HealFileResult
-from yamlr.core.pipeline import HealStatus
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
 
+if TYPE_CHECKING:
+    from yamlr.core.engine.models import HealConfig
+from yamlr.core.context import HealContext
+from yamlr.core.stages.base import PipelineState
+from yamlr.core.bridge import YamlrBridge
 from yamlr.core.manager import YamlrManager
 from yamlr.core.telemetry import TelemetryManager
 
+from .models import HealStatus
+
 logger = logging.getLogger("yamlr.engine")
-
-__all__ = ["YamlrEngine", "AuditEngineV3"]
-
-YAML_EXT = ".yaml"
-YML_EXT = ".yml"
-
-SEVERITY_RANK: Dict[str, int] = {"error": 100, "warning": 50, "info": 10, "none": 0}
-RISK_RANK: Dict[str, int] = {"high": 100, "medium": 50, "low": 10, "none": 0}
 
 class YamlrEngine:
     """
-    Principal Orchestrator for Kubernetes manifest healing.
-    
-    Responsibilities:
-    - Workspace and catalog management (via YamlrManager)
-    - Facade for Audit and Healing operations
-    - Result aggregation
+    Principal Orchestrator for Kubernetes manifest healing (The 'Brain').
     """
     
-    # Result Status Mapping
-    HEAL_STATUS = HealStatus
-    audit_status = HealStatus
-
-    def is_pro_enabled(self) -> bool:
-        """Checks if enterprise features are active via bridge or license manager."""
-        from yamlr.core.bridge import YamlrBridge
-        return YamlrBridge.is_pro_enabled()
-
-    @staticmethod
-    def quick(workspace_path: str = ".") -> "YamlrEngine":
-        """Factory method for ultra-fast, zero-config engine initialization."""
-        # Detect workspace and default cluster version
-        return YamlrEngine(workspace_path=workspace_path, catalog_path=None)
-
     def __init__(
         self,
         workspace_path: str,
         catalog_path: Optional[str] = None,
-        app_name: str = "Yamlr",
-        pro_brand: str = "Yamlr Enterprise (Pro)",
-        cpu_limit: str = "500m",
-        mem_limit: str = "512Mi",
-        default_namespace: str = "default",
-        health_threshold: int = 70,
         cluster_version: Optional[str] = None,
-        safe_mode: bool = False,
-        **kwargs: Union[str, bool, int, List[str], None]
+        app_name: Optional[str] = None,
+        **kwargs,
     ):
-        """Initializes the Yamlr Engine."""
+        from yamlr.core.gatekeeper import LicenseGate
+        tier_meta = LicenseGate.get_tier_metadata()
+        
+        self.app_name: str = app_name or str(kwargs.get("app_name", tier_meta["name"]))
+        self.pro_brand: str = tier_meta["name"]
+        
+        # [Modularity] manager handles the heavy lifting of workspace discovery
         self.manager = YamlrManager(
             workspace_path=workspace_path,
-            app_name=app_name,
             catalog_path=catalog_path,
-            health_threshold=health_threshold,
-            allowed_host_paths=kwargs.get("allowed_host_paths"),
-            concurrency=kwargs.get("concurrency"),
             cluster_version=cluster_version,
+            concurrency=kwargs.get("concurrency"),
+            app_name=self.app_name,
+            health_threshold=kwargs.get("health_threshold", 70),
+            allowed_host_paths=kwargs.get("allowed_host_paths")
         )
-        self.cpu_limit: str = cpu_limit
-        self.mem_limit: str = mem_limit
-        self.default_namespace: str = default_namespace
-        self.safe_mode: bool = safe_mode
-
-        # Expose properties for convenience
+        
+        # Essential Surface Area for Stage Handlers and Helpers
         self.workspace: Path = self.manager.workspace
-        self.app_name: str = self.manager.app_name
         self.fs = self.manager.fs
         self.config = self.manager.config
-        self.allowed_host_paths: List[str] = self.manager.allowed_host_paths
-        self.health_threshold: int = self.manager.health_threshold
         self.cluster_version: str = self.manager.cluster_version
+        self.health_threshold: int = self.manager.health_threshold
+        self.allowed_host_paths: List[str] = self.manager.allowed_host_paths or []
         self.concurrency: Optional[int] = self.manager.concurrency
+        
+        self.cpu_limit: str = str(kwargs.get("cpu_limit", "500m"))
+        self.mem_limit: str = str(kwargs.get("mem_limit", "512Mi"))
+        self.default_namespace: str = str(kwargs.get("default_namespace", "default"))
+        self.safe_mode: bool = bool(kwargs.get("safe_mode", False))
+        
         self.telemetry = TelemetryManager(self.workspace, app_name=self.app_name)
-        self._identity_cache: List["ManifestIdentity"] = []
-        self.disk_index: Optional["DiskIndex"] = None
-
-        self._cpu_limit: str = cpu_limit
-        self._mem_limit: str = mem_limit
-        self._default_namespace: str = default_namespace
-        self._deep_array_validation: bool = bool(kwargs.get("deep_array_validation", False))
-        self._custom_key_order: Optional[List[str]] = kwargs.get("custom_key_order")
-        self._opa_bundle_path: Optional[str] = kwargs.get("opa_bundle_path")
-        self._kyverno_report_path: Optional[str] = kwargs.get("kyverno_report_path")
-        self._from_report_path: Optional[str] = kwargs.get("from_report_path")
-        self._pipeline: Optional["HealingPipeline"] = None
-
-    def __enter__(self) -> "YamlrEngine":
-        """Context manager entry."""
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        """Context manager exit ensures resource cleanup."""
-        self.close()
-
-    def __del__(self) -> None:
-        """Safety-net to ensure resource cleanup during garbage collection."""
-        try:
-            self.close()
-        except Exception:
-            # Suppress errors in __del__ as they are non-actionable during shutdown
-            pass
-
-    def get_all_identities(self) -> List["ManifestIdentity"]:
-        """Scans the entire workspace to identify all resources and their relationships.
+        self._parser = None
         
-        Why: To build the ResourceGraph necessary for Relational Surgery (Stage 5.7).
-        """
-        if self._identity_cache:
-            for ident in self._identity_cache:
-                yield ident
-            return
-
-        from yamlr.core.engine.crawler import crawl_manifests
+        # 5. Initialize Diagnostic Subsystems (Analyzer Suite)
+        from yamlr.analyzers.registry import AnalyzerRegistry
+        AnalyzerRegistry.register_defaults()
         
-        extensions = self.config.config.get("ignore", {}).get("extensions", [YAML_EXT, YML_EXT])
-        if not isinstance(extensions, list):
-            extensions = [YAML_EXT, YML_EXT]
+        # [Zero-Blindspot] Support engine.pipeline boundary 
+        self.pipeline = self
 
-        files = crawl_manifests(
-            workspace_root=self.workspace, 
-            root_path=str(self.workspace), 
-            extensions=extensions,
-            max_depth=10,
-            engine_context={}
-        )
-        
-        for f in files:
-            path = f.get("full_path") or str(self.workspace / f["path"])
-            yield from self._scan_file_identities(path)
-
-    def _scan_file_identities(self, path: str) -> List["ManifestIdentity"]:
-        """Helper to scan a single file for identities with optimized fallbacks."""
-        from yamlr.parsers.lexer import YamlrLexer
-        from yamlr.parsers.scanner import YamlrScanner
-        from pathlib import Path
-
-        try:
-            content = self.fs.read_text(Path(path))
-            # 1. Try Native Fast Path
-            if os.getenv("YAMLR_DISABLE_NATIVE") != "1":
-                try:
-                    from yamlr_native import native_extract_metadata
-                    raw_meta = native_extract_metadata(content)
-                    if raw_meta:
-                        results = []
-                        for doc in raw_meta:
-                            results.append(ManifestIdentity(
-                                kind=doc.get("kind"),
-                                api_version=doc.get("apiVersion"),
-                                name=doc.get("metadata", {}).get("name"),
-                                namespace=doc.get("metadata", {}).get("namespace"),
-                                labels=doc.get("metadata", {}).get("labels"),
-                                file_path=path
-                            ))
-                        return results
-                except (ImportError, RuntimeError, AttributeError): # Optimized fallback triggers
-                    pass
-
-            # 2. Fallback to Python Parser
-            lexer = YamlrLexer()
-            scanner = YamlrScanner(self.catalog, app_name=self.app_name)
-            shards = lexer.shard(content)
-            ids = scanner.scan_shards(shards)
-            for ident in ids:
-                ident.file_path = path
-            return ids
-        except Exception as e:
-            logger.debug(f"Identity scan failed for {path}: {e}")
-            return []
+    @property
+    def parser(self) -> Any:
+        """Lazy-loaded shared parser instance."""
+        if self._parser is None:
+            from yamlr.core.parser.ruamel_adapter import RuamelAdapter
+            self._parser = RuamelAdapter()
+        return self._parser
 
     @property
     def catalog(self) -> Dict[str, Any]:
         """Lazy-bound catalog from manager."""
         return self.manager.catalog
 
-    @property
-    def pipeline(self) -> "HealingPipeline":
-        """Lazy-loaded healing pipeline with dynamic version binding."""
-        if self._pipeline is None:
-            from yamlr.core.pipeline import HealingPipeline
-            self._pipeline = HealingPipeline(
-                catalog=self.catalog,
-                cpu_limit=self._cpu_limit,
-                mem_limit=self._mem_limit,
-                default_namespace=self._default_namespace,
-                app_name=self.app_name,
-                k8s_version=self.cluster_version,
-                allowed_host_paths=self.allowed_host_paths,
-                trusted_registries=self.config.trusted_registries,
-            )
-            # Apply initial configuration
-            self._apply_pipeline_config(self._pipeline)
-        
-        # [Zero-Leakage] Check if the pipeline's version matches the engine's current target
-        if self._pipeline.k8s_version != self.cluster_version:
-            logger.debug(f"Engine: Pipeline version mismatch ({self._pipeline.k8s_version} vs {self.cluster_version}). Re-binding...")
-            self._pipeline.bind_catalog(self.catalog, self.cluster_version)
-            self._apply_pipeline_config(self._pipeline)
-
-        return self._pipeline
-
-    def _apply_pipeline_config(self, pipeline: "HealingPipeline"):
-        """Applies engine-level configurations to a pipeline instance."""
-        if hasattr(pipeline.validator, "deep_array_check"):
-            pipeline.validator.deep_array_check = self._deep_array_validation
-        if pipeline.exporter and self._custom_key_order:
-            pipeline.exporter.custom_order = self._custom_key_order
-
-        if self._opa_bundle_path:
-            self._init_opa_engine(self._opa_bundle_path)
-        if self._kyverno_report_path:
-            self._init_kyverno_engine(self._kyverno_report_path)
-        if self._from_report_path:
-            self._init_generic_report_adapter(self._from_report_path)
-
-    def audit_and_heal_file(self, relative_path: str, **kwargs) -> HealFileResult:
+    def process_file(
+        self, 
+        relative_path: str, 
+        content: Optional[str] = None, 
+        full_path: Optional[str] = None, 
+        config: Any = None, 
+        start_time: Optional[float] = None, 
+        **kwargs
+    ) -> Any:
         """
-        Delegates to auditor.audit_and_heal_file and records telemetry.
-        
-        Why: Centralized telemetry capture for all single-file operations.
+        Principal Entry Point for the modularized PipelineStage execution cycle (v4.2).
         """
-        from yamlr.core.engine import auditor
-        start_t = time.time()
-        res = auditor.audit_and_heal_file(self, relative_path, **kwargs)
-        duration = time.time() - start_t
+        from yamlr.core.engine.models import HealFileResult, HealStatus
+        from yamlr.core.stages.normalization import NormalizationStage
+        from yamlr.core.stages.analysis import AnalysisStage
+        from yamlr.core.stages.emulation import EmulationStage
         
-        # Determine bytes processed
-        b_proc = 0
+        # [Zero-Blindspot] Signature Normalization for mixed v3/v4 callers
+        if "apiVersion" in relative_path or "kind:" in relative_path:
+             # Positional swap: auditor.py passes (content, relative_path, ...)
+             _tmp = relative_path
+             relative_path = content or "unknown"
+             content = _tmp
+        
+        start_time = start_time or time.time()
+        full_path = full_path or str(self.workspace / relative_path) if not os.path.isabs(relative_path) else relative_path
+        
+        # 1. Acquire Content
+        content = content if content is not None else self._read_content(full_path, relative_path)
+        if isinstance(content, HealFileResult):
+            return content
+
+        # 2. Setup Context & State
+        engine_context, state = self._initialize_state(content, relative_path, config, **kwargs)
+
+        # 3. Normalization (Stage 1)
+        norm_res = NormalizationStage().execute(state, engine=self)
+        if not norm_res.success:
+            return self._build_error_result(relative_path, full_path, content, norm_res, start_time)
+        
+        # 4. Emulation (Stage 1.5 - Hybrid Sidecar Simulation)
+        emu_res = EmulationStage().execute(state, engine=self)
+        if not emu_res.success and state.context.shadow:
+             state.context.audit_log.append(f"⚠️ Shadow Mode Degradation: {emu_res.errors[0] if emu_res.errors else 'Unknown'}")
+
+        engine_context.docs = state.documents
+        self._populate_container_context(state, engine_context)
+
+        # 5. Analysis (Stage 2)
+        analysis_res = AnalysisStage(catalog=self.manager.catalog).execute(state)
+        engine_context.findings = state.findings
+
+        # 6. Remediation (Stage 3)
+        self._run_remediation_cycle(state, config, **kwargs)
+
+        # 7. Result Aggregation
+        from yamlr.core.engine.result_aggregator import ResultAggregator
+        final_telemetry = ResultAggregator.build_result(state, {"analysis": analysis_res}, config, engine=self)
+        
+        # 8. Status Mapping & Final Packaging
+        status = self._map_status(state, analysis_res.success, **kwargs)
+
+        # 9. Patch Bridge Persistence (v4.2)
+        # Why: Enforces GitOps compatibility by writing surgical patches to disk
+        # only when a heal action was successfully computed.
+        if kwargs.get("patch_mode") and status == HealStatus.HEALED:
+            from yamlr.core.engine.patch_engine import PatchGenerator
+            patch_path = os.path.join(os.getcwd(), "yamlr-patches.yaml")
+            
+            # [Safety First] Create backup of existing patch file
+            if os.path.exists(patch_path):
+                 self.fs.create_backup(patch_path)
+            
+            PatchGenerator.generate_and_append(patch_path, content, final_telemetry.content)
+
+        return HealFileResult(
+            file_path=relative_path,
+            full_path=full_path,
+            success=analysis_res.success,
+            status=status,
+            kind=final_telemetry.identities[0].kind if final_telemetry.identities else "Unknown",
+            logic_logs=final_telemetry.logs,
+            findings=final_telemetry.findings,
+            dna_integrity_score=final_telemetry.dna_integrity_score,
+            original_content=content,
+            healed_content=final_telemetry.content,
+            reconciled_count=final_telemetry.reconciled_count,
+            processing_time_seconds=time.time() - start_time
+        )
+
+    def _read_content(self, full_path: str, relative_path: str) -> Union[str, Any]:
+        """Reads file content with error handling."""
+        from yamlr.core.engine.models import HealFileResult, HealStatus, AnalysisResult
         try:
-            full_p = self.workspace / relative_path
-            if full_p.exists():
-                b_proc = full_p.stat().st_size
-        except (OSError, IOError, AttributeError):
-            pass
-        
-        # Record Telemetry
-        s = getattr(res, "processing_stats", {})
-        if not s: # Fallback
-             s = getattr(res, "stats", {})
-        
-        # Ensure s is a dict for get() calls
-        if not isinstance(s, dict):
-            s = getattr(s, "__dict__", {}) if hasattr(s, "__dict__") else {}
-        
-        fixed = (s.get("lexer_repairs", 0) + s.get("lexer_typos", 0) + 
-                 s.get("semantic_repairs", 0) + s.get("security_hardens", 0) + 
-                 s.get("migrator_changes", 0))
-        
-        # Calculate Max Severity & Risk for CI Gating
-        max_sev_label = "info"
-        max_sev_rank = 0
-        max_risk_label = "low"
-        max_risk_rank = 0
-        for f in res.findings:
-            sev = f.get("severity", "info").lower()
-            rank = SEVERITY_RANK.get(sev, 10)
-            if rank > max_sev_rank:
-                max_sev_rank = rank
-                max_sev_label = sev
+            if os.path.exists(full_path):
+                with open(full_path, 'r', encoding='utf-8') as f:
+                    return f.read()
+            return ""
+        except UnicodeDecodeError:
+            return self._build_io_error(relative_path, full_path, "DECODE_ERROR: File contains non-UTF-8 binary data.")
+        except Exception as e:
+            return self._build_io_error(relative_path, full_path, f"Read Error: {e}")
 
-            risk = f.get("risk_level", "low").lower()
-            rrank = RISK_RANK.get(risk, 10)
-            if rrank > max_risk_rank:
-                max_risk_rank = rrank
-                max_risk_label = risk
+    def _initialize_state(self, content: str, relative_path: str, config: Any, **kwargs) -> Tuple[Any, Any]:
+        """Initializes the engine context and pipeline state."""
+        from yamlr.core.engine.stages.ingest import execute_ingest_stage
+        from yamlr.core.stages.base import PipelineState
 
-        self.telemetry.record_session(
-            files_count=1,
-            fixed_issues=fixed,
-            avg_dna_score=res.trust_score,
-            is_heal=not kwargs.get("dry_run", True),
-            max_severity=max_sev_label,
-            max_risk=max_risk_label,
-            breakdown=s,
-            duration_seconds=duration,
-            bytes_processed=b_proc
+        engine_context = HealContext(
+            workspace=str(self.workspace),
+            catalog=self.manager.catalog,
+            cluster_version=getattr(config, "cluster_version", self.cluster_version),
+            dry_run=kwargs.get("dry_run", True),
+            emulate=kwargs.get("emulate", []),
+            shadow=kwargs.get("shadow", False),
+            original_content=content,
+            kube_context=kwargs.get("kube_context")
         )
-        return res
 
-    def audit_stream(self, content: str, **kwargs) -> HealFileResult:
-        """
-        Delegates to auditor.audit_stream and records telemetry.
-        
-        Why: Centralized telemetry capture for all stream operations.
-        """
-        from yamlr.core.engine import auditor
-        start_t = time.time()
-        res = auditor.audit_stream(self, content, **kwargs)
-        duration = time.time() - start_t
-        b_proc = len(content.encode("utf-8"))
-        
-        # Record Telemetry
-        s = getattr(res, "processing_stats", {})
-        if not s: # Fallback
-             s = getattr(res, "stats", {})
-             
-        if not isinstance(s, dict):
-            s = getattr(s, "__dict__", {}) if hasattr(s, "__dict__") else {}
-            
-        fixed = (s.get("lexer_repairs", 0) + s.get("lexer_typos", 0) + 
-                 s.get("semantic_repairs", 0) + s.get("security_hardens", 0) + 
-                 s.get("migrator_changes", 0))
-        
-        # Calculate Max Severity & Risk
-        max_sev_label = "info"
-        max_sev_rank = 0
-        max_risk_label = "low"
-        max_risk_rank = 0
-        for f in res.findings:
-            sev = f.get("severity", "info").lower()
-            rank = SEVERITY_RANK.get(sev, 10)
-            if rank > max_sev_rank:
-                max_sev_rank = rank
-                max_sev_label = sev
-            
-            risk = f.get("risk_level", "low").lower()
-            rrank = RISK_RANK.get(risk, 10)
-            if rrank > max_risk_rank:
-                max_risk_rank = rrank
-                max_risk_label = risk
-
-        self.telemetry.record_session(
-            files_count=1,
-            fixed_issues=fixed,
-            avg_dna_score=res.trust_score,
-            is_heal=not kwargs.get("dry_run", True),
-            max_severity=max_sev_label,
-            max_risk=max_risk_label,
-            breakdown=s,
-            duration_seconds=duration,
-            bytes_processed=b_proc
+        ingest_data = execute_ingest_stage(self, content, relative_path, config)
+        state = PipelineState(
+            content=content,
+            shards=ingest_data.get("shards", []),
+            identities=ingest_data.get("identities", []),
+            context=engine_context
         )
-        return res
+        return engine_context, state
 
-    def batch_heal(
-        self,
-        root_path: str,
-        extensions: Optional[List[str]] = None,
-        max_depth: int = 10,
-        dry_run: bool = True,
-        **kwargs: Union[str, bool, int, float, List[str], None]
-    ) -> List[HealFileResult]:
-        """Delegates to processor.batch_heal."""
+    def _populate_container_context(self, state: Any, engine_context: Any):
+        """Extracts container metadata for analyzers."""
+        from yamlr.core.k8s_utils import extract_containers
+        container_ctx = []
+        for doc in state.documents:
+            container_ctx.extend(extract_containers(doc))
+        engine_context.container_context = container_ctx
+
+    def _run_remediation_cycle(self, state: Any, config: Any, **kwargs):
+        """Executes the remediation stages (Safe/Pro)."""
+        from yamlr.core.stages.healing_core import HealingCoreStage
+        from yamlr.core.stages.healing_security import HealingSecurityStage
+        from yamlr.core.stages.healing_best_practices import HealingBestPracticesStage
+        
+        dry_run = kwargs.get("dry_run", True)
+        if not dry_run:
+            from yamlr.core.license_manager import LicenseManager
+            allowed, _, msg = LicenseManager.is_healing_allowed(1)
+            if not allowed:
+                state.context.quota_exceeded = True
+                state.context.audit_log.append(f"❌ Quota Exceeded: {msg}")
+                return
+
+            LicenseManager.record_healing_usage(1)
+        
+        # Execute Healing Tier Trophies
+        HealingCoreStage().execute(state)
+        HealingSecurityStage(harden=kwargs.get("harden", False)).execute(state)
+        HealingBestPracticesStage(
+            fix_tags=kwargs.get("fix_tags", False) or getattr(config, "fix_tags", False),
+            enforce_probes=kwargs.get("enforce_probes", False)
+        ).execute(state)
+
+    def _map_status(self, state: Any, analysis_success: bool, **kwargs) -> Any:
+        """Determines the final HealStatus for the file."""
+        from yamlr.core.engine.models import HealStatus
+        
+        if state.context.quota_exceeded:
+            return HealStatus.QUOTA_EXCEEDED
+        if not analysis_success:
+            return HealStatus.FAILED
+        if state.context.fixed_count > 0:
+            return HealStatus.HEALED
+        if not state.findings:
+            return HealStatus.UNCHANGED
+        
+        return HealStatus.UNCHANGED if kwargs.get("dry_run", True) else HealStatus.SKIPPED
+
+    def _build_io_error(self, relative_path: str, full_path: str, message: str) -> Any:
+        """Builds a standardized HealFileResult for IO errors."""
+        from yamlr.core.engine.models import HealFileResult, HealStatus, AnalysisResult
+        return HealFileResult(
+            file_path=relative_path,
+            full_path=full_path,
+            success=False,
+            status=HealStatus.FAILED,
+            kind="Unknown",
+            logic_logs=[f"❌ {message}"],
+            findings=[
+                AnalysisResult(
+                    analyzer_name="System",
+                    severity="ERROR",
+                    message=message,
+                    resource_name="unknown",
+                    resource_kind="Unknown",
+                    file_path=relative_path,
+                    suggestion="Check file permissions or encoding.",
+                    rule_id="system/io-error"
+                )
+            ],
+            original_content="",
+            healed_content="",
+        )
+
+    def _build_error_result(self, relative_path: str, full_path: str, content: str, norm_res: Any, start_time: float) -> Any:
+        """Builds a standardized error result for normalization failures."""
+        from yamlr.core.engine.models import HealFileResult, HealStatus
+        return HealFileResult(
+            file_path=relative_path,
+            full_path=full_path,
+            success=False,
+            status=HealStatus.FAILED,
+            kind="Error",
+            logic_logs=[f"❌ {norm_res.errors[0] if norm_res.errors else 'Parsing failed'}"],
+            findings=[],
+            original_content=content,
+            healed_content=content,
+            processing_time_seconds=time.time() - start_time
+        )
+
+    def audit_and_heal_file(self, relative_path, **kwargs):
+        """Legacy entrypoint redirected to v3 loop."""
+        return self.process_file(relative_path=relative_path, **kwargs)
+
+    def audit_stream(self, content, source_name="<stdin>", **kwargs):
+        """Legacy entrypoint redirected to v3 loop."""
+        return self.process_file(source_name, content=content, **kwargs)
+
+    def audit_stream(self, content, source_name="<stdin>", **kwargs):
+        """Legacy entrypoint redirected to v3 loop."""
+        return self.process_file(source_name, content=content, **kwargs)
+
+    def batch_heal(self, root_path, **kwargs):
+        """Batch processing entrypoint (Unified Crawler)."""
         from yamlr.core.engine import processor
-        if extensions is None: extensions = [YAML_EXT, YML_EXT]
+        from yamlr.core.engine.crawler import crawl_manifests
 
-        # [HYPERSCALE-CACHE] Initialize SQLite-backed DiskIndex (VAL-02-6)
-        # Why: Prevents RAM exhaustion during global analysis for 1M+ manifests.
-        from yamlr.analyzers.detectors.disk_index import DiskIndex
-        index_dir = self.workspace / ".yamlr_cache"
-        index_dir.mkdir(parents=True, exist_ok=True)
-        self.disk_index = DiskIndex(index_dir / "identity_index.db")
-        self.disk_index.clear() # Start fresh for each batch
-
-        if kwargs.get("from_report_path"):
-            self._init_generic_report_adapter(str(kwargs.get("from_report_path")))
-
-        # Group remaining kwargs
-        return processor.batch_heal(
-            self,
-            root_path,
-            extensions,
-            max_depth=max_depth,
-            dry_run=dry_run,
-            **kwargs
-        )
-
-    def apply_semantic_fixes(self, results: List[HealFileResult], stub_healing: bool = False, allow_unsafe: bool = False, dry_run: bool = True) -> int:
-        """Delegates to processor.apply_semantic_fixes."""
-        from yamlr.core.engine import processor
-        return processor.apply_semantic_fixes(self, results, stub_healing, allow_unsafe, dry_run, concurrency=self.concurrency)
-
-    def get_upgrade_advisory_data(self, from_version: str, to_version: str) -> Dict[str, Any]:
-        """Calculates risk levels for an upgrade path.
-        
-        Why: Centralized logic for the Safety Engine to assess version migration risk.
-        """
-        from yamlr.analyzers.detectors.deprecation import DeprecationChecker
-        checker = DeprecationChecker()
-        return checker.upgrade_risk_score(from_version, to_version)
-
-    def _init_opa_engine(self, opa_bundle_path: str):
-        """Initializes the OPA Policy Engine (Enterprise Feature)."""
-        try:
-            from yamlr.analyzers.registry import AnalyzerRegistry
-            from yamlr.pro.license import license_manager
-            from yamlr.pro.opa_adapter import OpaAnalyzer
-
-            if license_manager.check_feature_access("opa"):
-                opa_analyzer = OpaAnalyzer(policy_path=opa_bundle_path)
-                AnalyzerRegistry.register_instance(opa_analyzer)
-                logger.info(f"💎 OPA Policy Engine enabled (Bundle: {opa_bundle_path})")
-            else:
-                logger.warning("⛔ OPA Feature requires Enterprise license.")
-        except (ImportError, AttributeError, KeyError) as e:
-            logger.error(f"Failed to initialize OPA Engine: {e}")
-
-    def _init_kyverno_engine(self, kyverno_report_path: str):
-        """Initializes the Kyverno Policy Engine (Enterprise Feature)."""
-        try:
-            from yamlr.analyzers.registry import AnalyzerRegistry
-            from yamlr.pro.license import license_manager
-            from yamlr.pro.kyverno_adapter import KyvernoAdapter
-
-            if license_manager.check_feature_access("kyverno"):
-                kyverno_analyzer = KyvernoAdapter(report_path=kyverno_report_path)
-                AnalyzerRegistry.register_instance(kyverno_analyzer)
-                logger.info(f"💎 Kyverno Adapter enabled (Report: {kyverno_report_path})")
-            else:
-                logger.warning("⛔ Kyverno Feature requires Enterprise license.")
-        except (ImportError, AttributeError, KeyError) as e:
-            logger.error(f"Failed to initialize Kyverno Engine: {e}")
-
-    def _init_generic_report_adapter(self, report_path: str):
-        """Auto-detects and initializes the appropriate adapter for a report file."""
-        import json
-        try:
-            with open(report_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            
-            # Simple heuristic
-            if "items" in data or data.get("kind") in ["PolicyReport", "ClusterPolicyReport"]:
-                self._init_kyverno_engine(report_path)
-            elif "result" in data or "expressions" in str(data):
-                self._init_opa_engine(report_path)
-            else:
-                logger.warning(f"Could not determine report format for {report_path}")
-        except (json.JSONDecodeError, OSError, IOError) as e:
-            logger.error(f"Failed to auto-detect report format: {e}")
+        extensions = kwargs.get("extensions", [".yaml", ".yml"])
+        files = crawl_manifests(self.workspace, root_path, extensions=extensions, max_depth=10, engine_context={})
+        files_to_process = [f["path"] for f in files]
+        return processor.batch_heal(self, files_to_process, **kwargs)
 
     def close(self):
-        """Releases all engine and infrastructure resources safely."""
-        try:
-            if hasattr(self, "disk_index") and self.disk_index:
-                self.disk_index.close()
-                self.disk_index = None
-            if hasattr(self, "manager") and self.manager:
-                self.manager.close()
-        except (AttributeError, OSError, IOError) as e:
-            logger.debug(f"Engine shutdown warning: {e}")
+        """Ensures safe resource release."""
+        if hasattr(self, "manager") and self.manager:
+            self.manager.close()
 
 # Export aliases
-audit_status = HealStatus
-AUDIT_ENGINE_V3 = YamlrEngine
 AuditEngineV3 = YamlrEngine
+AuditEngine = YamlrEngine

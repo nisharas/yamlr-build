@@ -1,0 +1,10 @@
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: broken-indent
+spec:
+  replicas: 1
+    selector:  # Wrong indent
+    matchLabels:
+      app: test

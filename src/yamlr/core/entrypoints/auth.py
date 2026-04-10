@@ -1,9 +1,10 @@
 from __future__ import annotations
+
 from pathlib import Path
 
 from yamlr.core.bridge import ProStatus, YamlrBridge
-__all__ = ['handle_auth_command']
 
+__all__ = ["handle_auth_command"]
 
 
 def handle_auth_command(args, console):
@@ -25,9 +26,10 @@ def handle_auth_command(args, console):
 
             key_file = config_dir / "license.key"
             key_file.write_text(license_key, encoding="utf-8")
-            
+
             # [Security] Restrict permissions: 0600 (owner read/write only)
             import os
+
             try:
                 os.chmod(key_file, 0o600)
             except Exception as e:

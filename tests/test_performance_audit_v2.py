@@ -1,8 +1,10 @@
-import unittest
 import time
+import unittest
 from pathlib import Path
-from yamlr.core.engine.base import YamlrEngine
+
 from yamlr.core.engine import auditor
+from yamlr.core.engine.base import YamlrEngine
+
 
 class TestPerformanceAuditV2(unittest.TestCase):
     def setUp(self):
@@ -35,28 +37,29 @@ spec:
         """Verify that security penalties are applied without double-parsing."""
         # 1. Warm up
         auditor.audit_and_heal_file(self.engine, "perf_test.yaml", dry_run=True, harden=True)
-        
+
         # 2. Measure
         start_t = time.time()
         res = auditor.audit_and_heal_file(self.engine, "perf_test.yaml", dry_run=True, harden=True)
         duration = time.time() - start_t
-        
+
         print(f"\n[PERF] Audit duration: {duration:.3f}s")
-        print(f"[DEBUG] Findings: {[ (f.get('rule_id') if isinstance(f, dict) else f.rule_id) for f in res.findings ]}")
-        
+        print(f"[DEBUG] Findings: {[(f.get('rule_id') if isinstance(f, dict) else f.rule_id) for f in res.findings]}")
+
         # 3. Verify Security Findings (Should still be present)
         # rule/no-latest-tag and rule/unsafe-hostpath
         rule_ids = [f["rule_id"] for f in res.findings]
         self.assertIn("rule/no-latest-tag", rule_ids)
         self.assertIn("rule/unsafe-hostpath", rule_ids)
-        
+
         # 4. Verify Score Penalty
         # Base score starts high, but should be penalized by hostPath (-15) and latest tag
         self.assertLess(res.trust_score, 90)
-        
+
         # 5. Verify no double-parse artifacts in logs (should only see Stage 7.5 once)
         security_logs = [log for log in res.logic_logs if "Stage 7.5: Security Scoring" in log]
         self.assertEqual(len(security_logs), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

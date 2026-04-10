@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: aws-svc-12078
+  namespace: us-east-1
+spec:
+  selector:
+    app: aws-svc-12078
+  ports:
+  - port: 80
+    targetPort: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: aws-svc-12078-ingress
+  namespace: us-east-1
+spec:
+  rules:
+  - http:
+      paths:
+      - path: /api/12078
+        pathType: Prefix
+        backend:
+          service:
+            name: aws-svc-12078
+            port:
+              number: 80

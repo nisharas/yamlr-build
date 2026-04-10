@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-15599
+  labels:
+    app: ms-15599
+    dependency: ms-15600
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-15599
+  template:
+    metadata:
+      labels:
+        app: ms-15599
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-15600

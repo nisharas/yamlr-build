@@ -2,16 +2,16 @@
 """
 Yamlr Catalog Distiller
 -----------------------
-Automates the conversion of raw Kubernetes OpenAPI (swagger.json) into 
+Automates the conversion of raw Kubernetes OpenAPI (swagger.json) into
 Yamlr's hyper-efficient "Distilled DNA" catalog format.
 
-Why: To ensure Yamlr can support new K8s versions with sub-megabyte 
+Why: To ensure Yamlr can support new K8s versions with sub-megabyte
      distribution footprints and sub-50ms load times.
 """
 
+import argparse
 import json
 import logging
-import argparse
 import urllib.request
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -53,7 +53,7 @@ class CatalogDistiller:
             return {}
 
         definitions = self.raw_schema.get("definitions", {})
-        
+
         # 1. Map all K8s internal keys to simpler names (e.g. io.k8s.api.core.v1.Pod -> Pod)
         self._build_ref_map(definitions)
 
@@ -62,12 +62,12 @@ class CatalogDistiller:
         for key, schema in definitions.items():
             if not self._is_k8s_resource(key):
                 continue
-            
+
             kind = key.split(".")[-1]
             if kind in self.distilled:
                 # Resolve conflicts? Usually just use the first stable one or merge.
                 continue
-                
+
             self.distilled[kind] = self._process_node(schema)
 
         return self.distilled
@@ -85,12 +85,13 @@ class CatalogDistiller:
     def _is_k8s_resource(self, key: str) -> bool:
         """Heuristic to identify a K8s object vs an internal utility struct."""
         # Capture Standard APIs, Extensions (CRDs), and Core Machinery types
-        return (key.startswith("io.k8s.api.") or "apiextensions" in key or "apimachinery" in key) and \
-               not any(x in key for x in ["proto"])
+        return (key.startswith("io.k8s.api.") or "apiextensions" in key or "apimachinery" in key) and not any(
+            x in key for x in ["proto"]
+        )
 
     def _process_node(self, node: Dict[str, Any], depth: int = 0) -> Dict[str, Any]:
         """Recursively distills a schema node."""
-        if depth > 12: # Safety limit for circular refs
+        if depth > 12:  # Safety limit for circular refs
             return {"type": "object", "incomplete": True}
 
         # Case 1: Reference
@@ -104,7 +105,7 @@ class CatalogDistiller:
             return {
                 "type": "array",
                 "item_type": items.get("type", "object"),
-                "fields": self._process_node(items, depth + 1).get("fields")
+                "fields": self._process_node(items, depth + 1).get("fields"),
             }
 
         # Case 3: Object with properties
@@ -119,10 +120,7 @@ class CatalogDistiller:
         # Case 4: Multi-type (oneOf/anyOf) for types like IntOrString
         for key in ["oneOf", "anyOf"]:
             if key in node:
-                return {
-                    "type": "multi",
-                    "options": [self._process_node(opt, depth + 1) for opt in node[key]]
-                }
+                return {"type": "multi", "options": [self._process_node(opt, depth + 1) for opt in node[key]]}
 
         # Case 5: Primitive
         return {"type": node.get("type", "string")}
@@ -134,7 +132,7 @@ class CatalogDistiller:
         self.distilled["metadata"] = self.distilled.get("metadata", {})
         self.distilled["metadata"]["distiller_version"] = "1.6.0"
         self.distilled["metadata"]["distilled_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.get_gmtime())
-        
+
         with output_path.open("w", encoding="utf-8") as f:
             json.dump(self.distilled, f, indent=2, sort_keys=True)
         logger.info(f"Successfully saved distilled catalog to {output_path}")

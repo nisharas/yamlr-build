@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-8067
+  labels:
+    app: ms-8067
+    dependency: ms-8068
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-8067
+  template:
+    metadata:
+      labels:
+        app: ms-8067
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-8068

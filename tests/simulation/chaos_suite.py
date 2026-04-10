@@ -1,12 +1,13 @@
-import unittest
 import os
 import shutil
+import unittest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 # Core components to test for resilience
 from yamlr.core.io import FileSystemManager
 from yamlr.pro.opa_adapter import OpaAnalyzer
+
 
 class ChaosSuite(unittest.TestCase):
     """
@@ -19,7 +20,7 @@ class ChaosSuite(unittest.TestCase):
         self.workspace.mkdir(exist_ok=True)
         self.fsm = FileSystemManager(self.workspace)
         self.fsm.ensure_workspace()
-        
+
         self.test_file = self.workspace / "target.yaml"
         self.content = "apiVersion: v1\nkind: Pod\nmetadata:\n  name: chaos-target"
 
@@ -42,14 +43,14 @@ class ChaosSuite(unittest.TestCase):
             try:
                 self.fsm.atomic_write(self.test_file, "NEW_CONTENT")
             except (OSError, IOError):
-                 pass # Expected failure
-            
+                pass  # Expected failure
+
             # Verify original content is STILL THERE
             with open(self.test_file, "r") as f:
                 self.assertEqual(f.read(), "ORIGINAL_CONTENT")
-            
+
             # The tmp file should have been cleaned up by the except block in atomic_write
-            # Check state_dir/tmp 
+            # Check state_dir/tmp
             tmp_dir = self.workspace / ".yamlr" / "tmp"
             self.assertEqual(len(list(tmp_dir.glob("*.tmp"))), 0)
 
@@ -59,12 +60,12 @@ class ChaosSuite(unittest.TestCase):
         Rule: OpaAnalyzer must not crash; should handle timeout gracefully.
         """
         import urllib.error
-        
+
         # Mock urllib.request.urlopen to simulate timeout
         with patch("urllib.request.urlopen", side_effect=urllib.error.URLError("Connection timed out")):
             # Must use a trusted domain to pass domain allowlist check in OpaAnalyzer
             analyzer = OpaAnalyzer(policy_path="https://github.com/yamlr/unreachable.rego")
-            
+
             # If it failed to fetch, it should have returned None for policy_path
             self.assertIsNone(analyzer.policy_path)
 
@@ -77,20 +78,21 @@ class ChaosSuite(unittest.TestCase):
         tmp_dir = self.workspace / ".yamlr" / "tmp"
         tmp_dir.mkdir(parents=True, exist_ok=True)
         stale_tmp = tmp_dir / "stale.1234.tmp"
-        
+
         # We need to make it "old" so cleanup_fragments picks it up
         with open(stale_tmp, "w") as f:
             f.write("STALE_DATA")
-        
+
         # Backdate the file by 2 hours
         past_time = os.path.getmtime(stale_tmp) - 7200
         os.utime(stale_tmp, (past_time, past_time))
-            
+
         # Running ensure_workspace should trigger cleanup_fragments
         self.fsm.ensure_workspace()
-        
+
         # Stale .tmp should be gone
         self.assertFalse(stale_tmp.exists())
+
 
 if __name__ == "__main__":
     unittest.main()

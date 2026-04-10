@@ -1,16 +1,19 @@
 from __future__ import annotations
+
 from typing import Any, Dict, Optional
 
 from yamlr.models import K8S_CORE_KEYS
+
 from .base import BaseHeuristic
-__all__ = ['KeywordFusionHeuristic', 'MissingColonHeuristic']
+
+__all__ = ["KeywordFusionHeuristic", "MissingColonHeuristic"]
 
 
 class KeywordFusionHeuristic(BaseHeuristic):
     """
     Fixes fused K8s keywords like 'kindService' -> 'kind: Service'.
     """
-    
+
     SAFE_KEYWORDS = K8S_CORE_KEYS
 
     @property
@@ -36,16 +39,20 @@ class KeywordFusionHeuristic(BaseHeuristic):
             if "stats" in context:
                 context["stats"]["spacing_fixes"] = context["stats"].get("spacing_fixes", 0) + 1
             return (" " * indent) + f"{key}: {suffix}"
-            
+
         return line
 
     def _find_fused_keyword(self, stripped: str) -> Optional[Tuple[str, str]]:
         """Identifies a known keyword fused to its value (e.g. kindService)."""
         for key in self.SAFE_KEYWORDS:
             if stripped.startswith(key) and len(stripped) > len(key):
-                suffix = stripped[len(key):]
+                suffix = stripped[len(key) :]
                 # If suffix starts with uppercase, it's likely a ValueFusedToKey
-                if suffix[0].isupper() or suffix[0].isdigit() or (key == "apiVersion" and suffix.lower().startswith("v")):
+                if (
+                    suffix[0].isupper()
+                    or suffix[0].isdigit()
+                    or (key == "apiVersion" and suffix.lower().startswith("v"))
+                ):
                     return key, suffix
         return None
 
@@ -76,10 +83,10 @@ class MissingColonHeuristic(BaseHeuristic):
         if next_line:
             cur_indent = len(line) - len(line.lstrip())
             next_indent = len(next_line) - len(next_line.lstrip())
-            
+
             if next_indent > cur_indent and next_line.strip():
                 if "stats" in context:
                     context["stats"]["spacing_fixes"] = context["stats"].get("spacing_fixes", 0) + 1
                 return line.rstrip() + ":"
-        
+
         return line

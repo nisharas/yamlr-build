@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-632
+  labels:
+    app: ms-632
+    dependency: ms-633
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-632
+  template:
+    metadata:
+      labels:
+        app: ms-632
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-633

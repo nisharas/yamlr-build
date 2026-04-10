@@ -8,14 +8,16 @@ Extracts:
 """
 
 from __future__ import annotations
+
 from typing import List
 
 from yamlr.models import ManifestIdentity, Shard
-__all__ = ['ServiceAccountExtractor']
 
+__all__ = ["ServiceAccountExtractor"]
 
 
 from .base_extractor import BaseMetadataExtractor
+
 
 class ServiceAccountExtractor(BaseMetadataExtractor):
     """Extracts ServiceAccount references from workload resources."""
@@ -36,8 +38,13 @@ class ServiceAccountExtractor(BaseMetadataExtractor):
         """
         # Only extract from workload resources
         valid_kinds = [
-            "Pod", "Deployment", "StatefulSet", "DaemonSet",
-            "Job", "CronJob", "ReplicaSet",
+            "Pod",
+            "Deployment",
+            "StatefulSet",
+            "DaemonSet",
+            "Job",
+            "CronJob",
+            "ReplicaSet",
         ]
         if identity.kind not in valid_kinds:
             return False

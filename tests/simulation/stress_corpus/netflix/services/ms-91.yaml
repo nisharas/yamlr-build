@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-91
+  labels:
+    app: ms-91
+    dependency: ms-92
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-91
+  template:
+    metadata:
+      labels:
+        app: ms-91
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-92

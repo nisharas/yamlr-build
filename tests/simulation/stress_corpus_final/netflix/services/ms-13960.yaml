@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-13960
+  labels:
+    app: ms-13960
+    dependency: ms-13961
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-13960
+  template:
+    metadata:
+      labels:
+        app: ms-13960
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-13961

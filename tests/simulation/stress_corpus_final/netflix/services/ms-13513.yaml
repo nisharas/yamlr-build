@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-13513
+  labels:
+    app: ms-13513
+    dependency: ms-13514
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-13513
+  template:
+    metadata:
+      labels:
+        app: ms-13513
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-13514

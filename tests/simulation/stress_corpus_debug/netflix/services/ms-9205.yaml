@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-9205
+  labels:
+    app: ms-9205
+    dependency: ms-9206
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-9205
+  template:
+    metadata:
+      labels:
+        app: ms-9205
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-9206

@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-9396
+  labels:
+    app: ms-9396
+    dependency: ms-9397
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-9396
+  template:
+    metadata:
+      labels:
+        app: ms-9396
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-9397

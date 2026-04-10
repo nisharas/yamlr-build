@@ -1,0 +1,55 @@
+name: 🛠️ Hyperscale Stress Test (150k+)
+
+on:
+  workflow_dispatch:
+    inputs:
+      manifest_count:
+        description: 'Total number of manifests to generate and test'
+        required: true
+        default: '150000'
+        type: 'string'
+
+jobs:
+  stress-test:
+    name: 🚀 Execute 100x Scale Stress Test
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 🐍 Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 📦 Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install psutil rich
+          # No need to install yamlr as we run from source (src/)
+
+      - name: 🔥 Run Stress Test Orchestrator
+        env:
+          PYTHONPATH: src
+          PYTHONUTF8: 1
+          YAMLR_QUIET: true
+        run: |
+          python scripts/stress_test_orchestrator.py --count ${{ github.event.inputs.manifest_count }} --output stress_results.json
+
+      - name: 📊 Upload Stress Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stress-test-report-${{ github.run_id }}
+          path: stress_results.json
+
+      - name: 📝 Final Validation Summary
+        if: always()
+        run: |
+          echo "### 🚀 Hyperscale Stress Test Summary" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "| :--- | :--- |" >> $GITHUB_STEP_SUMMARY
+          echo "| Total Manifests | ${{ github.event.inputs.manifest_count }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Peak RAM (GB) | $(cat stress_results.json | jq -r '.results.peak_memory_gb' | xargs printf '%.3f') |" >> $GITHUB_STEP_SUMMARY
+          echo "| Throughput (f/s) | $(cat stress_results.json | jq -r '.results.files_per_sec' | xargs printf '%.2f') |" >> $GITHUB_STEP_SUMMARY
+          echo "| Status | $(cat stress_results.json | jq -r '.results.success') |" >> $GITHUB_STEP_SUMMARY

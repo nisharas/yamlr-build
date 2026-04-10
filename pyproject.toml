@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "Proprietary"}
 authors = [
-    {name = "Nishar A Sunkesala", email = "maintainers@yamlr.dev"}
+    {name = "Nishar A Sunkesala", email = "contact@yamlr.dev"}
 ]
 keywords = ["kubernetes", "yaml", "devops", "sre", "yamlr", "manifest-healing"]
 classifiers = [

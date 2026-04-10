@@ -9,12 +9,16 @@ Extracts:
 """
 
 from __future__ import annotations
+
 from typing import List
+
 from yamlr.models import ManifestIdentity, Shard
-__all__ = ['KMSExtractor']
+
+__all__ = ["KMSExtractor"]
 
 
 from .base_extractor import BaseMetadataExtractor
+
 
 class KMSExtractor(BaseMetadataExtractor):
     """Extracts KMS key references or encryption identifiers from Secrets."""

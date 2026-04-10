@@ -3,17 +3,17 @@ from pathlib import Path
 
 # Use project-relative paths
 ROOT = Path(__file__).resolve().parent.parent
-batch_file = str(ROOT / 'src/yamlr/ui/formatter_batch.py')
-summary_file = str(ROOT / 'src/yamlr/ui/formatter_summary.py')
-formatter_file = str(ROOT / 'src/yamlr/ui/formatter.py')
+batch_file = str(ROOT / "src/yamlr/ui/formatter_batch.py")
+summary_file = str(ROOT / "src/yamlr/ui/formatter_summary.py")
+formatter_file = str(ROOT / "src/yamlr/ui/formatter.py")
 
 # Split formatter_batch.py
-with open(batch_file, 'r', encoding='utf-8') as f:
+with open(batch_file, "r", encoding="utf-8") as f:
     lines = f.readlines()
 
 start_idx = -1
 for i, line in enumerate(lines):
-    if 'def _print_summary_stats(' in line:
+    if "def _print_summary_stats(" in line:
         start_idx = i
         break
 
@@ -21,7 +21,7 @@ if start_idx != -1:
     batch_lines = lines[:start_idx]
     summary_lines = lines[start_idx:]
 
-    with open(batch_file, 'w', encoding='utf-8') as f:
+    with open(batch_file, "w", encoding="utf-8") as f:
         f.writelines(batch_lines)
 
     summary_content = '''#!/usr/bin/env python3
@@ -51,40 +51,44 @@ class SummaryMixin:
     }
 
 '''
-    with open(summary_file, 'w', encoding='utf-8') as f:
+    with open(summary_file, "w", encoding="utf-8") as f:
         f.write(summary_content)
         f.writelines(summary_lines)
 
-    with open(formatter_file, 'r', encoding='utf-8') as f:
+    with open(formatter_file, "r", encoding="utf-8") as f:
         fmt = f.read()
 
-    if 'SummaryMixin' not in fmt:
-        fmt = fmt.replace('from yamlr.ui.formatter_batch import BatchMixin', 'from yamlr.ui.formatter_batch import BatchMixin\nfrom yamlr.ui.formatter_summary import SummaryMixin')
-        fmt = fmt.replace('ReportMixin, BatchMixin', 'ReportMixin, BatchMixin, SummaryMixin')
-        with open(formatter_file, 'w', encoding='utf-8') as f:
+    if "SummaryMixin" not in fmt:
+        fmt = fmt.replace(
+            "from yamlr.ui.formatter_batch import BatchMixin",
+            "from yamlr.ui.formatter_batch import BatchMixin\nfrom yamlr.ui.formatter_summary import SummaryMixin",
+        )
+        fmt = fmt.replace("ReportMixin, BatchMixin", "ReportMixin, BatchMixin, SummaryMixin")
+        with open(formatter_file, "w", encoding="utf-8") as f:
             f.write(fmt)
 
 # Split entrypoints/base.py
-base_file = str(ROOT / 'src/yamlr/core/entrypoints/base.py')
-display_file = str(ROOT / 'src/yamlr/core/entrypoints/display.py')
+base_file = str(ROOT / "src/yamlr/core/entrypoints/base.py")
+display_file = str(ROOT / "src/yamlr/core/entrypoints/display.py")
 
-with open(base_file, 'r', encoding='utf-8') as f:
+with open(base_file, "r", encoding="utf-8") as f:
     blines = f.readlines()
 
 header_idx = -1
 for i, line in enumerate(blines):
-    if 'def print_custom_header(' in line:
+    if "def print_custom_header(" in line:
         header_idx = i
         break
 
 if header_idx != -1:
-    base_content = ''.join(blines[:header_idx])
-    display_content = ''.join(blines[header_idx:])
+    base_content = "".join(blines[:header_idx])
+    display_content = "".join(blines[header_idx:])
 
-    with open(base_file, 'w', encoding='utf-8') as f:
+    with open(base_file, "w", encoding="utf-8") as f:
         f.write(base_content)
 
-    d_content = '''import platform
+    d_content = (
+        """import platform
 from rich.panel import Panel
 from rich.table import Table
 from rich.align import Align
@@ -93,22 +97,27 @@ from yamlr.core.bridge import YamlrBridge
 from yamlr.core.context import HealContext
 from .base import get_console, CORE_VERSION, CATALOG_VERSION
 
-''' + display_content
+"""
+        + display_content
+    )
 
-    with open(display_file, 'w', encoding='utf-8') as f:
+    with open(display_file, "w", encoding="utf-8") as f:
         f.write(d_content)
 
-    for root, _, files in os.walk(str(ROOT / 'src/yamlr/cli/commands')):
+    for root, _, files in os.walk(str(ROOT / "src/yamlr/cli/commands")):
         for file in files:
-            if file.endswith('.py'):
+            if file.endswith(".py"):
                 path = os.path.join(root, file)
-                with open(path, 'r', encoding='utf-8') as cf:
+                with open(path, "r", encoding="utf-8") as cf:
                     content = cf.read()
-                
-                if 'print_custom_header' in content or 'print_version' in content:
-                    if 'from yamlr.core.entrypoints.display import' not in content:
-                        content = content.replace('from yamlr.core.entrypoints.base import', 'from yamlr.core.entrypoints.display import print_custom_header, print_version\nfrom yamlr.core.entrypoints.base import')
-                        with open(path, 'w', encoding='utf-8') as cf:
+
+                if "print_custom_header" in content or "print_version" in content:
+                    if "from yamlr.core.entrypoints.display import" not in content:
+                        content = content.replace(
+                            "from yamlr.core.entrypoints.base import",
+                            "from yamlr.core.entrypoints.display import print_custom_header, print_version\nfrom yamlr.core.entrypoints.base import",
+                        )
+                        with open(path, "w", encoding="utf-8") as cf:
                             cf.write(content)
 
-print('Split complete.')
+print("Split complete.")

@@ -4,15 +4,18 @@ Extracted from scanner.py to improve maintainability.
 """
 
 from __future__ import annotations
+
 import difflib
 import time
 from typing import Any, Dict, List, Optional, Set
+
 
 class SchemaManager:
     """
     Manages K8s schema catalogs and validation.
     """
-    CACHE_TTL = 3600 # 1 hour default
+
+    CACHE_TTL = 3600  # 1 hour default
 
     def __init__(
         self,
@@ -179,7 +182,7 @@ class SchemaManager:
         # Deterministic accumulation prevents Kind collisions during scans.
         # Priority: Core > Primary > OpenAPI > Plugins > CRDs
         all_keys = core_keys | nested_keys
-        
+
         if self.catalog:
             all_keys |= self._extract_keys_from_catalog(self.catalog)
 
@@ -187,7 +190,7 @@ class SchemaManager:
             # OpenAPI takes priority over generic CRDs
             all_keys |= self._extract_openapi_keys(self.openapi_catalog)
 
-        for plugin_catalog in (self.plugin_catalogs or []):
+        for plugin_catalog in self.plugin_catalogs or []:
             if isinstance(plugin_catalog, dict):
                 all_keys |= self._extract_keys_from_catalog(plugin_catalog)
 
@@ -204,10 +207,10 @@ class SchemaManager:
         keys = set()
         if not isinstance(node, dict) or depth > 20:
             return keys
-            
+
         if _seen is None:
             _seen = set()
-        
+
         node_id = id(node)
         if node_id in _seen:
             return keys
@@ -215,10 +218,11 @@ class SchemaManager:
 
         # 1. Collect properties at this level
         keys.update(self._get_node_properties(node))
-        
+
         # 2. Recurse into all items
         for k, v in node.items():
-            if k in ["properties", "fields"]: continue
+            if k in ["properties", "fields"]:
+                continue
             keys |= self._recurse_node_value(v, depth, _seen)
 
         return keys
@@ -244,15 +248,13 @@ class SchemaManager:
     def _extract_resource_keys(self, schema: Dict[str, Any]) -> Set[str]:
         """Helper to extract keys from a specific resource schema."""
         keys = set()
-        properties = (schema.get("properties") or {})
+        properties = schema.get("properties") or {}
         if isinstance(properties, dict):
             keys.update(properties.keys())
             keys |= self._extract_nested_properties(properties)
         return keys
 
-    def _extract_nested_properties(
-        self, properties: Optional[Dict[str, Any]], depth: int = 0
-    ) -> Set[str]:
+    def _extract_nested_properties(self, properties: Optional[Dict[str, Any]], depth: int = 0) -> Set[str]:
         """
         Recursively extracts property keys from nested schema.
         """
@@ -266,7 +268,7 @@ class SchemaManager:
                 continue
 
             # Add nested properties
-            nested_props = (prop_schema.get("properties") or {})
+            nested_props = prop_schema.get("properties") or {}
             if isinstance(nested_props, dict):
                 keys.update(nested_props.keys())
                 keys |= self._extract_nested_properties(nested_props, depth + 1)
@@ -332,9 +334,7 @@ class SchemaManager:
 
         # Check plugin catalogs
         for plugin_catalog in self.plugin_catalogs:
-            if isinstance(plugin_catalog, dict) and self._kind_in_catalog(
-                kind, plugin_catalog
-            ):
+            if isinstance(plugin_catalog, dict) and self._kind_in_catalog(kind, plugin_catalog):
                 return True
 
         return False
@@ -368,17 +368,17 @@ class SchemaManager:
     def fuzzy_match(self, key: str, cutoff: float = 0.8, kind: Optional[str] = None) -> Optional[str]:
         """
         Finds the closest match for a key among known structure keys.
-        
+
         Args:
             key: The potentially misspelled key
             cutoff: Similarity threshold (0.0 to 1.0)
             kind: Optional resource kind to narrow the search space
-            
+
         Returns:
             The closest matching key if found, otherwise None
         """
         # [Zero-Blindspot] Scoped Registry Search
-        # Why: Prevents "Semantic Collisions" where a typo in one Kind 
+        # Why: Prevents "Semantic Collisions" where a typo in one Kind
         # matches a field from a completely different API group.
         search_keys = self.known_structure_keys
         if kind and self.has_schema_for(kind):
@@ -386,7 +386,7 @@ class SchemaManager:
             kind_keys = self._get_keys_for_kind(kind)
             if kind_keys:
                 search_keys = kind_keys
-        
+
         # 1. Exact case-sensitive match
         if key in search_keys:
             return key
@@ -398,23 +398,30 @@ class SchemaManager:
                 return k
 
         # 3. Fuzzy match (Levensthein)
-        matches = difflib.get_close_matches(
-            key, search_keys, n=1, cutoff=cutoff
-        )
-        
+        matches = difflib.get_close_matches(key, search_keys, n=1, cutoff=cutoff)
+
         # 4. Fallback to Global Search if scoped search failed to yield a high-confidence match
         if not matches and search_keys is not self.known_structure_keys:
-             return self.fuzzy_match(key, cutoff=cutoff, kind=None)
-             
+            return self.fuzzy_match(key, cutoff=cutoff, kind=None)
+
         return matches[0] if matches else None
 
     def _get_keys_for_kind(self, kind: str) -> Set[str]:
         """Retrieves known keys for a specific resource kind."""
         # Core keys are ALWAYS relevant
         core_keys = {
-            "apiVersion", "kind", "metadata", "spec", "status", "data", "name", "namespace", "labels", "annotations"
+            "apiVersion",
+            "kind",
+            "metadata",
+            "spec",
+            "status",
+            "data",
+            "name",
+            "namespace",
+            "labels",
+            "annotations",
         }
-        
+
         # Extract from catalog if available
         # Find the node for this kind
         kind_keys = set()
@@ -422,5 +429,5 @@ class SchemaManager:
             if isinstance(k_tuple, tuple) and k_tuple[1] == kind:
                 kind_keys |= self._extract_keys_from_catalog(schema)
                 break
-        
+
         return core_keys | kind_keys

@@ -45,16 +45,17 @@ Version: 1.2.1 (Modular Decomposition)
 """
 
 from __future__ import annotations
-import logging
-from typing import List, Tuple, Optional, Any, Dict
 
-from yamlr.models import Shard, ManifestIdentity
+import logging
+from typing import Any, Dict, List, Optional, Tuple
+
 from yamlr.core.deprecations import DeprecationChecker
+from yamlr.models import ManifestIdentity, Shard
 from yamlr.parsers.api_inference import APIVersionInferrer
-from yamlr.parsers.schema_manager import SchemaManager
 from yamlr.parsers.scanner_forensics import ForensicsMixin
 from yamlr.parsers.scanner_heuristics import HeuristicsMixin
 from yamlr.parsers.scanner_identity import IdentityMixin
+from yamlr.parsers.schema_manager import SchemaManager
 
 logger = logging.getLogger("yamlr.scanner")
 
@@ -62,7 +63,7 @@ logger = logging.getLogger("yamlr.scanner")
 # =============================================================================
 # THE IDENTITY ARCHEOLOGIST
 # =============================================================================
-__all__ = ['YamlrScanner']
+__all__ = ["YamlrScanner"]
 
 
 class YamlrScanner(IdentityMixin, HeuristicsMixin, ForensicsMixin):
@@ -114,12 +115,14 @@ class YamlrScanner(IdentityMixin, HeuristicsMixin, ForensicsMixin):
     IndentationError. It is the "Forensic Glue" of Stage 3.
     """
 
-    def __init__(self,
-                 catalog: Optional[Dict[Any, Any]] = None,
-                 schema_type: str = "kubernetes",
-                 app_name: str = "Yamlr",
-                 pro_brand: str = "Yamlr Enterprise (Pro)",
-                 **schema_sources):
+    def __init__(
+        self,
+        catalog: Optional[Dict[Any, Any]] = None,
+        schema_type: str = "kubernetes",
+        app_name: str = "Yamlr",
+        pro_brand: str = "Yamlr Enterprise (Pro)",
+        **schema_sources,
+    ):
         """
         Initializes the scanner with schema catalog(s) and branding.
 
@@ -145,9 +148,9 @@ class YamlrScanner(IdentityMixin, HeuristicsMixin, ForensicsMixin):
         self.pro_brand = pro_brand
 
         # Future expansion: Multi-catalog registration for hybrid parsing
-        self.openapi_catalog = schema_sources.get('openapi_catalog', {})
-        self.crd_catalog = schema_sources.get('crd_catalog', {})
-        self.plugin_catalogs = schema_sources.get('plugin_catalogs', [])
+        self.openapi_catalog = schema_sources.get("openapi_catalog", {})
+        self.crd_catalog = schema_sources.get("crd_catalog", {})
+        self.plugin_catalogs = schema_sources.get("plugin_catalogs", [])
 
         # Result store: Accumulates identities found in a single file stream.
         self.identities: List[ManifestIdentity] = []
@@ -168,7 +171,7 @@ class YamlrScanner(IdentityMixin, HeuristicsMixin, ForensicsMixin):
             catalog=self.catalog,
             openapi_catalog=self.openapi_catalog,
             crd_catalog=self.crd_catalog,
-            plugin_catalogs=self.plugin_catalogs
+            plugin_catalogs=self.plugin_catalogs,
         )
         self._known_structure_keys = self.schema_manager.get_structure_keys()
 
@@ -178,13 +181,11 @@ class YamlrScanner(IdentityMixin, HeuristicsMixin, ForensicsMixin):
         # Core Dependencies for API lifecycle and inference.
         self.deprecation_checker = DeprecationChecker()
         self.api_inferrer = APIVersionInferrer(
-            catalog=self.catalog,
-            crd_catalog=self.crd_catalog,
-            plugin_catalogs=self.plugin_catalogs
+            catalog=self.catalog, crd_catalog=self.crd_catalog, plugin_catalogs=self.plugin_catalogs
         )
 
         # Pro Mode Detection
-        self.pro_mode = schema_sources.get('pro_mode', self._detect_pro_mode())
+        self.pro_mode = schema_sources.get("pro_mode", self._detect_pro_mode())
 
         if self.pro_mode:
             logger.debug(f"Scanner initialized in PRO mode (intelligent repair enabled via {self.pro_brand})")
@@ -241,7 +242,9 @@ class YamlrScanner(IdentityMixin, HeuristicsMixin, ForensicsMixin):
         safety check for identity collisions.
         """
         if self._has_identity_collision(raw_yaml):
-            logger.debug("Identity collision detected in raw YAML. Falling back to Python scanner for diagnostic precision.")
+            logger.debug(
+                "Identity collision detected in raw YAML. Falling back to Python scanner for diagnostic precision."
+            )
             return self.scan_shards(self._get_shards_fallback(raw_yaml))
 
         try:
@@ -250,16 +253,18 @@ class YamlrScanner(IdentityMixin, HeuristicsMixin, ForensicsMixin):
             except ImportError:
                 from yamlr.native import fast_scan
             raw_results = fast_scan(raw_yaml)
-            
+
             identities = []
             for res in raw_results:
-                identities.append(ManifestIdentity(
-                    kind=res.get("kind"),
-                    api_version=res.get("api_version"),
-                    name=res.get("name"),
-                    namespace=res.get("namespace"),
-                    was_repaired=False # Fast scan is discovery-only
-                ))
+                identities.append(
+                    ManifestIdentity(
+                        kind=res.get("kind"),
+                        api_version=res.get("api_version"),
+                        name=res.get("name"),
+                        namespace=res.get("namespace"),
+                        was_repaired=False,  # Fast scan is discovery-only
+                    )
+                )
             return identities
         except (ImportError, Exception) as e:
             logger.debug(f"Native fast_scan failed or unavailable: {e}. Falling back to Python.")
@@ -271,30 +276,34 @@ class YamlrScanner(IdentityMixin, HeuristicsMixin, ForensicsMixin):
         Supports multi-document manifests with low memory overhead.
         """
         import re
+
         # Single-pass regex for document boundaries and identity markers at indent 0
-        pattern = re.compile(r'(?m)^(?:---$|kind\s*:|apiVersion\s*:)')
-        
+        pattern = re.compile(r"(?m)^(?:---$|kind\s*:|apiVersion\s*:)")
+
         has_kind = False
         has_api = False
-        
+
         for match in pattern.finditer(raw_yaml):
             marker = match.group(0).strip()
-            
+
             if marker == "---":
                 # Reset for next document
                 has_kind = False
                 has_api = False
             elif marker.startswith("kind"):
-                if has_kind: return True
+                if has_kind:
+                    return True
                 has_kind = True
             elif marker.startswith("apiVersion"):
-                if has_api: return True
+                if has_api:
+                    return True
                 has_api = True
-                
+
         return False
 
     def _get_shards_fallback(self, raw_yaml: str) -> List[Shard]:
         from yamlr.parsers.lexer import YamlrLexer
+
         lexer = YamlrLexer()
         return lexer.shard(raw_yaml)
 
@@ -314,7 +323,8 @@ class YamlrScanner(IdentityMixin, HeuristicsMixin, ForensicsMixin):
                 min_indent = 999
                 continue
 
-            if shard.is_block: continue
+            if shard.is_block:
+                continue
 
             if shard.key and shard.indent < min_indent:
                 min_indent = shard.indent
@@ -332,13 +342,13 @@ class YamlrScanner(IdentityMixin, HeuristicsMixin, ForensicsMixin):
 
             self._tag_intent(shard, key)
             self._extract_cross_resource_metadata(shard, key, val)
-            
+
             # Sovereignty Tracking
             if key in self._sovereign_candidates:
                 self._sovereign_candidates[key].append((shard.indent, val, shard.line_no))
 
             # Identity Extraction logic
-            is_root = (shard.indent == min_indent)
+            is_root = shard.indent == min_indent
             self._process_identity_marker(shard, key, val, is_root)
 
         self._flush_current_identity()
@@ -375,7 +385,9 @@ class YamlrScanner(IdentityMixin, HeuristicsMixin, ForensicsMixin):
 
         if self._in_global_metadata and not shard.is_list_item:
             if key == "name" and not self._current_identity.name:
-                logger.debug(f"[SCANNER] Setting name to '{val}' for {self._current_identity.kind} (Line {shard.line_no})")
+                logger.debug(
+                    f"[SCANNER] Setting name to '{val}' for {self._current_identity.kind} (Line {shard.line_no})"
+                )
                 self._current_identity.name = val
 
     def _finalize_scan(self, mode: str) -> List[ManifestIdentity]:
@@ -407,5 +419,3 @@ class YamlrScanner(IdentityMixin, HeuristicsMixin, ForensicsMixin):
         self.scan_logs = []
         for k in self._sovereign_candidates:
             self._sovereign_candidates[k] = []
-
-

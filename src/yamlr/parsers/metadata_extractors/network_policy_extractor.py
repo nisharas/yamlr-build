@@ -8,13 +8,16 @@ Extracts:
 """
 
 from __future__ import annotations
+
 from typing import List
 
 from yamlr.models import ManifestIdentity, Shard
-__all__ = ['NetworkPolicyExtractor']
+
+__all__ = ["NetworkPolicyExtractor"]
 
 
 from .base_extractor import BaseMetadataExtractor
+
 
 class NetworkPolicyExtractor(BaseMetadataExtractor):
     """Extracts podSelector and policyTypes for NetworkPolicy matching."""

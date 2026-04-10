@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-5807
+  labels:
+    app: ms-5807
+    dependency: ms-5808
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-5807
+  template:
+    metadata:
+      labels:
+        app: ms-5807
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-5808

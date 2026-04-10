@@ -15,15 +15,15 @@ Date: 2026-02-17
 """
 
 from __future__ import annotations
+
 import logging
 from typing import Any
 
-from yamlr.models import Shard, SPECIAL_PURPOSE_BLOCKS
+from yamlr.models import SPECIAL_PURPOSE_BLOCKS, Shard
 from yamlr.parsers.metadata_extractors import get_extractors
 
 logger = logging.getLogger("yamlr.scanner")
-__all__ = ['HeuristicsMixin']
-
+__all__ = ["HeuristicsMixin"]
 
 
 class HeuristicsMixin:
@@ -67,7 +67,7 @@ class HeuristicsMixin:
             key: Normalized key name after stripping whitespace/quotes.
         """
         # Safety Check: Do not overwrite tags set by identity extraction logic.
-        if hasattr(shard, 'intent_tag') and shard.intent_tag:
+        if hasattr(shard, "intent_tag") and shard.intent_tag:
             return
 
         # Tier 1: Unified Catalog Matching (Known World)
@@ -106,10 +106,10 @@ class HeuristicsMixin:
             return False
 
         # [PRECISION-10] Use line-specific repair tags if available
-        # Why: Global repair_stats (flush_left_lists_fixed) can cause false positives 
+        # Why: Global repair_stats (flush_left_lists_fixed) can cause false positives
         # for all list items in a large file. intent_tag ensures 1:1 correlation.
         if hasattr(shard, "intent_tag") and shard.intent_tag:
-            tag_lower = shard.intent_tag.lower()
+            tag_lower = (shard.intent_tag or "").lower()
             if any(marker in tag_lower for marker in ["repaired", "fixed", "normalized", "typo"]):
                 return True
 
@@ -190,7 +190,7 @@ class HeuristicsMixin:
             try:
                 metadata_index = path_keys.index("metadata")
                 # Must be at root or directly under root for multi-doc alignment.
-                self._in_global_metadata = (metadata_index == 0)
+                self._in_global_metadata = metadata_index == 0
             except (ValueError, IndexError):
                 self._in_global_metadata = False
         else:
@@ -218,5 +218,6 @@ class HeuristicsMixin:
 
     def _clean_id(self, val: Any) -> str:
         """DNA Sanitizer: Purges raw YAML tokens for accurate identity matching."""
-        if val is None: return ""
+        if val is None:
+            return ""
         return str(val).strip().strip("'").strip('"')

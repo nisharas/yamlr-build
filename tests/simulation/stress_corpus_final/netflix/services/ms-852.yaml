@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-852
+  labels:
+    app: ms-852
+    dependency: ms-853
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-852
+  template:
+    metadata:
+      labels:
+        app: ms-852
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-853

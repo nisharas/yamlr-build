@@ -1,26 +1,29 @@
+import argparse
 import os
 import subprocess
 import sys
-import argparse
-from typing import Any, Dict, List, Optional, Tuple
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
 from rich.console import Console
 from rich.panel import Panel
 
 console = Console()
+
 
 def run_command(cmd, name):
     console.print(f"\n[bold cyan]>> Running {name}...[/bold cyan]")
     # Use src in PYTHONPATH
     env = os.environ.copy()
     env["PYTHONPATH"] = "src" + os.pathsep + env.get("PYTHONPATH", "")
-    
+
     result = subprocess.run(cmd, shell=True, env=env)
     if result.returncode != 0:
         console.print(f"[bold red]!! {name} Failed![/bold red]")
         return False
     console.print(f"[bold green]>> {name} Passed.[/bold green]")
     return True
+
 
 def main():
     parser = argparse.ArgumentParser(description="Yamlr Quality Gate Auditor")
@@ -32,24 +35,33 @@ def main():
     success = True
 
     # 1. Linting (Ruff) - Focused on core and forensic healers
-    if not run_command("python -m ruff check src/yamlr/healers/best_practices/ src/yamlr/analyzers/ src/yamlr/core/stages/", "Ruff Lint (Core)"):
+    if not run_command(
+        "python -m ruff check src/yamlr/healers/best_practices/ src/yamlr/analyzers/ src/yamlr/core/stages/",
+        "Ruff Lint (Core)",
+    ):
         success = False
 
     # 2. Type Checking (Mypy) - Focused on core and forensic healers
-    if not run_command("python -m mypy src/yamlr/healers/best_practices/ src/yamlr/analyzers/ --ignore-missing-imports", "Mypy Type Check (Core)"):
+    if not run_command(
+        "python -m mypy src/yamlr/healers/best_practices/ src/yamlr/analyzers/ --ignore-missing-imports",
+        "Mypy Type Check (Core)",
+    ):
         # We allow Mypy to fail for now on legacy code but log it
         console.print("[yellow]WARN: Mypy reported errors in core/forensic modules. Reviewing for blockers...[/yellow]")
         # success = False # Temporarily allow to proceed to functional gates
 
     # 3. Unit Tests & Coverage
-    if not run_command("python -m pytest --cov=yamlr --cov-fail-under=10 tests/test_init.py tests/test_simple_scoring.py", "Fast Unit Tests"):
+    if not run_command(
+        "python -m pytest --cov=yamlr --cov-fail-under=10 tests/test_init.py tests/test_simple_scoring.py",
+        "Fast Unit Tests",
+    ):
         success = False
 
     if args.mode == "release":
         # 4. Full Test Suite (Enforce 75% coverage)
         if not run_command("python -m pytest --cov=yamlr --cov-fail-under=75 tests/", "Full Test Suite"):
             success = False
-        
+
         # 5. Intensive Fuzzing (10,000 cases)
         console.print("\n[bold cyan]>> Running 10,000 Case Fuzzing...[/bold cyan]")
         env = os.environ.copy()
@@ -71,11 +83,16 @@ def main():
             success = False
 
     if success:
-        console.print(Panel("[bold green]** ALL QUALITY GATES PASSED! **[/bold green]", subtitle="Ready for PR/Release"))
+        console.print(
+            Panel("[bold green]** ALL QUALITY GATES PASSED! **[/bold green]", subtitle="Ready for PR/Release")
+        )
         sys.exit(0)
     else:
-        console.print(Panel("[bold red]!! QUALITY GATES FAILED! !![/bold red]", subtitle="Fix issues before proceeding"))
+        console.print(
+            Panel("[bold red]!! QUALITY GATES FAILED! !![/bold red]", subtitle="Fix issues before proceeding")
+        )
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

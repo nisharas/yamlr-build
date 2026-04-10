@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: aws-svc-13341
+  namespace: us-east-1
+spec:
+  selector:
+    app: aws-svc-13341
+  ports:
+  - port: 80
+    targetPort: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: aws-svc-13341-ingress
+  namespace: us-east-1
+spec:
+  rules:
+  - http:
+      paths:
+      - path: /api/13341
+        pathType: Prefix
+        backend:
+          service:
+            name: aws-svc-13341
+            port:
+              number: 80

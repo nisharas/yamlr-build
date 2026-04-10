@@ -15,14 +15,14 @@ Date: 2026-02-17
 """
 
 from __future__ import annotations
+
 import logging
 from typing import List
 
 from yamlr.models import ManifestIdentity
 
 logger = logging.getLogger("yamlr.scanner")
-__all__ = ['IdentityMixin']
-
+__all__ = ["IdentityMixin"]
 
 
 class IdentityMixin:
@@ -118,7 +118,7 @@ class IdentityMixin:
             if len(candidates) == 1:
                 # Promotion Path: Unique high-confidence anchor.
                 val = candidates[0][1]
-                was_drifted = (key_min_indent > 0)
+                was_drifted = key_min_indent > 0
 
                 if key == "kind":
                     self._current_identity.kind = val
@@ -149,7 +149,9 @@ class IdentityMixin:
         # [ROUND-10] Enhanced debug: log all candidate values to reveal why they collided
         instances = self._sovereign_candidates.get(key, [])
         vals = [f"'{i[1]}'@L{i[2]}" for i in instances if i[0] == depth]
-        msg = f"Doc {self._doc_index}: IDENTITY_COLLISION! Multiple '{key}' markers at indent {depth}: {', '.join(vals)}"
+        msg = (
+            f"Doc {self._doc_index}: IDENTITY_COLLISION! Multiple '{key}' markers at indent {depth}: {', '.join(vals)}"
+        )
         logger.error(msg)
         self.scan_logs.append(msg)
 
@@ -202,7 +204,9 @@ class IdentityMixin:
                     logger.info("Standardization: Always specify API versions to avoid runtime ambiguity.")
 
         if skipped_count > 0:
-            logger.warning(f"OSS mode: Skipped {skipped_count} documents. Upgrade to {self.pro_brand} for repair logic.")
+            logger.warning(
+                f"OSS mode: Skipped {skipped_count} documents. Upgrade to {self.pro_brand} for repair logic."
+            )
 
         return valid_ids
 

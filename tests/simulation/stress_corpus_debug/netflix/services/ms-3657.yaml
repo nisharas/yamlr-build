@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-3657
+  labels:
+    app: ms-3657
+    dependency: ms-3658
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-3657
+  template:
+    metadata:
+      labels:
+        app: ms-3657
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-3658

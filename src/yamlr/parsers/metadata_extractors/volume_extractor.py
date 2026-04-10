@@ -7,14 +7,16 @@ Extracts:
 """
 
 from __future__ import annotations
+
 from typing import List
 
 from yamlr.models import ManifestIdentity, Shard
-__all__ = ['VolumeExtractor']
 
+__all__ = ["VolumeExtractor"]
 
 
 from .base_extractor import BaseMetadataExtractor
+
 
 class VolumeExtractor(BaseMetadataExtractor):
     """Extracts PVC references from Pod specs."""

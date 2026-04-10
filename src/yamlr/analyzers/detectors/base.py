@@ -15,21 +15,32 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("yamlr.analyzer.detectors.base")
 
+
 def build_index(identities: List[ManifestIdentity]) -> Dict[str, Dict[str, Set[str]]]:
     """Builds a lookup index for O(1) existence checks.
-    
+
     Why: Shared between sequential and parallel resolution paths.
     """
     index: Dict[str, Dict[str, Set[str]]] = {
-        k: {} for k in [
-            "ConfigMap", "Secret", "PersistentVolumeClaim", "Service",
-            "ServiceAccount", "Role", "ClusterRole", "StorageClass",
-            "IngressClass", "PriorityClass", "RuntimeClass"
+        k: {}
+        for k in [
+            "ConfigMap",
+            "Secret",
+            "PersistentVolumeClaim",
+            "Service",
+            "ServiceAccount",
+            "Role",
+            "ClusterRole",
+            "StorageClass",
+            "IngressClass",
+            "PriorityClass",
+            "RuntimeClass",
         ]
     }
-    
+
     for ident in identities:
-        if not ident.kind or not ident.name: continue
+        if not ident.kind or not ident.name:
+            continue
         k, ns = ident.kind, ident.namespace or "default"
         if k in index:
             index[k].setdefault(ns, set()).add(ident.name)

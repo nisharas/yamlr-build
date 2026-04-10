@@ -1,16 +1,17 @@
-
-import unittest
-import os
-from pathlib import Path
-import yaml
 import logging
+import os
+import unittest
+from pathlib import Path
+
+import yaml
 
 from yamlr.core.engine import YamlrEngine
-from yamlr.validators.schema_validator import SchemaValidator
 from yamlr.core.utils import resolve_bundled_asset
+from yamlr.validators.schema_validator import SchemaValidator
 
 # Configure logging to suppress noisy output during tests
 logging.getLogger("yamlr").setLevel(logging.CRITICAL)
+
 
 class TestSchemaCompliance(unittest.TestCase):
     """
@@ -22,11 +23,7 @@ class TestSchemaCompliance(unittest.TestCase):
     def setUpClass(cls):
         # Initialize engine and validator once
         catalog_path = str(resolve_bundled_asset("catalog/k8s_v1_distilled.json"))
-        cls.engine = YamlrEngine(
-            workspace_path=".", 
-            app_name="YamlrTest",
-            catalog_path=catalog_path
-        )
+        cls.engine = YamlrEngine(workspace_path=".", app_name="YamlrTest", catalog_path=catalog_path)
         cls.validator = SchemaValidator(k8s_version="1.31")
         # Ensure schema is loaded
         if not cls.validator.load_schema():
@@ -38,16 +35,11 @@ class TestSchemaCompliance(unittest.TestCase):
             print(f"Skipping missing file: {file_path}")
             return
 
-        with open(file_path, 'r', encoding='utf-8') as f:
+        with open(file_path, "r", encoding="utf-8") as f:
             content = f.read()
 
         # Run healing
-        result = self.engine.pipeline.heal(
-            content,
-            file_path=str(file_path),
-            strict_validation=False,
-            compact=False
-        )
+        result = self.engine.pipeline.heal(content, file_path=str(file_path), strict_validation=False, compact=False)
 
         # If healing failed (e.g. unparseable), check if it was expected
         # For this gate, we expect *if* it produces output, that output must be valid K8s.
@@ -58,7 +50,7 @@ class TestSchemaCompliance(unittest.TestCase):
         # If skipped, also safe
         if result.status == "SKIPPED":
             return
-            
+
         healed_content = result.content
         if not healed_content:
             return
@@ -73,7 +65,7 @@ class TestSchemaCompliance(unittest.TestCase):
         for doc in docs:
             if not doc:
                 continue
-                
+
             # Skip if no Kind/APIVersion (Lexer might have left it broken if unhealable)
             # But if it HAS Kind/APIVersion, it MUST be valid.
             if "kind" not in doc or "apiVersion" not in doc:
@@ -91,7 +83,7 @@ class TestSchemaCompliance(unittest.TestCase):
         corpus_dir = Path("tests/corpus/dirty")
         if not corpus_dir.exists():
             return
-            
+
         for ext in ["*.yaml", "*.yml"]:
             for f in corpus_dir.glob(ext):
                 with self.subTest(file=f.name):
@@ -120,6 +112,7 @@ class TestSchemaCompliance(unittest.TestCase):
             for f in corpus_dir.glob(ext):
                 with self.subTest(file=f.name):
                     self._heal_and_validate(f)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,6 +1,7 @@
 from __future__ import annotations
-import pkgutil
+
 import inspect
+import pkgutil
 
 from rich.markdown import Markdown
 from rich.panel import Panel
@@ -15,12 +16,12 @@ SEVERITY_DISPLAY = {
     "mixed": "Warning",
     "info": "Note",
 }
-__all__ = ['display_severity', 'load_rules', 'handle_explain_command']
+__all__ = ["display_severity", "load_rules", "handle_explain_command"]
 
 
 def display_severity(raw: str) -> str:
     """Transforms raw severity into a human-friendly display label.
-    
+
     Why: To provide clear, non-technical indicators of risk levels.
     """
     return SEVERITY_DISPLAY.get(raw.lower(), raw)
@@ -29,18 +30,19 @@ def display_severity(raw: str) -> str:
 def load_rules():
     """Loads rules from the data directory using robust discovery."""
     from yamlr.core.utils import resolve_bundled_asset
-    
+
     # Try the most common locations for the rules database
     rules_path = resolve_bundled_asset(f"core/data/{RULES_YAML}") or resolve_bundled_asset(RULES_YAML)
-    
+
     if rules_path and rules_path.exists():
         with open(rules_path, "r", encoding="utf-8") as f:
             from yamlr.core.utils import get_hardened_yaml
+
             try:
                 # [Security] Use hardened YAML to prevent Billion Laughs (VULN-008)
                 hyaml = get_hardened_yaml(typ="safe")
                 return hyaml.load(f) or {}
-            except Exception: # Hardened YAML throws standard errors
+            except Exception:  # Hardened YAML throws standard errors
                 return {}
 
     # Try pkgutil as a last-resort fallback
@@ -48,6 +50,7 @@ def load_rules():
         data = pkgutil.get_data("yamlr.core.data", RULES_YAML) or pkgutil.get_data("yamlr.core.entrypoints", RULES_YAML)
         if data:
             from yamlr.core.utils import get_hardened_yaml
+
             hyaml = get_hardened_yaml(typ="safe")
             return hyaml.load(data) or {}
     except (AttributeError, KeyError, ImportError, OSError):
@@ -62,7 +65,7 @@ RULE_DB = RULEDB
 
 def handle_explain_command(args, console):
     """Explains a specific rule or lists available rules.
-    
+
     Why: To provide the user with deep technical context and remediation steps for any safety rule.
     """
     rule_id = args.rule_id
@@ -80,9 +83,7 @@ def handle_explain_command(args, console):
 
     if not data:
         console.print(f"[red]❌ Unknown rule or config ID: {rule_id}[/red]")
-        console.print(
-            "[dim]Try 'yamlr explain config' or see 'yamlr rules' for valid IDs.[/dim]"
-        )
+        console.print("[dim]Try 'yamlr explain config' or see 'yamlr rules' for valid IDs.[/dim]")
         return 1
 
     _render_rule_panel(resolved_id, data, console)
@@ -105,14 +106,14 @@ def _resolve_rule_data(rule_id: str) -> tuple[dict | None, str]:
 
     # Search for any rule that ends with the requested slug
     candidates = [rid for rid in RULEDB.keys() if rid.endswith(f"/{rule_id}") or rid == rule_id]
-    
+
     if not candidates:
         return None, rule_id
-        
+
     if len(candidates) == 1:
         resolved_id = candidates[0]
         return RULEDB.get(resolved_id), resolved_id
-    
+
     # Ambiguity: prefer 'rule/' prefix if available
     preferred = next((c for c in candidates if c.startswith("rule/")), candidates[0])
     return RULEDB.get(preferred), preferred
@@ -365,7 +366,7 @@ See your project's compliance status:
         console.print(f"[red]❌ Unknown config topic: {topic_id}[/red]")
         console.print("[dim]Available: config, config/rules, config/ignore, config/security, config/analyzers[/dim]")
         return 1
-    
+
     console.print(
         Panel(
             Markdown(inspect.cleandoc(content)),

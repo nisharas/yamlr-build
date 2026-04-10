@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import logging
 import re
 from typing import Any, Dict, Set
@@ -6,28 +7,41 @@ from typing import Any, Dict, Set
 from .base import BaseHeuristic
 
 logger = logging.getLogger("yamlr.lexer.heuristics")
-__all__ = ['MagicColonHeuristic', 'QuoteBalancingHeuristic', 'SpacingHeuristic']
+__all__ = ["MagicColonHeuristic", "QuoteBalancingHeuristic", "SpacingHeuristic"]
 
 
 class MagicColonHeuristic(BaseHeuristic):
     """
     Injects missing colons in 'key value' patterns (e.g., 'image nginx' -> 'image: nginx').
-    
-    Why: High-speed developer typing often omits colons. This heuristic recovers 
+
+    Why: High-speed developer typing often omits colons. This heuristic recovers
     intent by identifying known K8s keywords followed by whitespace and a value.
-    
-    Stopword Filtering: Essential to prevent false-positives in English comments 
+
+    Stopword Filtering: Essential to prevent false-positives in English comments
     or descriptions (e.g., 'This is a test' shouldn't become 'This: is a test').
     """
 
     COMMON_ENGLISH_STOPWORDS: Set[str] = {
-        "This", "The", "A", "An", "It", "If", "When", "Then", "For", "To", "Note", "But", "And", "Or",
+        "This",
+        "The",
+        "A",
+        "An",
+        "It",
+        "If",
+        "When",
+        "Then",
+        "For",
+        "To",
+        "Note",
+        "But",
+        "And",
+        "Or",
     }
 
     @property
     def name(self) -> str:
         """Returns the internal name of the magic colon heuristic.
-        
+
         Why: To uniquely identify the heuristic in logs and performance traces.
         """
         return "magic_colon"
@@ -35,14 +49,14 @@ class MagicColonHeuristic(BaseHeuristic):
     @property
     def description(self) -> str:
         """Returns a human-readable description of the magic colon heuristic.
-        
+
         Why: To explain the heuristic's purpose in diagnostic outputs and reports.
         """
         return "Injects missing colons (key value -> key: value)"
 
     def apply(self, line: str, context: Dict[str, Any]) -> str:
         """Applies magic colon injection to a line of YAML code.
-        
+
         Why: To recover developer intent when colons are accidentally omitted during rapid editing.
         """
         if context.get("skip_punctuation_healing"):
@@ -82,13 +96,14 @@ class MagicColonHeuristic(BaseHeuristic):
 
 class QuoteBalancingHeuristic(BaseHeuristic):
     """Automatically closes unclosed quotes at the end of YAML values.
-    
+
     Why: To prevent lexing failures when a developer forgets to type the closing quote.
     """
+
     @property
     def name(self) -> str:
         """Returns the internal name of the quote balancing heuristic.
-        
+
         Why: To uniquely identify the heuristic in logs and performance traces.
         """
         return "quote_balancing"
@@ -96,14 +111,14 @@ class QuoteBalancingHeuristic(BaseHeuristic):
     @property
     def description(self) -> str:
         """Returns a human-readable description of the quote balancing heuristic.
-        
+
         Why: To explain the heuristic's purpose in diagnostic outputs and reports.
         """
         return "Closes unclosed quotes"
 
     def apply(self, line: str, context: Dict[str, Any]) -> str:
         """Balances quotes on a single line of YAML code.
-        
+
         Why: To ensure that string values are correctly terminated before they are sharded.
         """
         if context.get("skip_punctuation_healing"):
@@ -134,13 +149,14 @@ class QuoteBalancingHeuristic(BaseHeuristic):
 
 class SpacingHeuristic(BaseHeuristic):
     """Injects mandatory spaces after YAML structural markers ('-' and ':').
-    
+
     Why: YAML requires a space after certain markers; omitting them is a common syntax error.
     """
+
     @property
     def name(self) -> str:
         """Returns the internal name of the spacing heuristic.
-        
+
         Why: To uniquely identify the heuristic in logs and performance traces.
         """
         return "spacing_fix"
@@ -148,14 +164,14 @@ class SpacingHeuristic(BaseHeuristic):
     @property
     def description(self) -> str:
         """Returns a human-readable description of the spacing heuristic.
-        
+
         Why: To explain the heuristic's purpose in diagnostic outputs and reports.
         """
         return "Fixes '-item' and 'key:value' spacing"
 
     def apply(self, line: str, context: Dict[str, Any]) -> str:
         """Standardizes spacing around markers on a single line of YAML code.
-        
+
         Why: To ensure the lexer can correctly identify structural boundaries.
         """
         if context.get("skip_punctuation_healing"):
@@ -166,7 +182,12 @@ class SpacingHeuristic(BaseHeuristic):
         indent_str = line[:indent]
 
         # 1. Dash spacing "-item" -> "- item"
-        if stripped.startswith("-") and not stripped.startswith("---") and len(stripped) > 1 and not stripped[1].isspace():
+        if (
+            stripped.startswith("-")
+            and not stripped.startswith("---")
+            and len(stripped) > 1
+            and not stripped[1].isspace()
+        ):
             new_content = "- " + stripped[1:]
             if "stats" in context:
                 context["stats"]["spacing_fixes"] += 1

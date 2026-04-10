@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-3762
+  labels:
+    app: ms-3762
+    dependency: ms-3763
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-3762
+  template:
+    metadata:
+      labels:
+        app: ms-3762
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-3763

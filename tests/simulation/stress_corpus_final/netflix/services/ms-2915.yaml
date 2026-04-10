@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-2915
+  labels:
+    app: ms-2915
+    dependency: ms-2916
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-2915
+  template:
+    metadata:
+      labels:
+        app: ms-2915
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-2916

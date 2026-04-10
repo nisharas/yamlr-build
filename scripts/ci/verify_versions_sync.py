@@ -2,7 +2,7 @@
 """
 Yamlr CI: Version Synchronization Guard
 --------------------------------------
-Verifies that all packaging and distribution artifacts are in sync 
+Verifies that all packaging and distribution artifacts are in sync
 with the canonical version defined in pyproject.toml.
 
 Why: To prevent version drift and ensure $20M+ M&A readiness via
@@ -10,32 +10,29 @@ Why: To prevent version drift and ensure $20M+ M&A readiness via
 """
 
 from __future__ import annotations
-import sys
+
 import os
+import sys
 from pathlib import Path
 
 # Add scripts dir to path to import version_helper
 sys.path.append(str(Path(__file__).parent.parent))
 from version_helper import get_version
 
+
 def verify_sync():
     """Main verification logic."""
     canonical_version = get_version()
     print(f"[CI] Canonical Version (pyproject.toml): {canonical_version}")
-    
+
     root = Path(__file__).parent.parent.parent.resolve()
     dist_dir = root / "dist"
-    
+
     # Files to check (if they exist in dist/ after a build)
-    to_check = [
-        "yamlr.nuspec",
-        "yamlr.rb",
-        "install.ps1",
-        "install.sh"
-    ]
-    
+    to_check = ["yamlr.nuspec", "yamlr.rb", "install.ps1", "install.sh"]
+
     errors = 0
-    
+
     # 1. Check if templates still contain @VERSION@ (they should)
     scripts_dir = root / "scripts"
     for t_name in to_check:
@@ -44,7 +41,7 @@ def verify_sync():
             print(f"[FAIL] Missing template: {t_src.name}")
             errors += 1
             continue
-            
+
         content = t_src.read_text(encoding="utf-8")
         if "@VERSION@" not in content:
             print(f"[FAIL] Template {t_src.name} is missing @VERSION@ placeholder")
@@ -74,9 +71,10 @@ def verify_sync():
     if errors > 0:
         print(f"\n[CI] Version verification failed with {errors} errors.")
         sys.exit(1)
-    
+
     print("\n[OK] All versions are synchronized.")
     sys.exit(0)
+
 
 if __name__ == "__main__":
     verify_sync()

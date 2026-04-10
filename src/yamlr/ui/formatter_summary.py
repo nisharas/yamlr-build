@@ -4,37 +4,54 @@ Formatter SUMMARY Mixin
 -----------------------
 Extracted to enforce <500 line modularity rule.
 """
+
 from __future__ import annotations
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 if TYPE_CHECKING:
     from yamlr.models import HealFileResult
 from rich.panel import Panel
 from rich.table import Table
-from yamlr.cli.commands.base import get_console
+
+from yamlr.core.entrypoints.base import get_console
+from yamlr.core.gatekeeper import ProGate
 
 console = get_console()
-__all__ = ['SummaryMixin']
+__all__ = ["SummaryMixin"]
 
 
 class SummaryMixin:
     PRO_FIXABLE_RULES = {
-        "rule/resource-requests", "rule/resource-limits",
-        "rule/run-as-non-root", "rule/no-privileged", "rule/allow-privilege-escalation",
-        "rule/unsafe-hostpath", "rule/host-network", "rule/read-only-root-fs",
-        "rule/missing-liveness", "rule/missing-readiness",
+        "rule/resource-requests",
+        "rule/resource-limits",
+        "rule/run-as-non-root",
+        "rule/no-privileged",
+        "rule/allow-privilege-escalation",
+        "rule/unsafe-hostpath",
+        "rule/host-network",
+        "rule/read-only-root-fs",
+        "rule/missing-liveness",
+        "rule/missing-readiness",
         "rule/no-latest-tag",
-        "rule/ghost-service", "rule/port-mismatch", "rule/service-no-selector",
-        "rule/missing-configmap-target", "rule/broken-volume", "rule/ingress-broken",
-        "rule/network-policy-missing", "rule/untrusted-registry"
+        "rule/ghost-service",
+        "rule/port-mismatch",
+        "rule/service-no-selector",
+        "rule/missing-configmap-target",
+        "rule/broken-volume",
+        "rule/ingress-broken",
+        "rule/network-policy-missing",
+        "rule/untrusted-registry",
     }
 
-    def _print_summary_stats(self, reports: List[HealFileResult], elapsed_time: float = 0.0, telemetry_data: Optional[Dict[str, Any]] = None):
+    def _print_summary_stats(
+        self, reports: List[HealFileResult], elapsed_time: float = 0.0, telemetry_data: Optional[Dict[str, Any]] = None
+    ):
         """
         FIX: Compact summary mode for large batches (100+ files).
 
         Why: Provides a high-density, low-friction report for SREs and CI/CD.
-             Prevents terminal flooding while summarizing cumulative risk 
+             Prevents terminal flooding while summarizing cumulative risk
              reduction and ROI.
         """
         # Aggregate stats
@@ -76,17 +93,21 @@ class SummaryMixin:
             if stats:
                 # If stats is a dataclass object or a dict
                 if hasattr(stats, "lexer_repairs"):
-                    fixed = (getattr(stats, "lexer_repairs", 0) +
-                             getattr(stats, "lexer_typos", 0) +
-                             getattr(stats, "semantic_repairs", 0) +
-                             getattr(stats, "security_hardens", 0) +
-                             getattr(stats, "migrator_changes", 0))
+                    fixed = (
+                        getattr(stats, "lexer_repairs", 0)
+                        + getattr(stats, "lexer_typos", 0)
+                        + getattr(stats, "semantic_repairs", 0)
+                        + getattr(stats, "security_hardens", 0)
+                        + getattr(stats, "migrator_changes", 0)
+                    )
                 else:
-                    fixed = (stats.get("lexer_repairs", 0) +
-                             stats.get("lexer_typos", 0) +
-                             stats.get("semantic_repairs", 0) +
-                             stats.get("security_hardens", 0) +
-                             stats.get("migrator_changes", 0))
+                    fixed = (
+                        stats.get("lexer_repairs", 0)
+                        + stats.get("lexer_typos", 0)
+                        + stats.get("semantic_repairs", 0)
+                        + stats.get("security_hardens", 0)
+                        + stats.get("migrator_changes", 0)
+                    )
 
                 # Accumulate the true single-file repairs directly into the global counter.
                 by_status["_total_fixed"] = by_status.get("_total_fixed", 0) + fixed
@@ -108,7 +129,7 @@ class SummaryMixin:
                 total_resources += 1
 
         avg_score = avg_score / total_files if total_files > 0 else 0
-        
+
         # FIX: Efficiency Lie - Calculate real wall-clock throughput
         if elapsed_time > 0:
             avg_time = elapsed_time / total_files
@@ -124,26 +145,25 @@ class SummaryMixin:
             f"[bold cyan]Average DNA Integrity:[/bold cyan] {avg_score:.1f}/100\n"
             f"[bold cyan]Average Processing Time (per file):[/bold cyan] {avg_time:.2f}s"
         )
-        
+
         # [ROUND-10] Security DNA Receipt for single-file operations
         if total_files == 1:
             dna = reports[0].get("dna_hash")
             if dna:
                 summary_text += f"\n[bold cyan]Security DNA Receipt:[/bold cyan] [dim green]{dna[:16]}...[/dim green]"
 
-        
         if throughput > 0:
             summary_text += f" [dim]({throughput:.1f} files/sec)[/dim]"
-        
+
         try:
-            tot_detected = int(by_status.get('_total_detected', 0))
-            tot_fixed = int(by_status.get('_total_fixed', 0))
-            tot_pro = int(by_status.get('_pro_fixable', 0))
+            tot_detected = int(by_status.get("_total_detected", 0))
+            tot_fixed = int(by_status.get("_total_fixed", 0))
+            tot_pro = int(by_status.get("_pro_fixable", 0))
         except (TypeError, ValueError):
             tot_detected = 0
             tot_fixed = 0
             tot_pro = 0
-            
+
         heal_rate = (tot_fixed / tot_detected * 100) if tot_detected > 0 else 0.0
         pro_rate = (tot_pro / tot_detected * 100) if tot_detected > 0 else 0.0
 
@@ -170,11 +190,10 @@ class SummaryMixin:
             for kind, count in sorted_kinds[:10]:  # Top 10 kinds
                 summary_text += f"  {kind}: {count}\n"
             if len(sorted_kinds) > 10:
-                summary_text += (
-                    f"  [dim]... and {len(sorted_kinds) - 10} more types[/dim]\n"
-                )
+                summary_text += f"  [dim]... and {len(sorted_kinds) - 10} more types[/dim]\n"
 
         from rich import box
+
         box_style = getattr(console, "_yamlr_box", box.ROUNDED)
         title_bar = "---" if getattr(console, "_yamlr_plain", False) else "━━━"
 
@@ -187,21 +206,19 @@ class SummaryMixin:
                 box=box_style,
             )
         )
-        
+
         # --- SCORE ANIMATION (Dopamine Drip) ---
         if telemetry_data and not getattr(console, "_yamlr_plain", False):
             self._animate_score_increase(
                 telemetry_data.get("last_dna_integrity_score", 0.0),
                 avg_score,
-                telemetry_data.get("surgical_efficiency", 0.0)
+                telemetry_data.get("surgical_efficiency", 0.0),
             )
 
         # [Smart UX] Show backup message ONLY if files were actually healed
         healed_count = by_status.get("HEALED", 0)
         if healed_count > 0:
-            console.print(
-                f"[dim]💾 {healed_count} backup(s) saved to .yamlr/backups/ (relative to workspace)[/dim]"
-            )
+            console.print(f"[dim]💾 {healed_count} backup(s) saved to .yamlr/backups/ (relative to workspace)[/dim]")
 
         if failed > 0 or by_status.get("WARN", 0) > 0:
             console.print(
@@ -222,16 +239,14 @@ class SummaryMixin:
             console.print(
                 Panel(
                     f"[bold #875fff]There are {pro_fix} additional issues that can be fixed with Yamlr PRO.[/bold #875fff]\n"
-                    "Run [bold cyan]yamlr heal --harden[/bold cyan] to automatically resolve them.",
-                    title=f"[#ffaf00]{self._get_icon('💎')} MORE FIXES WITH PRO[/#ffaf00]",
+                    f"{ProGate.get_pro_hint('upsell')}",
+                    title=f"[#ffaf00]{ProGate.get_pro_title('generic')}[/#ffaf00]",
                     border_style="cyan",
                     expand=False,
                 )
             )
 
-        console.print(
-            "[dim]Note: Detailed table shown automatically for batches <= 5 files.[/dim]\n"
-        )
+        console.print("[dim]Note: Detailed table shown automatically for batches <= 5 files.[/dim]\n")
 
         # [Feature] Deprecation Summary
         self._render_deprecation_summary(reports)
@@ -240,8 +255,8 @@ class SummaryMixin:
         """[ULTRA-SCALE] Impact Summary View.
         Designed for 10k-100k+ file scans where a table is too large.
         Focuses on 'At a Glance' metrics and critical blockers.
-        
-        Why: Enables high-level executive reporting and ROI calculation 
+
+        Why: Enables high-level executive reporting and ROI calculation
              for hyperscale infrastructure.
         """
         total_files = len(reports)
@@ -254,38 +269,49 @@ class SummaryMixin:
         for r in reports:
             # Handle both dict and HealFileResult
             def _gv(obj, key, default=None):
-                if hasattr(obj, key): return getattr(obj, key)
-                if isinstance(obj, dict): return obj.get(key, default)
+                if hasattr(obj, key):
+                    return getattr(obj, key)
+                if isinstance(obj, dict):
+                    return obj.get(key, default)
                 return default
 
             findings = _gv(r, "findings", [])
             total_findings += len(findings)
             if _gv(r, "status") == "FAILED" or not _gv(r, "success"):
                 crit_errors += 1
-            
+
             for f in findings:
-                sev = f.get("severity", "").lower()
-                if sev == "error": security_risks += 1
-                if "deprecated" in f.get("message", "").lower(): deprecations += 1
+                # 🛡️ Null-Safety: Findings might missing severity or message in partial scans
+                sev = (f.get("severity") or "").lower()
+                if sev == "error":
+                    security_risks += 1
+                if "deprecated" in (f.get("message") or "").lower():
+                    deprecations += 1
 
             stats = _gv(r, "processing_stats") or _gv(r, "stats")
             if stats:
                 if hasattr(stats, "lexer_repairs"):
-                    fixed_issues += (getattr(stats, "lexer_repairs", 0) +
-                                   getattr(stats, "lexer_typos", 0) +
-                                   getattr(stats, "semantic_repairs", 0))
+                    fixed_issues += (
+                        getattr(stats, "lexer_repairs", 0)
+                        + getattr(stats, "lexer_typos", 0)
+                        + getattr(stats, "semantic_repairs", 0)
+                    )
                 elif isinstance(stats, dict):
-                    fixed_issues += (stats.get("lexer_repairs", 0) +
-                                   stats.get("lexer_typos", 0) +
-                                   stats.get("semantic_repairs", 0))
+                    fixed_issues += (
+                        stats.get("lexer_repairs", 0) + stats.get("lexer_typos", 0) + stats.get("semantic_repairs", 0)
+                    )
 
         # [MONETIZATION] Track PRO Fixable issues at scale
         pro_fixable_issues = 0
         for r in reports:
+
             def _gv(obj, key, default=None):
-                if hasattr(obj, key): return getattr(obj, key)
-                if isinstance(obj, dict): return obj.get(key, default)
+                if hasattr(obj, key):
+                    return getattr(obj, key)
+                if isinstance(obj, dict):
+                    return obj.get(key, default)
                 return default
+
             findings = _gv(r, "findings", [])
             pro_fixable_issues += sum(1 for f in findings if f.get("rule_id") in self.PRO_FIXABLE_RULES)
 
@@ -301,7 +327,10 @@ class SummaryMixin:
         table.add_row("🎯 Issue Detection Rate:", "[#ff5f87]100%[/]")
         table.add_row("✅ Auto-Healed (Free):", f"[green]{heal_rate:.1f}% ({fixed_issues:,})[/green]")
         table.add_row("💎 PRO would fix:", f"[cyan]{pro_rate:.1f}% ({pro_fixable_issues:,})[/cyan]")
-        table.add_row("⚡ Processing Time:", f"{elapsed_time:.2f}s ({(total_files/elapsed_time if elapsed_time > 0 else 0):.1f} files/sec)")
+        table.add_row(
+            "⚡ Processing Time:",
+            f"{elapsed_time:.2f}s ({(total_files / elapsed_time if elapsed_time > 0 else 0):.1f} files/sec)",
+        )
         table.add_row("🛡 Security/Policy Risks:", f"[yellow]{security_risks:,}[/yellow]")
         table.add_row("📉 API Deprecations:", f"[magenta]{deprecations:,}[/magenta]")
         table.add_row("🛑 Critical Failures:", f"[red]{crit_errors:,}[/red]")
@@ -311,7 +340,7 @@ class SummaryMixin:
             title="[bold magenta]🚀 Yamlr Ultra-Scale Impact Summary[/bold magenta]",
             subtitle="[dim]Enterprise CI/CD Visibility Mode[/dim]",
             border_style="magenta",
-            padding=(1, 2)
+            padding=(1, 2),
         )
         console.print("\n")
         console.print(panel)
@@ -321,36 +350,38 @@ class SummaryMixin:
             console.print(
                 Panel(
                     f"[bold cyan]There are {pro_fixable_issues} additional issues that can be fixed with Yamlr PRO.[/bold cyan]\n"
-                    "Run [bold cyan]yamlr heal --harden[/bold cyan] to automatically resolve them.",
-                    title=f"[cyan]{self._get_icon('💎')} PRO UPSELL[/cyan]",
+                    f"{ProGate.get_pro_hint('upsell')}",
+                    title=f"[cyan]{ProGate.get_pro_title('upsell')}[/cyan]",
                     border_style="cyan",
                     expand=False,
                 )
             )
 
         console.print()
+
     def _animate_score_increase(self, old_score: float, new_score: float, efficiency: float):
         """
         Animates a health score bar filling up.
-        
-        Why: Drives user engagement and creates a 'Magic Moment' visual feedback 
+
+        Why: Drives user engagement and creates a 'Magic Moment' visual feedback
              loop after a successful healing session.
         """
+        import time
+
         from rich.live import Live
         from rich.progress import ProgressBar
-        import time
-        
+
         try:
             old_val = float(old_score)
         except (TypeError, ValueError):
             old_val = 0.0
-            
+
         # Only animate if there's a positive change or high baseline
         if new_score < old_val and new_score < 100:
-            return 
+            return
 
         console.print("\n[bold cyan]✨ DNA Integrity Progression[/bold cyan]")
-        
+
         with Live(console=console, refresh_per_second=10) as live:
             try:
                 target = int(new_score)
@@ -358,28 +389,28 @@ class SummaryMixin:
             except (TypeError, ValueError):
                 target = 0
                 start = 0
-            
+
             from rich.columns import Columns
             from rich.text import Text
+
             for i in range(start, target + 1):
                 try:
                     color = "green" if i > 80 else "yellow" if i > 50 else "red"
                 except (TypeError, ValueError):
                     color = "red"
                 bar = ProgressBar(total=100, completed=i, width=40, style=color)
-                
+
                 try:
                     eff_val = float(efficiency)
                 except (TypeError, ValueError):
                     eff_val = 0.0
-                    
+
                 eff_text = f" | Efficiency: {eff_val:.1f}x" if eff_val > 0 else ""
-                
+
                 # Use Columns to render the bar alongside text instead of stringifying the Bar object
-                renderable = Columns([
-                    bar,
-                    Text(f" {i}%{eff_text}", style=f"bold {color}" if eff_text == "" else f"bold {color}")
-                ])
+                renderable = Columns(
+                    [bar, Text(f" {i}%{eff_text}", style=f"bold {color}" if eff_text == "" else f"bold {color}")]
+                )
                 live.update(renderable)
                 time.sleep(0.01)
 

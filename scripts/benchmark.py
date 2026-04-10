@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 #!/usr/bin/env python3
 """
 YAMLR PERFORMANCE BENCHMARK
@@ -55,9 +56,7 @@ def generate_large_file(path: Path, target_mb: int):
         while path.stat().st_size < (target_mb * 1024 * 1024):
             f.write(TEMPLATE.format(i=i))
             i += 1
-    print(
-        f"Generated {path.stat().st_size / 1024 / 1024:.2f} MB file with {i} documents."
-    )
+    print(f"Generated {path.stat().st_size / 1024 / 1024:.2f} MB file with {i} documents.")
 
 
 def run_benchmark():
@@ -69,10 +68,7 @@ def run_benchmark():
 
     # Initialize Engine (exclude initiation time from benchmark)
     print("\nInitializing Engine...")
-    engine = YamlrEngine(
-        workspace_path=str(ROOT_DIR), 
-        catalog_path=str(ROOT_DIR / "catalog/k8s_v1_distilled.json")
-    )
+    engine = YamlrEngine(workspace_path=str(ROOT_DIR), catalog_path=str(ROOT_DIR / "catalog/k8s_v1_distilled.json"))
 
     print(f"Starting Scan on {OUTPUT_FILE}...")
     start_time = time.time()

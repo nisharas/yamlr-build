@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-6432
+  labels:
+    app: ms-6432
+    dependency: ms-6433
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-6432
+  template:
+    metadata:
+      labels:
+        app: ms-6432
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-6433

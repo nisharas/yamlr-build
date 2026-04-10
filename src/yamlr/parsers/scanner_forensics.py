@@ -15,6 +15,7 @@ Date: 2026-02-17
 """
 
 from __future__ import annotations
+
 import logging
 import os
 from typing import List
@@ -22,8 +23,7 @@ from typing import List
 from yamlr.models import ManifestIdentity
 
 logger = logging.getLogger("yamlr.scanner")
-__all__ = ['ForensicsMixin']
-
+__all__ = ["ForensicsMixin"]
 
 
 class ForensicsMixin:
@@ -61,41 +61,14 @@ class ForensicsMixin:
 
     def _detect_pro_mode(self) -> bool:
         """
-        Detects if Yamlr is running in Pro/Enterprise mode.
+        Detects if Yamlr is running in Pro/Enterprise mode via the Bridge.
 
-        Pro mode enables:
-        1. Intelligent apiVersion inference from Kind (Auto-complete)
-        2. Anchor key promotion (Heterogeneous Alignment for drifted IDs)
-        3. Detailed forensic repair logs for compliance audit trails
-
-        Detection Tiers:
-        - Tier 1: Environment variable 'Yamlr_PRO' (true/1/yes)
-        - Tier 2: License file presence (Future expansion path)
-        - Tier 3: Default to OSS mode (Strict validation)
-
-        Enterprise Rationale:
-        Pro mode bypasses strict K8s rejection to allow the pipeline to
-        automatically 'heal' identity markers that are missing or
-        historically drifted in legacy namespaces.
-
-        Returns:
-            bool: True if Pro mode is active
+        Why: Centralizes capability discovery to ensure consistency across
+             different internal modules (Parser vs Engine vs CLI).
         """
-        # Detection Tier 1: Environment Variables (Highest Precedence)
-        env_val = os.getenv("Yamlr_PRO", "").lower()
-        if env_val in ("true", "1", "yes"):
-            logger.debug("Pro mode enabled via Yamlr_PRO environment variable.")
-            return True
+        from yamlr.core.bridge import YamlrBridge
 
-        # Detection Tier 2: License File (Standard Enterprise Check)
-        # Note: License validation logic should be isolated in a dedicated
-        # License Manager. This placeholder represents the enterprise path.
-        # license_path = Path.home() / ".yamlr" / "license.key"
-        # if license_path.exists():
-        #     logger.debug("Pro mode enabled via enterprise license file.")
-        #     return True
-
-        return False
+        return YamlrBridge.is_pro_enabled()
 
     def _log_scan_summary_verbose(self, valid_ids: List[ManifestIdentity]) -> None:
         """
@@ -108,7 +81,8 @@ class ForensicsMixin:
         summary = f"Stage 3 (Scanner): Archeology complete. {count} identities mined."
         if self._lexer_context:
             fixes = sum(self._lexer_context.get("repair_stats", {}).values())
-            if fixes > 0: summary += f" (Lexer performed {fixes} structural heals)"
+            if fixes > 0:
+                summary += f" (Lexer performed {fixes} structural heals)"
         logger.debug(summary)
         for idnt in valid_ids:
             logger.debug(f"  → DNA MATCH: {idnt.api_version}/{idnt.kind} (name={idnt.name or 'N/A'})")

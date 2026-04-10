@@ -1,7 +1,9 @@
 from __future__ import annotations
+
 import os
 from pathlib import Path
-__all__ = ['handle_evidence_command']
+
+__all__ = ["handle_evidence_command"]
 
 
 def handle_evidence_command(args, console) -> int:
@@ -25,19 +27,18 @@ def handle_evidence_command(args, console) -> int:
         console.print(f"[bold red]❌ Directory not found:[/bold red] {evidence_dir}")
         return 1
 
-    try:
-        from yamlr.pro.compliance.aggregator import EvidenceAggregator
-    except ImportError:
-         console.print("[bold red]❌ Yamlr Enterprise (Pro) compliance module missing or corrupted.[/bold red]")
-         return 1
+    EvidenceAggregator = YamlrBridge.get_evidence_aggregator()
+    if not EvidenceAggregator:
+        console.print("[bold red]❌ Yamlr Enterprise (Pro) compliance module missing or corrupted.[/bold red]")
+        return 1
 
     console.print(f"[cyan]🔍 Scanning cryptographic DNA receipts in {evidence_dir}...[/cyan]")
-    
+
     aggregator = EvidenceAggregator(evidence_dir)
-    
+
     # 1. Verification Phase
     is_clean = aggregator.load_and_verify()
-    
+
     receipt_count = len(aggregator.receipts)
     if receipt_count == 0 and not aggregator.tampered_files:
         console.print(f"[yellow]⚠️ No 'evidence-*.json' receipts found in {evidence_dir}[/yellow]")
@@ -68,10 +69,10 @@ def handle_evidence_command(args, console) -> int:
         else:
             console.print(f"[bold red]❌ Unsupported format:[/bold red] {output_format}")
             return 1
-            
+
         console.print("\n[bold green]✅ Auditor-Ready Export Complete![/bold green]")
         console.print(f"📄 Report saved to: [cyan]{output_file}[/cyan]")
-        
+
     except ImportError as e:
         console.print(f"[bold red]❌ Missing Dependency:[/bold red] {e}")
         return 1

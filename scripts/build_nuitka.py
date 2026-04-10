@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 #!/usr/bin/env python3
 """
 Yamlr Nuitka Build Orchestrator (Google-Quality Edition)
@@ -13,7 +14,8 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
-from version_helper import get_version
+
+from version_helper import get_version  # type: ignore
 
 # Paths
 ROOT_DIR = Path(__file__).parent.parent.resolve()
@@ -21,83 +23,130 @@ SRC_DIR = ROOT_DIR / "src"
 DIST_DIR = ROOT_DIR / "dist"
 ENTRY_POINT = SRC_DIR / "yamlr" / "cli" / "main.py"
 
-def build():
-    parser = argparse.ArgumentParser(description="Yamlr Nuitka Builder")
-    parser.add_argument("--pro", action="store_true", help="Build Enterprise Edition")
-    args = parser.parse_args()
 
-    app_name = "yamlr_pro" if args.pro else "yamlr"
+def _check_baseline():
+    """MANDATORY: Gold Standard Baseline Pre-Flight Check"""
+    baseline_path = ROOT_DIR / ".yamlr-baseline"
+    if not baseline_path.exists():
+        print("❌ CRITICAL: Gold Standard Baseline not found.")
+        print("   Why: We never build binaries that haven't cleared the semantic parity check.")
+        print("   Action: Run 'python scripts/capture_baseline.py' first.")
+        sys.exit(1)
+
+def _get_base_cmd(app_name: str) -> list[str]:
+    """Generates the base Nuitka command configuration."""
+    return [
+        sys.executable,
+        "-m",
+        "nuitka",
+        "--standalone",
+        "--low-memory",  # 🛡️ MANDATORY: Prevent MSVC C1002 (Heap Exhaustion)
+        "--follow-imports",
+        "--jobs=2",      # 🛡️ Safety: Reduce peak memory during heavy module compilation
+        "--plugin-enable=pylint-warnings",
+        "--plugin-enable=multiprocessing",  # 🛡️ MANDATORY: Fix Windows silent crash
+        f"--output-dir={DIST_DIR}",
+        f"--output-filename={app_name}",
+        "--include-package=yamlr",
+        "--include-package=yamlr.healers",
+        "--nofollow-import-to=pygls",
+        "--nofollow-import-to=lsprotocol",
+        "--nofollow-import-to=yamlr.cli.lsp",
+        "--nofollow-import-to=yamlr.core.integrations.vscode_lsp",
+        "--nofollow-import-to=yamlr.debug",
+        "--nofollow-import-to=yamlr.experimental",
+        "--include-package=yamlr.core.engine",
+        "--include-package=yamlr.core.stages",
+        "--include-package=yamlr.core.validation",
+        "--include-package=yamlr.core.parser",
+        "--include-package=yamlr.core.utils",
+        "--include-package=yamlr.parsers",
+        "--include-package=yamlr.analyzers",
+        "--include-package=yamlr.models",
+        "--include-package=yamlr_native",
+        "--include-package=ruamel.yaml",
+        "--include-package=pydantic",
+        "--include-package=pydantic_core._pydantic_core",
+        "--include-package=rich",
+        "--include-package=jwt",
+        "--report=dist/nuitka-build-report.xml",
+    ]
+
+def _add_platform_optimizations(cmd: list[str], version: str):
+    """Adds OS-specific optimizations and metadata."""
+    if sys.platform == "win32":
+        cmd.extend([
+            f"--windows-file-version={version}",
+            f"--windows-product-version={version}",
+            "--windows-company-name=Timonel Labs",
+            "--windows-product-name=Yamlr Forensic Engine",
+        ])
+        cmd.append("--lto=no")  # 🛡️ Stability: Disable LTO on Windows to save memory
+    else:
+        cmd.append("--lto=yes")  # Link Time Optimization (Linux/macOS)
+
+def _add_data_files(cmd: list[str]):
+    """Embeds static catalog resources, protocol glue, and deprecations into the build."""
+    distilled_src_131 = SRC_DIR / "yamlr" / "catalog" / "k8s_v1.31_distilled.json"
+    if distilled_src_131.exists():
+        cmd.append(f"--include-data-file={distilled_src_131}=yamlr/catalog/k8s_v1.31_distilled.json")
+        cmd.append(f"--include-data-file={distilled_src_131}=yamlr/catalog/k8s_latest_distilled.json")
+
+    catalog_source = ROOT_DIR / "catalog"
+    if catalog_source.exists():
+        for cat_file in catalog_source.glob("k8s_v*.json"):
+            if "1.31" in cat_file.name:
+                continue
+            cmd.append(f"--include-data-file={cat_file}=yamlr/catalog/{cat_file.name}")
+
+    proxy_src = SRC_DIR / "yamlr" / "cli" / "lsp_proxy.py"
+    if proxy_src.exists():
+        cmd.append(f"--include-data-file={proxy_src}=lsp_proxy.py")
+
+    rules_src = SRC_DIR / "yamlr" / "core" / "data" / "rules.yaml"
+    if rules_src.exists():
+        cmd.append(f"--include-data-file={rules_src}=yamlr/core/data/rules.yaml")
+
+    depr_src = SRC_DIR / "yamlr" / "data" / "k8s_deprecations.json"
+    if depr_src.exists():
+        cmd.append(f"--include-data-file={depr_src}=yamlr/data/k8s_deprecations.json")
+
+    cmd.append("--include-package-data=yamlr.core.data")
+
+def build():
+    app_name = "yamlr"
     binary_name = f"{app_name}.exe" if sys.platform == "win32" else app_name
     version = get_version()
 
     print(f"🚀 Starting Native {app_name.upper()} Build...")
 
-    # Nuitka Base Command
-    cmd = [
-        sys.executable, "-m", "nuitka",
-        "--standalone",
-        "--onefile",
-        "--follow-imports",
-        "--plugin-enable=pylint-warnings",
-        f"--output-filename={app_name}",
-        "--output-dir=dist",
-        "--remove-output",  # Clean build
-        "--onefile-tempdir-spec=.yamlr_runtime", # Extract into the excluded folder
-        "--include-package=yamlr", # Explicitly include the main package
-        "--include-package=rich",  # Fix missing unicode data in binary
-        "--include-package=jwt",   # Pro dependency
-        "--include-package=cryptography", # Pro dependency
-    ]
+    _check_baseline()
 
-    if sys.platform == "win32":
-        # Add Windows specific version metadata
-        cmd.extend([
-            f"--windows-file-version={version}",
-            f"--windows-product-version={version}",
-            f"--windows-company-name=Yamlr Dev",
-            f"--windows-product-name=Yamlr",
-        ])
+    cmd = _get_base_cmd(app_name)
+    _add_platform_optimizations(cmd, version)
 
-    # 🛡 Zero-Leak Logic: Control what modules get compiled
-    if not args.pro:
-        # Community build: Explicitly block enterprise module
-        cmd.append("--nofollow-import-to=yamlr.pro")
-        print("    🛡 Security: yamlr.pro excluded from build.")
-    else:
-        # Enterprise build: Ensure pro module is included
-        cmd.append("--follow-import-to=yamlr.pro")
-        print("    🚀 Mode: ENTERPRISE (yamlr.pro included)")
-
-    # 📦 Asset Bundling (Catalogs & Rules)
-    catalog_path = ROOT_DIR / "catalog"
-    if catalog_path.exists():
-        cmd.append(f"--include-data-dir={catalog_path}=yamlr/catalog")
+    # [Unified Motto] Always include yamlr.pro in the build
+    cmd.append("--follow-import-to=yamlr.pro")
+    cmd.append("--include-package=yamlr.pro.reconciliation")
     
-    # Rules: Direct mapping for reliable resolution in frozen context
-    rules_src = SRC_DIR / "yamlr" / "core" / "data" / "rules.yaml"
-    if rules_src.exists():
-        cmd.append(f"--include-data-file={rules_src}=yamlr/core/data/rules.yaml")
-    
-    # Deprecations: Required for scan/check version awareness
-    depr_src = SRC_DIR / "yamlr" / "data" / "k8s_deprecations.json"
-    if depr_src.exists():
-        cmd.append(f"--include-data-file={depr_src}=yamlr/data/k8s_deprecations.json")
-    
-    # Other package data
-    cmd.append("--include-package-data=yamlr.core.data")
+    # 🛡️ Surface Reduction: Exclude dev/leaks
+    cmd.extend([
+        "--nofollow-import-to=mypy",
+        "--nofollow-import-to=numpy",
+        "--nofollow-import-to=pytest",
+        "--nofollow-import-to=unittest",
+        "--nofollow-import-to=setuptools",
+        "--nofollow-import-to=pip",
+    ])
 
-    # Platform Optimization
-    if sys.platform != "win32":
-        cmd.append("--lto=yes") # Link Time Optimization (Linux/macOS)
+    _add_data_files(cmd)
 
     cmd.append(str(ENTRY_POINT))
 
     os.chdir(ROOT_DIR)
-    
-    # Environment Setup
     env = os.environ.copy()
     env["PYTHONPATH"] = str(SRC_DIR)
-    
+
     print(f"🛠️ Executing: {' '.join(cmd)}")
 
     try:

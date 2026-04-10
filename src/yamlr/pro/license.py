@@ -4,15 +4,17 @@ Yamlr Enterprise (Pro): License Manager
 Enforces feature access based on authentication tier.
 
 [M&A READINESS] Entitlement Verification:
-This module provides the core non-circumvention logic for Yamlr Pro. It uses 
-RS256 signature verification to prove that the current environment is 
-entitled to Enterprise features (OPA, Shield), providing 100% IP protection 
+This module provides the core non-circumvention logic for Yamlr Pro. It uses
+RS256 signature verification to prove that the current environment is
+entitled to Enterprise features (OPA, Shield), providing 100% IP protection
 and auditability for licensing.
 """
 
 from __future__ import annotations
+
 import json
 import logging
+from typing import Dict, List, Optional
 
 from yamlr.core.exceptions import YamlrQuotaError
 
@@ -20,7 +22,8 @@ logger = logging.getLogger("yamlr.pro.license")
 
 
 # Module-level export for YamlrBridge compatibility
-__all__ = ['validate', 'LicenseManager']
+__all__ = ["validate", "LicenseManager"]
+
 
 def validate() -> tuple[bool, str]:
     """Validates the local Pro license installation.
@@ -31,6 +34,7 @@ def validate() -> tuple[bool, str]:
         tuple: (is_valid: bool, status_message: str)
     """
     from yamlr.pro.auth import auth_device
+
     if not auth_device.validate_session():
         return False, "Unauthenticated: Run 'yamlr auth login' to activate Pro features."
 
@@ -43,9 +47,10 @@ def validate() -> tuple[bool, str]:
     tier = payload.get("tier", "free")
     # [Security] Use constant-time comparison for sensitive tier strings
     import hmac
+
     is_pro = hmac.compare_digest(tier, "pro")
     is_ent = hmac.compare_digest(tier, "enterprise")
-    
+
     if not (is_pro or is_ent):
         return False, f"License required: Feature not available for '{tier}' tier."
 
@@ -91,30 +96,31 @@ class LicenseManager:
         # [CRITICAL-1] Enforce Rate Limiting for Pro Features
         if feature_name in ["shield", "opa", "kyverno"]:
             from yamlr.pro.rate_limiter import pro_limiter
+
             user_id = self._get_user_id()
             if not pro_limiter.is_allowed(user_id, feature_name, current_tier):
-                 return False # Quota exceeded
+                return False  # Quota exceeded
 
         return True
 
     def feature_gate(self, feature_name: str, context_label: str = "") -> None:
         """
         Enforces a hard gate on a feature, raising an exception if denied.
-        
+
         Why: Simplified enforcement for CLI entrypoints to avoid repetitive if/else.
         """
         if not self.check_feature_access(feature_name):
             required_tier = self.FEATURES.get(feature_name, "enterprise")
             current_tier = self._get_current_tier()
-            
+
             msg = f"Feature '{feature_name}' requires {required_tier.capitalize()} license."
             if context_label:
                 msg = f"Operation '{context_label}' failed: {msg}"
-            
+
             remedy = "Run 'yamlr auth login' to activate your credentials."
             if current_tier != "free":
                 remedy = f"Contact your administrator to upgrade your {current_tier.capitalize()} license."
-                
+
             raise YamlrQuotaError(msg, remediation=remedy)
 
     def track_usage(self, metric: str, value: int = 1):
@@ -125,6 +131,7 @@ class LicenseManager:
         logger.debug(f"[Usage] {metric}: {value}")
         try:
             from yamlr.core.telemetry import GlobalTelemetryManager
+
             gtm = GlobalTelemetryManager()
             gtm.record_pro_usage(metric, value)
         except Exception as e:
@@ -143,12 +150,13 @@ class LicenseManager:
     def _get_payload(self) -> Optional[dict]:
         """Safely retrieves validated JWT payload."""
         from yamlr.pro.auth import auth_device
+
         if not auth_device.validate_session():
             return None
 
         token = auth_device.get_token()
         if token == "PRO-ECC-SIMULATED-KEY-2026":
-             return {"tier": "enterprise", "sub": "test-user"}
+            return {"tier": "enterprise", "sub": "test-user"}
 
         if not token:
             return None

@@ -1,6 +1,6 @@
-import sys
-import os
 import argparse
+import os
+import sys
 from io import StringIO
 from unittest.mock import MagicMock
 
@@ -9,16 +9,14 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../src"
 
 from yamlr.cli.parser_factory import create_parser
 
+
 def test_cli_sync():
     print("🔍 Auditing CLI Command Synchronization...")
     parser = create_parser(invoked_as="yamlr")
-    
+
     # Get all subcommands
-    subparsers_actions = [
-        action for action in parser._actions 
-        if isinstance(action, argparse._SubParsersAction)
-    ]
-    
+    subparsers_actions = [action for action in parser._actions if isinstance(action, argparse._SubParsersAction)]
+
     commands = []
     for action in subparsers_actions:
         # Compatibility for different argparse versions
@@ -29,17 +27,18 @@ def test_cli_sync():
 
     # Remove duplicates
     commands = sorted(list(set(commands)))
-    
+
     print(f"Detected {len(commands)} subcommands: {', '.join(commands)}")
-    
+
     # Extract help commands from help_formatter.py by reading the file
     help_file_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../src/yamlr/cli/help_formatter.py"))
     with open(help_file_path, "r") as f:
         content = f.read()
-    
+
     # Look for keys in the 'dispatch' dict
     import re
-    help_commands = re.findall(r'\"([a-z0-9_-]+)\": lambda', content)
+
+    help_commands = re.findall(r"\"([a-z0-9_-]+)\": lambda", content)
     print(f"Detected {len(help_commands)} help handlers: {', '.join(sorted(help_commands))}")
 
     missing_help = []
@@ -55,6 +54,7 @@ def test_cli_sync():
         sys.exit(1)
     else:
         print("\n✨ ALL COMMANDS ARE 100% SYNCHRONIZED.")
+
 
 if __name__ == "__main__":
     test_cli_sync()

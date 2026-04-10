@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-4585
+  labels:
+    app: ms-4585
+    dependency: ms-4586
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-4585
+  template:
+    metadata:
+      labels:
+        app: ms-4585
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-4586

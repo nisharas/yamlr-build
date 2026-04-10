@@ -1,97 +1,60 @@
 """
-Schema Analyzer - Validates API versions against K8s OpenAPI schemas
---------------------------------------------------------------------
-Integrates SchemaValidator into the Yamlr pipeline.
+Yamlr Schema Analyzer Adapter
+------------------------------
+Standard adapter for the consolidated SchemaValidator.
+
+Why: Bridges the diagnostic core with the Analyzer Registry system.
+     Bypasses local re-definitions to eliminate code duplication.
 """
 
 from __future__ import annotations
 
-import logging
 from typing import Any, Dict, List, Optional
 
 from yamlr.analyzers.base import AnalysisResult, BaseAnalyzer
-from yamlr.validators.schema_validator import SchemaValidator
+from yamlr.core.validation.schema import SchemaValidator
 
-logger = logging.getLogger("yamlr.analyzers.schema")
-__all__ = ['SchemaAnalyzer']
-
+__all__ = ["SchemaAnalyzer"]
 
 
 class SchemaAnalyzer(BaseAnalyzer):
     """
-    Analyzes manifests for invalid API versions.
-    
-    Uses SchemaValidator to check if apiVersion + kind combinations exist
-    in the target Kubernetes version.
+    Adapter for SchemaValidator into the Analyzer Registry.
+
+    Why: Keeps the analyzer interface consistent while leveraging
+         the hardened core validation layer.
     """
-    
-    def __init__(self, catalog: Dict[str, Any], k8s_version: str = "1.31"):
-        """
-        Initialize schema analyzer.
-        
-        Args:
-            catalog: Distilled schema catalog
-            k8s_version: Target Kubernetes version (e.g., "1.31")
-        """
-        super().__init__()
-        self.validator = SchemaValidator(catalog, k8s_version)
-    
+
+    def __init__(self, catalog: Optional[Dict[str, Any]] = None):
+        """Initializes the analyzer with a shared or default catalog."""
+        self.validator = SchemaValidator(catalog=catalog)
+
     @property
     def name(self) -> str:
-        """Return analyzer name."""
-        return "SchemaAnalyzer"
-    
+        """Unique identifier for the schema analyzer."""
+        return "schema"
+
     @property
     def analyzer_type(self) -> str:
-        """Return analyzer type - operates on manifest content."""
+        """Categorized as a content-based analyzer."""
         return "content"
-    
-    def analyze(self, resources: List[dict], **kwargs) -> List[AnalysisResult]:
-        """
-        Analyze manifests for invalid API versions.
-        
-        Args:
-            resources: List of parsed YAML manifests
-            **kwargs: Additional context (kubernetes_version, etc.)
-            
-        Returns:
-            List of AnalysisResult objects (empty if all valid)
-        """
-        results = []
-        
-        # Respect kubernetes_version if passed in kwargs
-        target_version = kwargs.get("kubernetes_version")
-        if target_version:
-            # We don't want to recreate SchemaValidator every time if not needed.
-            # But the validator is lightweight enough for now.
-            # Safer: check if it's the same version.
-            if target_version != self.validator.version:
-                self.validator = SchemaValidator(target_version)
 
-        for resource in resources:
-            # [ROUND-10] Defensive check: if resource is not dict-like, skip it
-            # Why: Malformed or string-only YAML documents can slip into the resource list
-            if not isinstance(resource, dict) and not hasattr(resource, "to_dict"):
-                continue
+    def analyze(self, resources: Any, **kwargs) -> List[AnalysisResult]:
+        """
+        Validates all provided resources against Kubernetes schemas.
 
-            # Normalize to primitives for schema validation and reporting
-            data = resource.to_dict() if hasattr(resource, "to_dict") else resource
-            
-            # Extract apiVersion and kind
-            api_version = data.get("apiVersion")
-            kind = data.get("kind")
-            
-            if not api_version or not kind:
-                # Missing apiVersion or kind - will be caught by other analyzers
-                continue
-            
-            # Validate API version
-            error = self.validator.validate_api_version(api_version, kind)
-            if error:
-                # Update resource context in the error
-                error.resource_name = data.get("metadata", {}).get("name", "<unknown>")
-                error.resource_kind = kind
-                logger.debug(f"Invalid API version: {api_version} for {kind}")
-                results.append(error)
-        
+        Why: Ensures 100% null-safety by delegating to the hardened core.
+        """
+        file_path = kwargs.get("file_path", "unknown")
+
+        # [v0.1.0-HF] Support both single-doc and multi-doc manifests
+        if isinstance(resources, dict):
+            resources = [resources]
+        elif not isinstance(resources, list):
+            return []
+
+        results: List[AnalysisResult] = []
+        for doc in resources:
+            if isinstance(doc, dict):
+                results.extend(self.validator.validate_full_document(doc, file_path=file_path))
         return results

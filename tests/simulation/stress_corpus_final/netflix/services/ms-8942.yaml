@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-8942
+  labels:
+    app: ms-8942
+    dependency: ms-8943
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-8942
+  template:
+    metadata:
+      labels:
+        app: ms-8942
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-8943

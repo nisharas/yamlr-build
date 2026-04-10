@@ -1,19 +1,20 @@
 from __future__ import annotations
+
 import logging
 from typing import Any, Dict
 
 from .base import BaseHeuristic
 
 logger = logging.getLogger("yamlr.lexer.heuristics")
-__all__ = ['BooleanGuardHeuristic']
+__all__ = ["BooleanGuardHeuristic"]
 
 
 class BooleanGuardHeuristic(BaseHeuristic):
     """
     Protects YAML 1.1 booleans (yes, no, on, off) from being parsed as actual booleans.
-    
+
     Why: Legacy clusters often use 'yes/no' in environment variables or ConfigMaps.
-    YAML 1.1 (used by many older tools) parses these as booleans. Yamlr forces 
+    YAML 1.1 (used by many older tools) parses these as booleans. Yamlr forces
     them to strings to ensure semantic DNA integrity.
     """
 
@@ -37,7 +38,7 @@ class BooleanGuardHeuristic(BaseHeuristic):
         # Split into key and value parts
         # We use a simple partition because we are at the raw line level here
         key_part, sep, val_part = line.partition(":")
-        
+
         stripped_val = val_part.strip()
         if not stripped_val:
             return line
@@ -48,13 +49,13 @@ class BooleanGuardHeuristic(BaseHeuristic):
             # Reconstruct the line with quoted value
             indent_and_key = key_part
             # Preserving the exact spacing after colon if possible
-            colon_space = val_part[:val_part.find(stripped_val)]
-            
-            new_line = f"{indent_and_key}:{colon_space}\"{stripped_val}\"".rstrip()
-            
+            colon_space = val_part[: val_part.find(stripped_val)]
+
+            new_line = f'{indent_and_key}:{colon_space}"{stripped_val}"'.rstrip()
+
             if "stats" in context:
                 context["stats"]["quote_repairs"] = context["stats"].get("quote_repairs", 0) + 1
-            
+
             logger.debug(f"BooleanGuard: Quoted '{stripped_val}' in line: {line.strip()}")
             return new_line
 

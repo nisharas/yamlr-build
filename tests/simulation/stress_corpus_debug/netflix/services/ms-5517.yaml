@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-5517
+  labels:
+    app: ms-5517
+    dependency: ms-5518
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-5517
+  template:
+    metadata:
+      labels:
+        app: ms-5517
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-5518

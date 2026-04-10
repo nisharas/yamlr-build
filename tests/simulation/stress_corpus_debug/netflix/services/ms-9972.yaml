@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-9972
+  labels:
+    app: ms-9972
+    dependency: ms-9973
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-9972
+  template:
+    metadata:
+      labels:
+        app: ms-9972
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-9973

@@ -7,14 +7,16 @@ Extracts:
 """
 
 from __future__ import annotations
+
 from typing import List
 
 from yamlr.models import ManifestIdentity, Shard
-__all__ = ['LabelsExtractor']
 
+__all__ = ["LabelsExtractor"]
 
 
 from .base_extractor import BaseMetadataExtractor
+
 
 class LabelsExtractor(BaseMetadataExtractor):
     """Extracts label fields for selector matching."""

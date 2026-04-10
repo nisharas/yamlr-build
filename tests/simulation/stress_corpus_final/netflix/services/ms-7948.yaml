@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-7948
+  labels:
+    app: ms-7948
+    dependency: ms-7949
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-7948
+  template:
+    metadata:
+      labels:
+        app: ms-7948
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-7949

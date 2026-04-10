@@ -2,23 +2,27 @@
 """
 HYPERSCALE SIMULATOR
 --------------------
-Generates massive synthetic clusters mimicking the architectures of 
-Google, Amazon, and Netflix to verify Yamlr's performance and logical 
+Generates massive synthetic clusters mimicking the architectures of
+Google, Amazon, and Netflix to verify Yamlr's performance and logical
 integrity at scale.
 
 Author: Antigravity / Yamlr Team
 """
 
+import argparse
+import concurrent.futures
 import os
-from pathlib import Path
 import random
+from pathlib import Path
 
 BASE_DIR = Path("tests/simulation/hyperscale")
+
 
 def write_manifest(path: Path, content: str):
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         f.write(content)
+
 
 def generate_google_cluster(count: int):
     """Borg-style: High density of Jobs, CronJobs, and complex OwnerReferences."""
@@ -58,6 +62,7 @@ spec:
 """
         write_manifest(cluster_dir / f"jobs/job-{i}.yaml", content.strip())
 
+
 def generate_amazon_cluster(count: int):
     """VPC-style: Complex Ingress/Gateway API meshes."""
     print(f"Generating Amazon-style cluster ({count} files)...")
@@ -96,13 +101,14 @@ spec:
 """
         write_manifest(cluster_dir / f"networking/svc-{i}.yaml", content.strip())
 
+
 def generate_netflix_cluster(count: int):
     """Microservice Chaos: Massive graph with high inter-dependency."""
     print(f"Generating Netflix-style cluster ({count} files)...")
     cluster_dir = BASE_DIR / "netflix"
     for i in range(count):
         name = f"ms-{i}"
-        target = f"ms-{(i+1)%count}" # Circular dependecies for graph stress
+        target = f"ms-{(i + 1) % count}"  # Circular dependecies for graph stress
         content = f"""
 apiVersion: apps/v1
 kind: Deployment
@@ -130,17 +136,32 @@ spec:
 """
         write_manifest(cluster_dir / f"services/ms-{i}.yaml", content.strip())
 
+
 def main():
+    parser = argparse.ArgumentParser(description="Yamlr Hyperscale Simulator")
+    parser.add_argument("--count", type=int, default=1000, help="Number of files per architecture style")
+    parser.add_argument("--out", type=str, default="tests/simulation/hyperscale", help="Output directory")
+    args = parser.parse_args()
+
+    global BASE_DIR
+    BASE_DIR = Path(args.out)
+
     if BASE_DIR.exists():
         import shutil
+
         shutil.rmtree(BASE_DIR)
-    
-    # Generate 1000 files per mode as a starting point (Total 3000 files)
-    # We can scale this up for the 1M test
-    generate_google_cluster(1000)
-    generate_amazon_cluster(1000)
-    generate_netflix_cluster(1000)
-    print("\nHyperscale Simulation Clusters Generated.")
+
+    # Generate files per mode (Default 1000, Scalable to 150k+)
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        futures = [
+            executor.submit(generate_google_cluster, args.count),
+            executor.submit(generate_amazon_cluster, args.count),
+            executor.submit(generate_netflix_cluster, args.count),
+        ]
+        concurrent.futures.wait(futures)
+
+    print(f"\nHyperscale Simulation Clusters Generated: {args.count * 3} total files.")
+
 
 if __name__ == "__main__":
     main()

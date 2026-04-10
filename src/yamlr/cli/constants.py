@@ -8,13 +8,16 @@ Why: To maintain a clean public API surface while preserving advanced power-user
 
 from enum import Enum, auto
 
+
 class CommandTier(Enum):
     """
     Categorizes commands based on the user journey.
     """
-    PRIMARY = auto()     # START HERE: scan, heal, check
-    SECONDARY = auto()   # WHEN YOU'RE READY: upgrade, status, doctor, rules, explain
-    ADVANCED = auto()    # Hidden by default: Everything else (Insights, Pipeline, Meta)
+
+    PRIMARY = auto()  # START HERE: scan, heal, check
+    SECONDARY = auto()  # WHEN YOU'RE READY: upgrade, status, doctor, rules, explain
+    ADVANCED = auto()  # Hidden by default: Everything else (Insights, Pipeline, Meta)
+
 
 # Mapping of command -> Tier for journey-based discovery
 COMMAND_TIER_MAP = {
@@ -23,16 +26,14 @@ COMMAND_TIER_MAP = {
     "heal": CommandTier.PRIMARY,
     "check": CommandTier.PRIMARY,
     "audit": CommandTier.PRIMARY,  # Twin for scan
-
     # SECONDARY: When You're Ready (Deeper Analysis & Day 2)
     "upgrade": CommandTier.SECONDARY,
-    "migrate": CommandTier.SECONDARY, # Twin for upgrade
+    "migrate": CommandTier.SECONDARY,  # Twin for upgrade
     "status": CommandTier.SECONDARY,
     "doctor": CommandTier.SECONDARY,
     "rules": CommandTier.SECONDARY,
     "explain": CommandTier.SECONDARY,
-    "secure": CommandTier.SECONDARY, # Hardening is a Day-2 maturity step
-
+    "secure": CommandTier.SECONDARY,  # Hardening is a Day-2 maturity step
     # ADVANCED: Power User / Pipelines / Meta (Hidden unless --all)
     "graph": CommandTier.ADVANCED,
     "stats": CommandTier.ADVANCED,
@@ -53,4 +54,7 @@ COMMAND_TIER_MAP = {
     "catalog": CommandTier.ADVANCED,
     "version": CommandTier.ADVANCED,
     "auth": CommandTier.ADVANCED,
+    "lsp": CommandTier.ADVANCED,
+    "drift": CommandTier.SECONDARY,
+    "rollback": CommandTier.ADVANCED,
 }

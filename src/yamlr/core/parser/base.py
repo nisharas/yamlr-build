@@ -6,8 +6,9 @@ decoupling the engine from specific library implementations.
 """
 
 from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Union, IO
+from typing import IO, Any, Dict, List, Optional, Union
 
 __all__ = ["YamlrNode", "YamlrParser"]
 
@@ -16,7 +17,7 @@ class YamlrNode(ABC):
     """
     Abstract interface for a YAML document node (Map, Sequence, or Scalar).
     """
-    
+
     @property
     @abstractmethod
     def is_map(self) -> bool:

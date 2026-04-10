@@ -5,13 +5,17 @@ Logic for batch healing directories and many files.
 """
 
 from __future__ import annotations
+
 import os
-__all__ = ['perform_batch_dry_run', 'perform_batch_apply']
+
+__all__ = ["perform_batch_dry_run", "perform_batch_apply"]
 
 
-def perform_batch_dry_run(targets, engine, options, stub_healing, allow_unsafe, skip_backup, check_deprecations, sovereign, pro_preview=False):
+def perform_batch_dry_run(
+    targets, engine, options, stub_healing, allow_unsafe, skip_backup, check_deprecations, sovereign, pro_preview=False
+):
     """Executes a simulated healing run across multiple targets without modifying files.
-    
+
     Why: To provide a safety-first preview of changes before they are applied to the filesystem.
     """
     dry_results = []
@@ -34,7 +38,9 @@ def perform_batch_dry_run(targets, engine, options, stub_healing, allow_unsafe, 
                 evidence_dir=options.evidence_dir,
                 adapters_dir=options.adapters_dir,
                 from_report_path=options.from_report,
-                pro_preview=pro_preview
+                pro_preview=pro_preview,
+                emulate=getattr(options, "emulate", []),
+                shadow=getattr(options, "shadow", False),
             )
             if stub_healing:
                 engine.apply_semantic_fixes([res], stub_healing, allow_unsafe, dry_run=True)
@@ -63,14 +69,26 @@ def perform_batch_dry_run(targets, engine, options, stub_healing, allow_unsafe, 
                     adapters_dir=options.adapters_dir,
                     use_rust=options.use_rust,
                     from_report_path=options.from_report,
-                    pro_preview=pro_preview
+                    pro_preview=pro_preview,
                 )
             )
     return dry_results
 
-def perform_batch_apply(targets, engine, options, stub_healing, allow_unsafe, skip_backup, check_deprecations, sovereign, args, pro_preview=False):
+
+def perform_batch_apply(
+    targets,
+    engine,
+    options,
+    stub_healing,
+    allow_unsafe,
+    skip_backup,
+    check_deprecations,
+    sovereign,
+    args,
+    pro_preview=False,
+):
     """Executes a real healing run across multiple targets, modifying files in-place.
-    
+
     Why: To automate the remediation of Kubernetes manifest issues at scale.
     """
     real_results = []
@@ -94,7 +112,10 @@ def perform_batch_apply(targets, engine, options, stub_healing, allow_unsafe, sk
                 evidence_dir=options.evidence_dir,
                 adapters_dir=options.adapters_dir,
                 generate_receipts=getattr(args, "generate_receipts", False),
-                pro_preview=pro_preview
+                pro_preview=pro_preview,
+                patch_mode=getattr(options, "patch_mode", False),
+                emulate=getattr(options, "emulate", []),
+                shadow=getattr(options, "shadow", False),
             )
             if stub_healing:
                 engine.apply_semantic_fixes([res], stub_healing, allow_unsafe, dry_run=False)
@@ -127,7 +148,7 @@ def perform_batch_apply(targets, engine, options, stub_healing, allow_unsafe, sk
                     generate_receipts=getattr(args, "generate_receipts", False),
                     use_rust=options.use_rust,
                     from_report_path=options.from_report,
-                    pro_preview=pro_preview
+                    pro_preview=pro_preview,
                 )
             )
     return real_results

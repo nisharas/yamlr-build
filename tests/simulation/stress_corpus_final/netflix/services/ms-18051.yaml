@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-18051
+  labels:
+    app: ms-18051
+    dependency: ms-18052
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-18051
+  template:
+    metadata:
+      labels:
+        app: ms-18051
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-18052

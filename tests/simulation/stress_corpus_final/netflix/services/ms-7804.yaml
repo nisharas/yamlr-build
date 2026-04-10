@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-7804
+  labels:
+    app: ms-7804
+    dependency: ms-7805
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-7804
+  template:
+    metadata:
+      labels:
+        app: ms-7804
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-7805

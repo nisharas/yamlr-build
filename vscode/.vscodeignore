@@ -1,0 +1,17 @@
+.vscode/**
+.vscode-test/**
+out/test/**
+src/**
+.gitignore
+.vscodeignore
+tsconfig.json
+package-lock.json
+.eslintrc.json
+.editorconfig
+**/*.ts
+node_modules/**
+!bin/**
+audit_vsix/**
+audit_vsix_new/**
+audit_vsix_v011/**
+*.vsix

@@ -4,7 +4,7 @@ metadata:
   name: ms-999
   labels:
     app: ms-999
-    dependency: ms-0
+    dependency: ms-1000
 spec:
   replicas: 1
   selector:
@@ -20,4 +20,4 @@ spec:
         image: netflix/service:latest
         env:
         - name: TARGET_SERVICE
-          value: ms-0
+          value: ms-1000

@@ -1,19 +1,23 @@
 """
 Memmap Manager for Yamlr Engine.
 
-Why: Efficiently shares large data structures (like the K8s catalog) 
+Why: Efficiently shares large data structures (like the K8s catalog)
      across multiprocessing workers without serialization overhead.
 """
+
 from __future__ import annotations
+
 import os
 import tempfile
 from pathlib import Path
 from typing import Any, Dict, Optional
+
 import joblib
+
 
 class MemmapManager:
     """Manages memory-mapped file storage for large Python objects."""
-    
+
     def __init__(self, runtime_dir: Optional[Path] = None):
         self.runtime_dir = runtime_dir or Path(tempfile.gettempdir()) / "yamlr_memmap"
         self.runtime_dir.mkdir(parents=True, exist_ok=True)
@@ -31,7 +35,7 @@ class MemmapManager:
         path = self._active_maps.get(path_or_key, path_or_key)
         if not os.path.exists(path):
             return None
-        return joblib.load(path, mmap_mode='r')
+        return joblib.load(path, mmap_mode="r")
 
     def cleanup(self):
         """Removes temporary memmap files."""

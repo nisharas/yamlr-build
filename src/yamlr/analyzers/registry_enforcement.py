@@ -4,7 +4,7 @@ Yamlr REGISTRY ENFORCEMENT
 --------------------------
 Strict validation of container image registries and tags.
 
-Why: Ensures that workloads only use approved registries and prevents 
+Why: Ensures that workloads only use approved registries and prevents
      the use of mutable or dangerous image tags in production.
 """
 
@@ -17,7 +17,8 @@ from yamlr.analyzers.base import AnalysisResult, BaseAnalyzer
 from yamlr.analyzers.rules import Rules
 
 logger = logging.getLogger("yamlr.analyzers.registry_enforcement")
-__all__ = ['RegistryAnalyzer']
+__all__ = ["RegistryAnalyzer"]
+
 
 class RegistryAnalyzer(BaseAnalyzer):
     """
@@ -79,7 +80,7 @@ class RegistryAnalyzer(BaseAnalyzer):
                             resource_name=r_name,
                             resource_kind=r_kind,
                             file_path="unknown",
-                            line_number=0,
+                            line_no=0,
                         )
                     )
         return results

@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-4123
+  labels:
+    app: ms-4123
+    dependency: ms-4124
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-4123
+  template:
+    metadata:
+      labels:
+        app: ms-4123
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-4124

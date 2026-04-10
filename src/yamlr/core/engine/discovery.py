@@ -5,9 +5,11 @@ High-performance file system crawlers for manifest discovery.
 """
 
 from __future__ import annotations
+
 import os
 
 __all__ = ["fast_manifest_scan"]
+
 
 def fast_manifest_scan(root: str, max_count: int = 500) -> int:
     """
@@ -17,7 +19,7 @@ def fast_manifest_scan(root: str, max_count: int = 500) -> int:
     count = 0
     ignore_dirs = {".git", ".venv", "node_modules", "__pycache__", "bin", "obj"}
     stack = [(root, 0)]
-    
+
     while stack and count < max_count:
         curr_dir, depth = stack.pop()
         try:
@@ -32,5 +34,5 @@ def fast_manifest_scan(root: str, max_count: int = 500) -> int:
                             return count
         except OSError:
             continue
-            
+
     return count

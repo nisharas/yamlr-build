@@ -1,0 +1,10 @@
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: hungry-pod
+spec:
+  containers:
+  - name: worker
+    image: busybox
+    # Missing resources block entirely

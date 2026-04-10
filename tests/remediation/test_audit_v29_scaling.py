@@ -1,16 +1,18 @@
 import time
+
 from yamlr.analyzers.detectors import CrossResourceDetectors
 from yamlr.models import ManifestIdentity
+
 
 def test_scaling_performance():
     """Quantifies the performance gain from pre-built indexing."""
     # Generate 5,000 resources (4,900 valid, 100 broken)
     identities = []
-    
+
     # 4000 ConfigMaps
     for i in range(4000):
         identities.append(ManifestIdentity(kind="ConfigMap", name=f"cm-{i}", namespace="default"))
-    
+
     # 1000 Deployments (900 valid, 100 broken)
     for i in range(1000):
         ref = f"cm-{i}" if i < 900 else f"cm-missing-{i}"
@@ -28,7 +30,7 @@ def test_scaling_performance():
     start_idx = time.time()
     index = CrossResourceDetectors.build_index(identities)
     dur_idx = time.time() - start_idx
-    
+
     start = time.time()
     broken2 = CrossResourceDetectors.detect_broken_refs(identities, index=index)
     dur2 = time.time() - start
@@ -37,6 +39,7 @@ def test_scaling_performance():
     assert len(broken1) == 100
     assert len(broken2) == 100
     # In a real parallel scenario, dur2 would be the time per worker.
-    
+
+
 if __name__ == "__main__":
     test_scaling_performance()

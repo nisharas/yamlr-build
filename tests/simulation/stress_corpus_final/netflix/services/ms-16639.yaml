@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-16639
+  labels:
+    app: ms-16639
+    dependency: ms-16640
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-16639
+  template:
+    metadata:
+      labels:
+        app: ms-16639
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-16640

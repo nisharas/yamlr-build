@@ -7,7 +7,16 @@ Why: Prevents drift between scan, heal, and toolbox help modules.
 
 from __future__ import annotations
 
-__all__ = ["print_shared_analysis_options", "print_semantic_protection_options"]
+__all__ = [
+    "print_shared_analysis_options",
+    "print_semantic_protection_options",
+    "OPTIONS_HEADER",
+    "OUTPUT_JSON_FLAG",
+]
+
+OPTIONS_HEADER = "\n[bold cyan]OPTIONS[/bold cyan]"
+OUTPUT_JSON_FLAG = "  --output json       Export data as structured JSON"
+
 
 def print_shared_analysis_options(console, show_all: bool = False):
     """Prints standard analysis flags (kube-version, max-depth, etc.)."""
@@ -15,7 +24,7 @@ def print_shared_analysis_options(console, show_all: bool = False):
     console.print("  --output FORMAT     Report format (text, json, sarif)")
     console.print("  --fail-on CHOICE    CI/CD Gate: Exit 1 if found (any/warning/error)")
     console.print("  -q, --quiet         Minimal output (CI/CD mode: errors + exit code)")
-    
+
     if show_all:
         console.print("  --max-depth N       Recursion depth (default: 10)")
         console.print("  --ext LIST          Extensions (default: .yaml,.yml). Supports .tf")
@@ -29,6 +38,7 @@ def print_shared_analysis_options(console, show_all: bool = False):
         console.print("  --risk-threshold R  Exit 1 if finding meets/exceeds risk (high/medium/low)")
         console.print("  --stream-to FILE    ULTRA-SCALE: Stream incremental results to NDJSON")
         console.print("  -p, --plain         ASCII-only output mode (Recommended for Logs)")
+
 
 def print_semantic_protection_options(console, is_heal: bool = False, show_all: bool = False):
     """Prints semantic & protection flags (harden, limits, etc.)."""
@@ -47,7 +57,7 @@ def print_semantic_protection_options(console, is_heal: bool = False, show_all: 
     console.print("  --mem-limit L       Override default Memory limit (e.g. 512Mi)")
     console.print("  --namespace NS      Default namespace for generated resources")
     console.print("  --health-threshold N Min score to consider 'Healthy' (default: 70)")
-    
+
     if is_heal:
         console.print("  --stub-refs [TYPE]  Generate missing resources via filter")
         console.print("  --fix-refs           [PRO] Cross-Resource Auto-Fix selector/port/stubs")

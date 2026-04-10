@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-12320
+  labels:
+    app: ms-12320
+    dependency: ms-12321
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-12320
+  template:
+    metadata:
+      labels:
+        app: ms-12320
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-12321

@@ -3,11 +3,15 @@ DEMO COMMAND - The Safety Engine Showcase
 ----------------------------------
 Scaffolds a sample directory with purposeful errors to demonstrate Yamlr's power.
 """
+
 from __future__ import annotations
+
 from pathlib import Path
+
 from rich.console import Console
 from rich.panel import Panel
-__all__ = ['handle_demo_command']
+
+__all__ = ["handle_demo_command"]
 
 
 def handle_demo_command(args, engine, console: Console):
@@ -19,7 +23,7 @@ def handle_demo_command(args, engine, console: Console):
         console.print(f"[yellow]⚠️  Directory '[bold]{demo_dir}[/bold]' already exists. Skipping scaffold.[/yellow]")
     else:
         demo_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # 1. Scaffolding malformed sample.yaml
         sample_path = demo_dir / "sample.yaml"
         sample_content = """# Yamlr Demo: Safety Engine Showcase
@@ -67,7 +71,7 @@ spec:
 """
         with open(sample_path, "w", encoding="utf-8") as f:
             f.write(sample_content)
-        
+
         console.print(f"[green]✅ Created demo manifest at [bold]{sample_path}[/bold][/green]")
 
     # Instructions
@@ -82,7 +86,14 @@ spec:
         "⚙️ [bold white]NEXT STEP:[/bold white]\n"
         "[dim]Drop Yamlr into your GitHub Actions to prevent silent failures from ever reaching production.[/dim]"
     )
-    
-    console.print(Panel(instructions, title="[bold magenta]✨ Kubernetes Safety Engine Demo[/bold magenta]", border_style="magenta", padding=(1, 2)))
-    
+
+    console.print(
+        Panel(
+            instructions,
+            title="[bold magenta]✨ Kubernetes Safety Engine Demo[/bold magenta]",
+            border_style="magenta",
+            padding=(1, 2),
+        )
+    )
+
     return 0

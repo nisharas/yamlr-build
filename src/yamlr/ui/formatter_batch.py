@@ -14,18 +14,19 @@ Date: 2026-02-17
 """
 
 from __future__ import annotations
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
+
 if TYPE_CHECKING:
     from yamlr.models import HealFileResult
 
 from rich.panel import Panel
 from rich.table import Table
 
-from yamlr.cli.commands.base import get_console
+from yamlr.core.entrypoints.base import get_console
 
 console = get_console()
-__all__ = ['BatchMixin']
-
+__all__ = ["BatchMixin"]
 
 
 class BatchMixin:
@@ -39,14 +40,25 @@ class BatchMixin:
     """
 
     PRO_FIXABLE_RULES = {
-        "rule/resource-requests", "rule/resource-limits",
-        "rule/run-as-non-root", "rule/no-privileged", "rule/allow-privilege-escalation",
-        "rule/unsafe-hostpath", "rule/host-network", "rule/read-only-root-fs",
-        "rule/missing-liveness", "rule/missing-readiness",
+        "rule/resource-requests",
+        "rule/resource-limits",
+        "rule/run-as-non-root",
+        "rule/no-privileged",
+        "rule/allow-privilege-escalation",
+        "rule/unsafe-hostpath",
+        "rule/host-network",
+        "rule/read-only-root-fs",
+        "rule/missing-liveness",
+        "rule/missing-readiness",
         "rule/no-latest-tag",
-        "rule/ghost-service", "rule/port-mismatch", "rule/service-no-selector",
-        "rule/missing-configmap-target", "rule/broken-volume", "rule/ingress-broken",
-        "rule/network-policy-missing", "rule/untrusted-registry"
+        "rule/ghost-service",
+        "rule/port-mismatch",
+        "rule/service-no-selector",
+        "rule/missing-configmap-target",
+        "rule/broken-volume",
+        "rule/ingress-broken",
+        "rule/network-policy-missing",
+        "rule/untrusted-registry",
     }
 
     # -------------------------------------------------------------------------
@@ -54,15 +66,19 @@ class BatchMixin:
     # -------------------------------------------------------------------------
 
     def print_final_table(
-        self, reports: List[HealFileResult], summary_only: bool = False, telemetry_data: Optional[Dict[str, Any]] = None, **kwargs
+        self,
+        reports: List[HealFileResult],
+        summary_only: bool = False,
+        telemetry_data: Optional[Dict[str, Any]] = None,
+        **kwargs,
     ):
         """
         Summary table with multi-resource expansion.
-        
+
         Why: Orchestrates the final visual output after a batch operation.
-             Decoupled to support both detailed inspection and high-level 
+             Decoupled to support both detailed inspection and high-level
              ROI summaries.
-             
+
         Args:
             reports: List of file processing results
             summary_only: If True, show aggregate stats only (recommended for 100+ files)
@@ -76,9 +92,7 @@ class BatchMixin:
         if summary_only or len(reports) > 5:
             # Note: caller should pass elapsed_time if available
             elapsed_time = kwargs.get("elapsed_time", 0.0)
-            console.print(
-                f"\n[dim]Processed {len(reports)} files - using summary mode[/dim]\n"
-            )
+            console.print(f"\n[dim]Processed {len(reports)} files - using summary mode[/dim]\n")
             self._print_summary_stats(reports, elapsed_time=elapsed_time, telemetry_data=telemetry_data)
             return
 
@@ -87,24 +101,34 @@ class BatchMixin:
 
     def _get_icon(self, icon: str) -> str:
         """Returns ASCII fallback for emojis if plain mode is active.
-        
-        Why: Ensures terminal compatibility and accessibility for users 
+
+        Why: Ensures terminal compatibility and accessibility for users
              with no-color or basic TTY environments.
         """
         if not getattr(console, "_yamlr_plain", False):
             return icon
-        
+
         mapping = {
-            "📊": "[#]", "✅": "[v]", "✓": "v", "→": "->", 
-            "✎": "*", "⚠": "!", "○": "o", "↪": ">>", "✗": "x",
-            "💾": "(B)", "✨": "OK", "💡": "i", "⚔️": "[!]"
+            "📊": "[#]",
+            "✅": "[v]",
+            "✓": "v",
+            "→": "->",
+            "✎": "*",
+            "⚠": "!",
+            "○": "o",
+            "↪": ">>",
+            "✗": "x",
+            "💾": "(B)",
+            "✨": "OK",
+            "💡": "i",
+            "⚔️": "[!]",
         }
         return mapping.get(icon, icon)
 
     def _print_detailed_table(self, reports: List[HealFileResult]):
         """Renders detailed table with per-file and per-resource rows.
-        
-        Why: Provides the 'Surgical Precision' view, allowing users to trace 
+
+        Why: Provides the 'Surgical Precision' view, allowing users to trace
              exactly what was found and healed in each manifest.
         """
         table = Table(
@@ -143,7 +167,7 @@ class BatchMixin:
                 score = int(r.get("dna_integrity_score", 0))
             except (TypeError, ValueError):
                 score = 0
-                
+
             try:
                 proc_time = float(r.get("processing_time_seconds", 0))
             except (TypeError, ValueError):
@@ -218,10 +242,8 @@ class BatchMixin:
                     score_val = int(score)
                 except (TypeError, ValueError):
                     score_val = 0
-                    
-                score_style = (
-                    "green" if score_val >= 80 else "yellow" if score_val >= 50 else "red"
-                )
+
+                score_style = "green" if score_val >= 80 else "yellow" if score_val >= 50 else "red"
 
                 if status == "HEALED":
                     status_style = "bold green"
@@ -260,9 +282,7 @@ class BatchMixin:
                     f"{kind}: [dim]{name}[/dim]",
                     f"[{score_style}]{score}[/{score_style}]",
                     f"{proc_time:.2f}s" if is_first_row else "",
-                    f"[{status_style}]{status}[/{status_style}]"
-                    if is_first_row
-                    else "",
+                    f"[{status_style}]{status}[/{status_style}]" if is_first_row else "",
                     issue_str if is_first_row else "",
                     result_icon if is_first_row else "",
                 )
@@ -292,9 +312,7 @@ class BatchMixin:
             )
 
         # [Smart Tip] If issues exist, guide user to single scan
-        has_issues = (
-            warnings > 0 or failed > 0 or any(r.get("findings") for r in reports)
-        )
+        has_issues = warnings > 0 or failed > 0 or any(r.get("findings") for r in reports)
         if has_issues:
             console.print(
                 Panel(
@@ -312,4 +330,3 @@ class BatchMixin:
 
         # [Feature] Deprecation Summary
         self._render_deprecation_summary(reports)
-

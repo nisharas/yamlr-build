@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-9052
+  labels:
+    app: ms-9052
+    dependency: ms-9053
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-9052
+  template:
+    metadata:
+      labels:
+        app: ms-9052
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-9053

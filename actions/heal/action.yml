@@ -112,6 +112,10 @@ inputs:
     description: '[PRO] Directory containing custom Python/Shell remediation adapters
       for compliance violations.'
     required: false
+  comment:
+    description: Automatically post anatomical findings and repairs as a PR comment
+    required: false
+    default: 'true'
 runs:
   using: docker
   image: Dockerfile

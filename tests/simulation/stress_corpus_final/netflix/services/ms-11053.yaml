@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-11053
+  labels:
+    app: ms-11053
+    dependency: ms-11054
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-11053
+  template:
+    metadata:
+      labels:
+        app: ms-11053
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-11054

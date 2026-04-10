@@ -3,18 +3,22 @@ CLI OPTIONS AND EXTRACTION
 -------------------------
 Standardized data structures and logic for CLI flag extraction.
 """
+
 from __future__ import annotations
+
 from dataclasses import dataclass, field
-from typing import List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, List, Optional
 
 if TYPE_CHECKING:
     pass
+
 
 @dataclass(slots=True)
 class CliOptions:
     """
     Standard container for all common CLI options.
     """
+
     targets: List[str] = field(default_factory=list)
     kube_version: Optional[str] = None
     max_depth: int = 10
@@ -53,14 +57,29 @@ class CliOptions:
     export: Optional[str] = None
     timing: bool = False
     timing_file: Optional[str] = None
+    complement: List[str] = field(default_factory=list)
+    patch_mode: bool = False
+    emulate: List[str] = field(default_factory=list)
+    shadow: bool = False
+
 
 def extract_cli_options(args, is_pro: bool, console=None) -> CliOptions:
     """
     Extracts and normalizes flags from argparse namespace.
     """
     from yamlr.core.entrypoints.base import get_console
+
     if console is None:
         console = get_console()
+
+    complement_val = getattr(args, "complement", None)
+    if complement_val:
+        if isinstance(complement_val, str):
+            complement_list = [c.strip() for c in complement_val.split(",")]
+        else:
+            complement_list = complement_val
+    else:
+        complement_list = []
 
     options = CliOptions(
         targets=args.path if hasattr(args, "path") else [],
@@ -100,11 +119,16 @@ def extract_cli_options(args, is_pro: bool, console=None) -> CliOptions:
         pro_preview=getattr(args, "pro_preview", False),
         export=getattr(args, "export", None),
         timing=getattr(args, "timing", False),
-        timing_file=getattr(args, "timing_file", None)
+        timing_file=getattr(args, "timing_file", None),
+        complement=complement_list,
+        patch_mode=getattr(args, "patch", False),
+        emulate=getattr(args, "emulate", []) or [],
+        shadow=getattr(args, "shadow", False),
     )
 
     # [HARDENING] Centralized Pro-Gating (Hardened v1.4 CapabilityShield)
     from yamlr.core.bridge import YamlrBridge
+
     caps = YamlrBridge.capabilities
     is_pro_effective = is_pro or options.pro_preview
 

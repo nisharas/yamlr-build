@@ -29,6 +29,9 @@ Yamlr is the high-fidelity Kubernetes manifest healing engine. It repairs broken
    :caption: API Reference:
 
    api/core
+   api/pipeline
+   api/stages
+   api/pro
    api/analyzers
    api/healers
    api/parsers

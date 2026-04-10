@@ -4,12 +4,12 @@ Extracted from scanner.py to reduce complexity and improve maintainability.
 """
 
 from __future__ import annotations
+
 import logging
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
-__all__ = ['APIVersionInferrer']
-
+__all__ = ["APIVersionInferrer"]
 
 
 class APIVersionInferrer:
@@ -23,6 +23,7 @@ class APIVersionInferrer:
 
     This is primarily used in Pro mode for intelligent manifest repair.
     """
+
     def __init__(
         self,
         catalog: Dict[Tuple[str, str], Any],
@@ -60,17 +61,13 @@ class APIVersionInferrer:
         # Strategy 1: Catalog-driven inference (most accurate)
         catalog_api = self.infer_from_catalog(kind)
         if catalog_api:
-            logger.debug(
-                f"Inferred apiVersion {catalog_api} for kind {kind} from catalog"
-            )
+            logger.debug(f"Inferred apiVersion {catalog_api} for kind {kind} from catalog")
             return catalog_api
 
         # Strategy 2: Heuristic-driven inference (fallback for common kinds)
         heuristic_api = self.infer_from_heuristics(kind)
         if heuristic_api:
-            logger.debug(
-                f"Inferred apiVersion {heuristic_api} for kind {kind} from heuristics"
-            )
+            logger.debug(f"Inferred apiVersion {heuristic_api} for kind {kind} from heuristics")
             return heuristic_api
 
         # Strategy 3: Unknown kind - cannot infer safely
@@ -102,7 +99,7 @@ class APIVersionInferrer:
         """Helper to search a single catalog dictionary for a kind."""
         if not isinstance(catalog, dict):
             return None
-            
+
         for key in catalog.keys():
             if isinstance(key, tuple) and len(key) == 2:
                 api_version, catalog_kind = key
@@ -116,7 +113,7 @@ class APIVersionInferrer:
         Based on stable K8s API versions as of K8s 1.31+ (2026).
         """
         from yamlr.models import RESOURCE_CATALOG
-        
+
         # Centralized Catalog Check (Source of Truth)
         if kind in RESOURCE_CATALOG:
             return RESOURCE_CATALOG[kind]

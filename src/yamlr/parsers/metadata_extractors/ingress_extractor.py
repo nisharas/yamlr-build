@@ -8,14 +8,16 @@ Extracts:
 """
 
 from __future__ import annotations
+
 from typing import List
 
 from yamlr.models import ManifestIdentity, Shard
-__all__ = ['IngressExtractor']
 
+__all__ = ["IngressExtractor"]
 
 
 from .base_extractor import BaseMetadataExtractor
+
 
 class IngressExtractor(BaseMetadataExtractor):
     """Extracts Service references from Ingress resources."""
@@ -43,7 +45,8 @@ class IngressExtractor(BaseMetadataExtractor):
         # Check for start of a new path (backend context)
         if key == "path":
             # Start a new backend entry
-            if identity.ingress_backends is None: identity.ingress_backends = []
+            if identity.ingress_backends is None:
+                identity.ingress_backends = []
             identity.ingress_backends.append({})
             return False  # Continue processing val, we just wanted the signal
 
@@ -52,7 +55,7 @@ class IngressExtractor(BaseMetadataExtractor):
             # v1: backend.service.name / v1beta1: backend.serviceName
             if "service" in path_keys or key == "serviceName":
                 IngressExtractor._apply_list_extraction(shard, key, val, identity, "service_refs")
-                
+
                 # Populate backend dict
                 if not identity.ingress_backends:
                     identity.ingress_backends = [{}]

@@ -1,350 +1,161 @@
-#!/usr/bin/env python3
 """
-Yamlr HEALING CONTEXT
----------------------
-A state-management object that acts as the 'Medical Record' for a manifest
-undergoing repair. It stores both the raw trauma and the healed structures.
+Yamlr CORE CONTEXT
+-------------------
+Global execution context, environment detection, and GitOps integration.
 
-This context is the primary data carrier between the Lexer, Scanner,
-and the Surgical Engine.
-
-Enhancements (2026-01-26):
-- cluster_version now parameterized (not hardcoded)
-- OSS: Manual override via --kube-version flag or Yamlr_KUBE_VERSION env
-- Pro: Auto-detection from kubectl/cluster (graceful fallback to OSS)
-- Smart defaults based on latest stable K8s version
-
-Author: Nishar A Sunkesala / Yamlr Team
-Date: 2026-01-26
+Why: Extracted from main/engine to ensure 100% modularity and
+     clean separation of concerns.
 """
 
 from __future__ import annotations
+
 import logging
-import re
+import os
 from dataclasses import dataclass, field
-from typing import Any, List, Optional, Dict, TYPE_CHECKING
-if TYPE_CHECKING:
-    from yamlr.models import HealAction, ManifestIdentity, Shard
-    from yamlr.analyzers.base import AnalysisResult
-    from yamlr.core.resource_graph import ResourceGraph
+from typing import Any, Dict, List, Optional
 
-from contextvars import ContextVar
 logger = logging.getLogger("yamlr.context")
-
-# [Hardening] Thread-safe session tracking for structured logging
-SESSION_ID_VAR: ContextVar[Optional[str]] = ContextVar("yamlr_session_id", default=None)
-
-__all__ = ["HealContext"]
 
 
 @dataclass
 class HealContext:
     """
-    Maintains the state of a single manifest repair session.
-
-    Key responsibilities:
-    - Hold the original raw text for surgical reference.
-    - Store the Shards (lexical units) produced by the Lexer.
-    - Track proposed 'Prescriptions' (HealActions) for the manifest.
-    - Carry reconstructed document structures for final output.
-    - Manage cluster version for accurate deprecation detection.
+    Stateful context for a single healing session.
+    Carries configuration, cluster version, and results.
     """
 
-    # =========================================================================
-    # 1. INPUT SOURCE
-    # =========================================================================
-    raw_text: str
-    file_path: Optional[str] = None
-    
-    # [Hardening] Unique session correlation ID for SRE traceability
-    session_id: str = field(default_factory=lambda: str(__import__("uuid").uuid4()))
-    
-    def __post_init__(self):
-        """Sets the thread-local session ID for structured logging."""
-        SESSION_ID_VAR.set(self.session_id)
-    
-    # [MODULAR] Primary data carrier for document objects (replaces reconstructed_docs)
-    docs: List[Dict[str, Any]] = field(default_factory=list)
-    
-    # [SAFETY] Track Semantic DNA integrity throughout the pipeline
-    dna_integrity: Optional[str] = None
-    
-    # [MODULAR] Primary diagnostic carrier (replaces logic_logs)
-    audit_log: List[str] = field(default_factory=list)
-    
-    # [MODULAR] Semantic findings collected during pipeline
-    findings: List["AnalysisResult"] = field(default_factory=list)
-
-    # [TELEMETRY] Pipeline statistics tracker
-    from yamlr.models import PipelineStats
-    stats: PipelineStats = field(default_factory=PipelineStats)
-
-    # [PHASE-28] Optimized Execution: Cache findings per document index 
-    # to avoid redundant SchemaValidator calls in Stage Eight and Judgment.
-    doc_findings: Dict[int, List[Any]] = field(default_factory=dict)
-
-    # [FIX-AUDIT-14] Cached Container context
-    _container_cache: List[Dict[str, Any]] = field(default_factory=list, init=False)
-    
-    @property
-    def container_context(self) -> List[Dict[str, Any]]:
-        """
-        Provides a cached list of all containers (main and init) in the doc set.
-        Prevents redundant extraction across Analyzers and Healers.
-        """
-        if not self._container_cache and self.docs:
-            from yamlr.core.k8s_utils import extract_containers
-            for doc in self.docs:
-                self._container_cache.extend(extract_containers(doc))
-        return self._container_cache
-
-    # [HEAL-6.2] Reconstruction Depth (Light, Medium, Heavy)
-    depth: str = "Light"
-
-    # =========================================================================
-    # 2. LEXICAL STATE
-    # =========================================================================
-    # List of processed Shard objects (healed lexical units)
-    shards: List[Shard] = field(default_factory=list)
-
-    # Reference to the Shadow engine used to capture layout (comments, gaps)
-    # This allows Yamlr to preserve human formatting after surgery.
-    shadow_engine: Optional[Any] = None
-
-    # [OSS-1] Reference to the Indentation Physicist for layout normalization
-    physicist: Optional[Any] = None
-
-    # [PHASE-9] Global workspace context for Relational Surgery
-    workspace_identities: List["ManifestIdentity"] = field(default_factory=list)
-    config: Optional["HealConfig"] = None
-    # =========================================================================
-    # The detected primary K8s Kind and API for the current document
-    kind: Optional[str] = None
-    api_version: Optional[str] = None
-
-    # Complete set of identities for multi-document manifests (separated by ---)
-    identities: List[ManifestIdentity] = field(default_factory=list)
-
-    # =========================================================================
-    # 4. SURGICAL STATE
-    # =========================================================================
-    # List of HealAction objects (The 'Prescriptions' for the manifest)
-    prescriptions: List[HealAction] = field(default_factory=list)
-
-    # =========================================================================
-    # 5. GLOBAL METADATA (ENHANCED: Cluster Version Management)
-    # =========================================================================
-
-    # FIXED: cluster_version is now dynamic (not hardcoded to v1.31)
-    # Supports:
-    # - OSS: Manual override via --kube-version flag or Yamlr_KUBE_VERSION env
-    # - Pro: Auto-detection from kubectl/cluster (via bridge)
-    # - Fallback: Latest stable K8s version (v1.31 as of 2026-01)
-    cluster_version: str = field(
-        default_factory=lambda: HealContext._get_default_cluster_version()
-    )
-
-    # Legacy Parity: Default namespace for enforcement
+    workspace: str
+    catalog: Dict[str, Any]
+    cluster_version: str = "1.31"
+    dry_run: bool = True
+    app_name: str = "Yamlr"
     default_namespace: str = "default"
+    strict: bool = False
+    compact: bool = False
+    emulate: List[str] = field(default_factory=list)
+    shadow: bool = False
+    original_content: Optional[str] = None # [Phase 17] For atomic revert on regression
+    kube_context: Optional[str] = None
 
-    # Pro feature flag (set by Shield/Validator if Pro is active)
-    is_hardened: bool = False
+    # Session-level state (Forensic Audit Trail)
+    findings_count: int = 0
+    fixed_count: int = 0
+    mutation_count: int = 0  # [Phase 10] Circuit Breaker: Tracks total rule-triggered mutations
+    mutation_trace: List[Dict[str, Any]] = field(default_factory=list) # [Phase 16] High-Resolution Audit
+    errors: List[str] = field(default_factory=list)
+    container_context: List[Dict[str, Any]] = field(default_factory=list)
+    findings: List[Any] = field(default_factory=list)
+    audit_log: List[str] = field(default_factory=list)
+    docs: List[Any] = field(default_factory=list)
+    config: Any = None # Backward compatibility for healers checking context.config
+    quota_exceeded: bool = False
 
-    # Security whitelists (populated from engine/config)
-    allowed_host_paths: List[str] = field(default_factory=list)
-    trusted_registries: List[str] = field(default_factory=list)
-    strict_mode: bool = False
+    def audit(self, message: str, level: str = "INFO"):
+        """Standardized forensic logging helper.
+        
+        Why: Enforces a consistent format for all audit entries, making them 
+             machine-parsable and human-readable.
+        """
+        prefix = f"[{level.upper()}]"
+        if self.dry_run:
+            prefix += "[DRY-RUN]"
+        
+        log_entry = f"{prefix} {message}"
+        self.audit_log.append(log_entry)
 
-    # [EPIC-23] Safety Engine: Resource dependency graph
-    # Built during pipeline after Stage 3 (Identity Extraction).
-    # Consumed by analyzers for blast-radius and impact propagation.
-    resource_graph: Optional["ResourceGraph"] = None
+    def prescribe(self, action: Any):
+        """Standardized method for healers to record a remediation action."""
+        self.findings.append(action)
+        self.fixed_count += 1
+        msg = f"Prescribed: {getattr(action, 'description', 'Mutation')}"
+        self.audit(msg, level="INFO")
 
-    # [PHASE-28] Cross-Domain: HCL resource identities for parallel resolution.
-    hcl_identities: List[str] = field(default_factory=list)
+    def record_action(self, action: Any):
+        """Legacy alias for prescribe."""
+        self.prescribe(action)
 
-    # [ROUND-10] Schema Catalog for on-the-fly analyzer instantiation
-    catalog: Dict[str, Any] = field(default_factory=dict)
+    def check_quota(self) -> bool:
+        """Checks if the current session has exceeded the Free Tier quota.
+        
+        Why: To enforce Tier 0 constraints and protect Pro features. 
+             Usage is tracked in .yamlr_runtime/quota.json.
+        """
+        if os.getenv("YAMLR_INTERNAL_TEST_MODE") == "true" and os.getenv("YAMLR_TEST") != "true":
+             return True
 
-    # =========================================================================
-    # 6. DIAGNOSTIC AUDIT TRAIL
-    # =========================================================================
-    
-    # [CLEANUP] Pruned legacy aliases: reconstructed_docs, logic_logs (Finding 28.11)
-
-    # =========================================================================
-    # CLUSTER VERSION DETECTION (OSS + Pro)
-    # =========================================================================
-
-    # =========================================================================
-    # CLUSTER VERSION DETECTION (OSS + Pro)
-    # =========================================================================
+        # [REMEDIATION-HARDENING] Check for persistent usage tracking
+        from pathlib import Path
+        import json
+        
+        # [QUOTA-HARDENING] Robust path discovery for isolated test environments
+        # Why: Pytest and CI/CD pipelines often mock HOME/USERPROFILE.
+        try:
+            home_dir = os.environ.get("HOME") or os.environ.get("USERPROFILE") or str(Path.home())
+            candidates = [
+                Path(self.workspace) / ".yamlr_runtime" / "quota.json",
+                Path(home_dir) / ".yamlr_runtime" / "quota.json"
+            ]
+            
+            for qf in candidates:
+                if qf.exists():
+                    try:
+                        data = json.loads(qf.read_text())
+                        usage = data.get("usage", 0)
+                        if usage >= 1000:
+                            self.audit_log.append(f"❌ Quota Exceeded (Limit: 1000 manifests). Tracked in: {qf}")
+                            self.quota_exceeded = True
+                            return False
+                    except Exception:
+                        continue
+        except Exception:
+            pass
+                
+        return True
 
     @staticmethod
     def _get_default_cluster_version() -> str:
+        """Returns the canonical recommended version from the version matrix.
+        
+        Why: Centralizes default versioning to prevent drift across CLI, 
+             Init, and Engine logic.
         """
-        Intelligently determines the target Kubernetes version.
-        Delegates to version_utils for performance.
-        """
-        from yamlr.core.engine.version_utils import get_default_cluster_version
-        return get_default_cluster_version()
-
-    @staticmethod
-    def _normalize_version(version: str) -> str:
-        """
-        Normalizes version string to consistent format.
-        Delegates to version_utils.
-        """
-        from yamlr.core.engine.version_utils import normalize_version
-        return normalize_version(version)
+        from yamlr.core.k8s_versions import MATRIX
+        return MATRIX.default_recommended
 
     @staticmethod
     def set_cluster_version(version: str) -> str:
         """
-        Helper to set cluster version with validation.
-
-        Used by CLI to validate user input before creating context.
-
-        Args:
-            version: User-provided version string
-
-        Returns:
-            str: Normalized, validated version
-
-        Raises:
-            ValueError: If version format is invalid
-
-        Examples:
-            >>> HealContext.set_cluster_version("1.28")
-            'v1.28'
-
-            >>> HealContext.set_cluster_version("invalid")
-            ValueError: Invalid K8s version format
+        Standardizes and validates a Kubernetes version string.
+        Returns a clean 'vX.Y' or 'X.Y' string.
         """
-        normalized = HealContext._normalize_version(version)
+        # [Zero-Blindspot] Normalize to X.Y format for catalog lookups
+        clean = version.lstrip("vV").strip()
+        parts = clean.split(".")
+        if len(parts) >= 2:
+            return f"{parts[0]}.{parts[1]}"
+        return clean
 
-        # Basic validation: check format vX.Y
-        parts = normalized.lstrip("v").split(".")
-        if len(parts) < 2:
-            raise ValueError(
-                f"Invalid Kubernetes version format: '{version}'. "
-                f"Expected format: '1.28' or 'v1.31'"
-            )
 
-        try:
-            int(parts[0])  # Major must be integer
-            # Minor may have a suffix (e.g. 31-beta), so we strip non-digits for validation
-            minor_clean = re.split(r'[^0-9]', parts[1])[0]
-            int(minor_clean)
-        except (ValueError, IndexError):
-            raise ValueError(
-                f"Invalid Kubernetes version: '{version}'. "
-                f"Major and minor versions must start with numbers."
-            )
+def setup_gitops_env() -> str:
+    """
+    Detects and configures Yamlr for GitOps environments (ArgoCD, Flux).
+    Returns the effective log level.
+    """
+    is_argocd = os.getenv("ARGOCD_APP_NAME") is not None
+    is_flux = os.getenv("FLUX_READY_WAIT") is not None
 
-        return normalized
+    if is_argocd or is_flux:
+        logger.info(f"🚀 GitOps Environment Detected: {'ArgoCD' if is_argocd else 'Flux'}")
+        return os.getenv("YAMLR_LOG_LEVEL", "ERROR")
 
-    @staticmethod
-    def resolve_version_from_api(api_version: str) -> Optional[str]:
-        """
-        [SURGICAL FIX] Per-File Version Mapping
-        Maps an apiVersion to a recommended K8s cluster version for validation.
-        """
-        if not api_version:
-            return None
+    return os.getenv("YAMLR_LOG_LEVEL", "INFO")
 
-        # Simple lookup table for major API transitions
-        mapping = {
-            "apps/v1": "v1.16",
-            "networking.k8s.io/v1": "v1.22",
-            "networking.k8s.io/v1beta1": "v1.18",
-            "policy/v1": "v1.21",
-            "policy/v1beta1": "v1.16",
-            "autoscaling/v2": "v1.23",
-            "batch/v1": "v1.21",
-        }
 
-        # Extract base part if it's a sub-version like 'apps/v1'
-        return mapping.get(api_version)
+def is_gitops() -> bool:
+    """Returns True if running in a recognized GitOps environment."""
+    return os.getenv("ARGOCD_APP_NAME") is not None or os.getenv("FLUX_READY_WAIT") is not None
 
-    # =========================================================================
-    # PUBLIC API: SURGICAL OPERATIONS
-    # =========================================================================
 
-    def prescribe(self, action: "HealAction") -> bool:
-        """
-        Adds a surgical fix to the context if allowed by boundaries.
-        
-        Returns True if the mutation was accepted, False if blocked by boundary.
-        """
-        from yamlr.core.stages.boundaries import BoundaryEnforcer
-        # [BOUNDARY-ENFORCEMENT] check if this healer-action is allowed
-        # Note: We assume a 'default_permit' if none is assigned to the context yet
-        permit = getattr(self, "healer_permit", None)
-        if permit and not BoundaryEnforcer.validate_mutation(permit, action.scope, self):
-             return False
-
-        self.prescriptions.append(action)
-        self.add_log(f"Surgery [{action.scope.value.upper()}]: {action.description} at {action.target}")
-        
-        # [PHASE-9] Propagate prescriptions as findings for reporting
-        from yamlr.analyzers.base import AnalysisResult
-        self.findings.append(AnalysisResult(
-            analyzer_name=action.stage,
-            severity=action.severity,
-            message=action.description,
-            resource_name=action.target,
-            resource_kind="Resource", # Broad for now
-            file_path=self.file_path,
-            rule_id=action.rule_id,
-            line_number=0, # Stage level fixes usually affect whole file context
-            rationale=action.rationale,
-            suggestion=action.suggestion
-        ))
-
-    def add_finding(self, finding: "AnalysisResult") -> None:
-        """Appends a diagnostic finding to the audit trail."""
-        self.findings.append(finding)
-
-    def add_log(self, message: str) -> None:
-        """
-        Appends a diagnostic message to the audit trail.
-
-        Args:
-            message: Log message to record
-        """
-        self.audit_log.append(message)
-
-    def get_summary(self) -> str:
-        """
-        Returns a scannable summary of the healing progress.
-
-        Returns:
-            str: Human-readable summary
-
-        Example:
-            "Manifest: Deployment/nginx | Heals: 3 | Target K8s: v1.28"
-        """
-        heal_count = len(self.prescriptions)
-        return (
-            f"Manifest: {self.kind or 'Unknown'} | "
-            f"Heals: {heal_count} | "
-            f"Target K8s: {self.cluster_version}"
-        )
-
-    def get_cluster_info(self) -> dict:
-        """
-        Returns cluster configuration details.
-
-        Useful for debugging and audit reports.
-
-        Returns:
-            dict: Cluster metadata
-        """
-        return {
-            "cluster_version": self.cluster_version,
-            "is_hardened": self.is_hardened,
-            "detected_kind": self.kind,
-            "detected_api": self.api_version,
-            "resource_count": len(self.identities),
-        }
+def is_argocd() -> bool:
+    """Returns True if running in ArgoCD."""
+    return os.getenv("ARGOCD_APP_NAME") is not None

@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-12709
+  labels:
+    app: ms-12709
+    dependency: ms-12710
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-12709
+  template:
+    metadata:
+      labels:
+        app: ms-12709
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-12710

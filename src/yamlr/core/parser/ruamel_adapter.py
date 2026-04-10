@@ -6,34 +6,50 @@ Specifically tailored to support the 'Comment Preservation' pillar.
 """
 
 from __future__ import annotations
-from typing import Any, Dict, List, Optional, Union, IO
+
+from typing import IO, Any, Dict, List, Optional, Union
+
 try:
     from ruamel.yaml import YAML
     from ruamel.yaml.comments import CommentedMap, CommentedSeq
 except (ImportError, SystemError) as e:
-    # [Hardening] If binary extensions are broken, we might need to fail gracefully 
+    # [Hardening] If binary extensions are broken, we might need to fail gracefully
     # or inform the user about the environment issue.
     # In a real scenario, we might try to force-import the pure-python version if possible.
     import logging
+
     logging.getLogger("yamlr.parser.ruamel").error(f"Failed to load ruamel.yaml: {e}")
     raise
 
-from yamlr.core.parser.base import YamlrParser, YamlrNode
+from dataclasses import dataclass, field
+from yamlr.core.parser.base import YamlrNode, YamlrParser
 
-__all__ = ["RuamelNode", "RuamelAdapter"]
+__all__ = ["RuamelNode", "RuamelAdapter", "YamlrMetadata"]
+
+
+@dataclass
+class YamlrMetadata:
+    """
+    Formalized DNA container for Yamlr internal processing metadata.
+    Why: Decouples diagnostic 'GHOST' nodes from the actual K8s manifest structure.
+    """
+    node_id: str
+    stage_logs: List[str] = field(default_factory=list)
+    virtual_context: Dict[str, Any] = field(default_factory=dict)
+    forensic_hash: Optional[str] = None
 
 
 class RuamelNode(YamlrNode):
     """
     Adapter for ruamel.yaml CommentedMap and CommentedSeq objects.
     """
-    
+
     def __init__(self, raw_node: Any):
         # [HARDENING] Prevent double-wrapping
         if isinstance(raw_node, RuamelNode):
             self._node = raw_node._node
         elif hasattr(raw_node, "_node"):
-             self._node = raw_node._node
+            self._node = raw_node._node
         else:
             self._node = raw_node
 
@@ -56,14 +72,14 @@ class RuamelNode(YamlrNode):
 
     def get_comments(self) -> List[str]:
         """Extracts leading and trailing comments from the ruamel.yaml node."""
-        if not hasattr(self._node, 'ca') or not self._node.ca:
+        if not hasattr(self._node, "ca") or not self._node.ca:
             return []
-            
+
         comments = []
-        if hasattr(self._node.ca, 'comment') and self._node.ca.comment:
+        if hasattr(self._node.ca, "comment") and self._node.ca.comment:
             for c in self._node.ca.comment:
                 comments.extend(self._extract_comment_values(c))
-                             
+
         return comments
 
     def _extract_comment_values(self, comment_item: Any) -> List[str]:
@@ -71,12 +87,12 @@ class RuamelNode(YamlrNode):
         values = []
         if not comment_item:
             return values
-            
-        if hasattr(comment_item, 'value'):
+
+        if hasattr(comment_item, "value"):
             values.append(comment_item.value.strip())
         elif isinstance(comment_item, list):
             for sub_c in comment_item:
-                if sub_c and hasattr(sub_c, 'value'):
+                if sub_c and hasattr(sub_c, "value"):
                     values.append(sub_c.value.strip())
         return values
 
@@ -84,7 +100,7 @@ class RuamelNode(YamlrNode):
         """Adds a trailing comment to the bottom of the document."""
         if not text or not text.strip():
             return
-            
+
         # Ensure # prefix for all lines
         lines = []
         for line in text.splitlines():
@@ -94,30 +110,31 @@ class RuamelNode(YamlrNode):
             else:
                 lines.append(line)
         joined = "\n".join(lines) + "\n"
-        
+
         if hasattr(self._node, "ca"):
             if not self._node.ca.comment:
                 self._node.ca.comment = [None, []]
-            
+
             # Trailing comments are in the second element of the comment list
-            # We can just append the raw string as ruamel often accepts it 
-            # or try to build a token. 
+            # We can just append the raw string as ruamel often accepts it
+            # or try to build a token.
             # For simplicity and robustness across ruamel versions:
             try:
                 from ruamel.yaml.tokens import CommentToken
-                # Ensure the text has a leading # if it doesn't already 
+
+                # Ensure the text has a leading # if it doesn't already
                 # AND it's not a pure newline (Gap preservation)
-                has_content = any(line.strip().startswith('#') for line in joined.splitlines())
+                has_content = any(line.strip().startswith("#") for line in joined.splitlines())
                 if not has_content:
                     # If it's just newlines, we must NOT prefix with #
                     pass
-                elif not joined.strip().startswith('#'):
-                    joined = '# ' + joined
-                
+                elif not joined.strip().startswith("#"):
+                    joined = "# " + joined
+
                 token = CommentToken(joined, None, None)
                 self._node.ca.comment[1].append(token)
             except Exception:
-                # If we can't create a Token, we shouldn't append a raw string 
+                # If we can't create a Token, we shouldn't append a raw string
                 # as it causes AttributeErrors in Newer Ruamel versions.
                 pass
 
@@ -126,6 +143,7 @@ class RuamelNode(YamlrNode):
         if not text:
             return
         from yamlr.comments import yaml_set_start_comment
+
         yaml_set_start_comment(self._node, text, indent=indent)
 
     def set_key_start_comment(self, key: Any, text: str, indent: int = 0):
@@ -133,6 +151,7 @@ class RuamelNode(YamlrNode):
         if not text or not self.is_map:
             return
         from yamlr.comments import yaml_set_key_comment
+
         yaml_set_key_comment(self._node, key, text, indent=indent)
 
     def set_eol_comment(self, text: str, key: Any):
@@ -149,6 +168,7 @@ class RuamelNode(YamlrNode):
         if not text:
             return
         from yamlr.comments import yaml_set_footer_comment
+
         yaml_set_footer_comment(self._node, text)
 
     def graft_metadata(self, target: YamlrNode, key: Optional[Any] = None):
@@ -166,7 +186,7 @@ class RuamelNode(YamlrNode):
             self._graft_key_metadata(target_raw, key)
         else:
             self._graft_node_metadata(target_raw)
-        
+
         # Preserve formatting attributes
         for attr in ["_yaml_format", "_yaml_line_col"]:
             if hasattr(self._node, attr):
@@ -183,17 +203,17 @@ class RuamelNode(YamlrNode):
         """Grafts node-level metadata (comments and sequence items)."""
         if hasattr(self._node.ca, "comment") and self._node.ca.comment:
             target_raw.ca.comment = self._node.ca.comment
-        
+
         if hasattr(self._node.ca, "items"):
             if not hasattr(target_raw.ca, "items"):
                 target_raw.ca.items = {}
             for k, v in self._node.ca.items.items():
                 target_raw.ca.items[k] = v
-        
+
         # Preserve formatting attributes
-        for attr in ['_yaml_format', '_yaml_line_col']:
-            if hasattr(source_raw, attr):
-                setattr(target_raw, attr, getattr(source_raw, attr))
+        for attr in ["_yaml_format", "_yaml_line_col"]:
+            if hasattr(self._node, attr):
+                setattr(target_raw, attr, getattr(self._node, attr))
 
     def create_empty(self) -> YamlrNode:
         """Creates a new empty node of the same type, preserving formatting/style."""
@@ -208,10 +228,10 @@ class RuamelNode(YamlrNode):
             return RuamelNode(self._node)
 
         # Preserve formatting
-        for attr in ['_yaml_format', '_yaml_line_col']:
+        for attr in ["_yaml_format", "_yaml_line_col"]:
             if hasattr(self._node, attr):
                 setattr(new_raw, attr, getattr(self._node, attr))
-        
+
         return RuamelNode(new_raw)
 
     def to_dict(self) -> Union[Dict, List, Any]:
@@ -219,7 +239,7 @@ class RuamelNode(YamlrNode):
         # [HARDENING] If we're already a YamlrNode, unwrap our inner node
         node = self._node
         if hasattr(node, "to_dict") and node is not self:
-             return node.to_dict()
+            return node.to_dict()
 
         if self.is_map:
             return {str(k): RuamelNode(v).to_dict() for k, v in node.items()}
@@ -231,7 +251,7 @@ class RuamelNode(YamlrNode):
         val = self._node[key]
         # Auto-wrap children if they are containers
         if isinstance(val, (CommentedMap, CommentedSeq, list, dict)) and not isinstance(val, (str, bytes)):
-             return RuamelNode(val)
+            return RuamelNode(val)
         return val
 
     def __setitem__(self, key: Any, value: Any):
@@ -270,7 +290,8 @@ class RuamelNode(YamlrNode):
 
     def __contains__(self, key: Any) -> bool:
         """Standard check for membership."""
-        if self._node is None: return False
+        if self._node is None:
+            return False
         return key in self._node
 
     def get(self, key: Any, default: Any = None) -> Any:
@@ -306,16 +327,15 @@ class RuamelAdapter(YamlrParser):
         self.yaml = YAML(typ=typ, pure=pure)
         self.yaml.preserve_quotes = True
         self.compact = compact
-        
+
         # [HEAL-6] Configure parser for standard K8s indents
         self.yaml.indent(mapping=indent, sequence=indent, offset=offset)
-        
+
         self.yaml.width = 4096
 
     def set_indent(self, mapping: int = 2, sequence: int = 2, offset: int = 0):
         """Standardized indentation configuration."""
         self.yaml.indent(mapping=mapping, sequence=sequence, offset=offset)
-
 
     def load(self, stream: Union[str, IO[Any]]) -> YamlrNode:
         """
@@ -333,18 +353,23 @@ class RuamelAdapter(YamlrParser):
                 if hasattr(stream, "seek"):
                     stream.seek(0)
             except Exception:
-                pass # Fallback to standard load if stream is not readable here
+                pass  # Fallback to standard load if stream is not readable here
 
         if content:
             import re
+
             # Count anchors (&) and aliases (*) while ignoring those in comments or quotes where possible
             # We use a conservative threshold of 50.
-            anchors = len(re.findall(r'(?m)(?:^\s*&)|(?:(?<=\s)&(?=\w))', content))
-            aliases = len(re.findall(r'\*\w+', content))
-            
+            # Count anchors (&) at start of line and anchors with leading space
+            anchors_start = len(re.findall(r"(?m)^\s*&", content))
+            anchors_inline = len(re.findall(r"(?<=\s)&(?=\w)", content))
+            anchors = anchors_start + anchors_inline
+            aliases = len(re.findall(r"\*\w+", content))
+
             if anchors > 50 or aliases > 50:
-                 from yamlr.core.exceptions import YamlrSecurityError
-                 raise YamlrSecurityError(f"YAML Bomb Detected: Too many aliases ({aliases}) or anchors ({anchors})")
+                from yamlr.core.exceptions import YamlrSecurityError
+
+                raise YamlrSecurityError(f"YAML Bomb Detected: Too many aliases ({aliases}) or anchors ({anchors})")
 
         data = self.yaml.load(stream)
         return RuamelNode(data)
@@ -355,26 +380,31 @@ class RuamelAdapter(YamlrParser):
 
     def dump(self, node: Union[YamlrNode, Any], stream: Optional[IO[Any]] = None) -> Optional[str]:
         raw_data = node._node if isinstance(node, RuamelNode) else node
-        
+
+        # [Phase 3] Serialization Guard: Isolate internal metadata from K8s manifest
+        self._purge_virtual_metadata(raw_data)
+
         if stream is None:
             import io
+
             buf = io.StringIO()
             self.yaml.dump(raw_data, buf)
             return buf.getvalue()
-        
+
         self.yaml.dump(raw_data, stream)
         return None
 
     def dump_all(self, nodes: List[YamlrNode], stream: Optional[IO[Any]] = None) -> Optional[str]:
         """Serializes multiple YamlrNodes to a single multi-document YAML stream."""
         raw_docs = [n._node if isinstance(n, RuamelNode) else n for n in nodes]
-        
+
         if stream is None:
             import io
+
             buf = io.StringIO()
             self.yaml.dump_all(raw_docs, buf)
             return buf.getvalue()
-        
+
         self.yaml.dump_all(raw_docs, stream)
         return None
 
@@ -390,10 +420,21 @@ class RuamelAdapter(YamlrParser):
             if isinstance(data, list):
                 return RuamelNode(CommentedSeq(data))
             return RuamelNode(data)
-            
+
         if typ == "map":
             return RuamelNode(CommentedMap())
         if typ == "seq":
             return RuamelNode(CommentedSeq())
-            
+
         return RuamelNode(None)
+
+    def _purge_virtual_metadata(self, data: Any):
+        """Recursively removes '_yamlr_virtual' keys before serialization."""
+        if isinstance(data, dict):
+            if "_yamlr_virtual" in data:
+                del data["_yamlr_virtual"]
+            for v in data.values():
+                self._purge_virtual_metadata(v)
+        elif isinstance(data, list):
+            for item in data:
+                self._purge_virtual_metadata(item)

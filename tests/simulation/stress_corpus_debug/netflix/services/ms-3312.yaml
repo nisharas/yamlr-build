@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-3312
+  labels:
+    app: ms-3312
+    dependency: ms-3313
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-3312
+  template:
+    metadata:
+      labels:
+        app: ms-3312
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-3313

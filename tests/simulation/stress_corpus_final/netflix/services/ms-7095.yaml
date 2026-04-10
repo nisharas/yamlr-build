@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-7095
+  labels:
+    app: ms-7095
+    dependency: ms-7096
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-7095
+  template:
+    metadata:
+      labels:
+        app: ms-7095
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-7096

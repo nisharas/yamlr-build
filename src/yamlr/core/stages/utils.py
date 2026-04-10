@@ -14,7 +14,7 @@ import logging
 from typing import Any, Dict, List
 
 logger = logging.getLogger("yamlr.pipeline.utils")
-__all__ = ['diff_dicts', 'detect_manifest_changes']
+__all__ = ["diff_dicts", "detect_manifest_changes"]
 
 
 def diff_dicts(d1: Dict, d2: Dict, path: str = "") -> List[str]:
@@ -33,6 +33,7 @@ def diff_dicts(d1: Dict, d2: Dict, path: str = "") -> List[str]:
             else:
                 changes.append(f"~{current_path}")
     return changes
+
 
 def detect_manifest_changes(before: List[Dict[str, Any]], after: List[Dict[str, Any]]) -> List[str]:
     """Detects which keys changed between versions."""

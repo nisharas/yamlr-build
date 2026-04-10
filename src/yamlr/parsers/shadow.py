@@ -20,10 +20,12 @@ Date: 2026-01-22
 """
 
 from __future__ import annotations
+
 import logging
 import re
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Union, TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict, List, Optional, Union
+
 if TYPE_CHECKING:
     from yamlr.parsers.physicist import IndentationPhysicist
 
@@ -32,8 +34,7 @@ from yamlr.models import Shard
 from yamlr.parsers.lexer import YamlrLexer
 
 logger = logging.getLogger("yamlr.shadow")
-__all__ = ['Gap', 'ShadowMetadata', 'YamlrShadow']
-
+__all__ = ["Gap", "ShadowMetadata", "YamlrShadow"]
 
 
 @dataclass
@@ -215,12 +216,10 @@ class YamlrShadow:
                 for orphan in self.orphans:
                     if orphan not in anchor_target.trailing_layout_sequence:
                         anchor_target.trailing_layout_sequence.append(orphan)
-                
+
                 self._orphans_anchored = True
-                logger.debug(f"EOF Hardening: Attached {len(self.orphans)} trailing orphans to line {anchor_target.line_no}")
+                logger.debug(
+                    f"EOF Hardening: Attached {len(self.orphans)} trailing orphans to line {anchor_target.line_no}"
+                )
 
-        logger.debug(
-            f"Layout metadata grafted onto {len(shards)} shards. "
-        )
-
-
+        logger.debug(f"Layout metadata grafted onto {len(shards)} shards. ")

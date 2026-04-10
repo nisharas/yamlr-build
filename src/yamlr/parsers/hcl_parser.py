@@ -3,19 +3,21 @@ HCL PARSER - The Cross-Domain Bridge
 -----------------------------------
 Extracts resource identities from Terraform (.tf) files.
 
-Why: Enables Yamlr to build a "Full-Stack Safety Graph" by linking 
+Why: Enables Yamlr to build a "Full-Stack Safety Graph" by linking
      K8s manifests to the underlying Cloud resources (EBS, RDS, IAM).
 """
+
 from __future__ import annotations
-import re
+
 import logging
+import re
 from pathlib import Path
 from typing import List
 
 from yamlr.models import ManifestIdentity
 
 logger = logging.getLogger("yamlr.parsers.hcl")
-__all__ = ['HCLParser', 'parse_tf_files']
+__all__ = ["HCLParser", "parse_tf_files"]
 
 
 class HCLParser:
@@ -27,7 +29,7 @@ class HCLParser:
 
     # Matches: resource "aws_db_instance" "primary" {
     RE_RESOURCE_START = re.compile(r'resource\s+"([^"]+)"\s+"([^"]+)"\s*\{')
-    
+
     # Matches: arn = "arn:aws:rds:..."
     RE_ARN = re.compile(r'arn\s*=\s*"([^"]+)"')
 
@@ -39,10 +41,10 @@ class HCLParser:
         """
         identities = []
         lines = content.splitlines()
-        
+
         stack_depth = 0
         current_identity: Optional[ManifestIdentity] = None
-        
+
         in_block_comment = False
         for i, line in enumerate(lines):
             # Handle block comments
@@ -50,7 +52,7 @@ class HCLParser:
                 if "/*" in line:
                     if "*/" in line:
                         # Single line block comment
-                        line = re.sub(r'/\*.*?\*/', '', line)
+                        line = re.sub(r"/\*.*?\*/", "", line)
                     else:
                         in_block_comment = True
                         line = line.split("/*")[0]
@@ -62,8 +64,8 @@ class HCLParser:
                     continue
 
             # [PHASE-14] Strip all comments from the line for processing
-            stripped_line = re.sub(r'(?<![:])(#|//).*$', '', line).strip()
-            
+            stripped_line = re.sub(r"(?<![:])(#|//).*$", "", line).strip()
+
             if not stripped_line:
                 continue
 
@@ -73,19 +75,15 @@ class HCLParser:
                 if match:
                     res_type, res_name = match.groups()
                     current_identity = ManifestIdentity(
-                        kind=res_type,
-                        name=res_name,
-                        namespace="cloud",
-                        api_version="terraform/v1",
-                        file_path=file_path
+                        kind=res_type, name=res_name, namespace="cloud", api_version="terraform/v1", file_path=file_path
                     )
                     # [PHASE-14] Tag as terraform for parallel analysis in processor_helpers
-                    setattr(current_identity, "is_terraform", True)
-            
+                    current_identity.is_terraform = True
+
             # Update stack depth
             stack_depth += stripped_line.count("{")
             stack_depth -= stripped_line.count("}")
-            
+
             # If we are inside a resource block, look for metadata
             if current_identity and stack_depth > 0:
                 arn_match = cls.RE_ARN.search(stripped_line)
@@ -93,13 +91,13 @@ class HCLParser:
                     if not current_identity.annotations:
                         current_identity.annotations = {}
                     current_identity.annotations["cloud.yamlr.dev/arn"] = arn_match.group(1)
-            
+
             # If we just exited the resource block, save it
             if current_identity and stack_depth <= 0:
                 identities.append(current_identity)
                 current_identity = None
-                stack_depth = 0 # Guard against negative depth from malformed HCL
-            
+                stack_depth = 0  # Guard against negative depth from malformed HCL
+
         return identities
 
 
@@ -108,7 +106,7 @@ def parse_tf_files(root_path: Path) -> List[ManifestIdentity]:
     all_identities = []
     # [Security] Limit crawl depth to prevent DoS on massive repositories (VULN-010)
     MAX_DEPTH = 5
-    
+
     # We simulate depth limiting as rglob doesn't support it directly in all versions
     for tf_file in root_path.rglob("*.tf"):
         # Check depth relative to root

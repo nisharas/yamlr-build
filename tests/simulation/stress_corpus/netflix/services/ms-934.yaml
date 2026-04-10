@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-934
+  labels:
+    app: ms-934
+    dependency: ms-935
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-934
+  template:
+    metadata:
+      labels:
+        app: ms-934
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-935

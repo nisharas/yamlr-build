@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nightmare-app
+  namespace: default
+  labels:
+    app: nightmare
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nightmare
+  template:
+    metadata:
+      labels:
+        app: nightmare
+    spec:
+      # 🛡️ SECURITY: Missing PSA label (pod-security.kubernetes.io/enforce) in namespace (inherent)
+      # 🛡️ SECURITY: Run as root check
+      # 🛡️ SECURITY: Privileged container check
+      # 🛡️ SECURITY: IMDS Leak (hostNetwork)
+      hostNetwork: true
+      automountServiceAccountToken: true
+      terminationGracePeriodSeconds: 15 # ⚡ RELIABILITY: < 30s
+      containers:
+      - name: web
+        image: nginx:latest # ⚡ BEST PRACTICE: latest tag
+        resources:
+          requests:
+            cpu: "100m"
+          # ⚡ BEST PRACTICE: missing limits
+        securityContext:
+          privileged: true # 🛡️ SECURITY: Privileged
+          runAsNonRoot: false # 🛡️ SECURITY: Run as root
+          capabilities:
+            add: ["NET_ADMIN"]
+            # 🛡️ SECURITY: Not dropping ALL
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 80
+        # ⚡ RELIABILITY: Missing StartupProbe
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: nightmare-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: non-existent-workload # ⚡ RELIABILITY: HPA Mismatch
+  minReplicas: 1
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 80
+---
+# ⚡ RELIABILITY: Missing PDB for 'nightmare-app'

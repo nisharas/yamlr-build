@@ -1,14 +1,18 @@
 from __future__ import annotations
-from enum import Enum
-from typing import Dict, List, Any, Optional
-from pydantic import BaseModel, Field
-from yamlr.analyzers.rules import Rules, RuleCategory
 
-__all__ = ['Severity', 'ScoringEngine', 'AppSafetySummary', 'AppSafetyReport', 'ScoringConfig']
+from enum import Enum
+from typing import Any, Dict, List, Optional
+
+from pydantic import BaseModel, Field
+
+from yamlr.analyzers.rules import RuleCategory, Rules
+
+__all__ = ["Severity", "ScoringEngine", "AppSafetySummary", "AppSafetyReport", "ScoringConfig"]
 
 
 class Severity(Enum):
     """Enumeration of violation severity levels and their base scoring values."""
+
     INFO = 100
     WARNING = 200
     ERROR = 300
@@ -16,10 +20,11 @@ class Severity(Enum):
 
 class ScoringConfig(BaseModel):
     """Configuration for the Scoring Engine.
-    
-    Why: To allow enterprise users to tune penalty weights and track scoring 
+
+    Why: To allow enterprise users to tune penalty weights and track scoring
          evolutions via versioning.
     """
+
     version: int = Field(default=1, alias="scoring_version")
     penalties: Dict[str, int] = Field(default_factory=dict)
     blast_radius_multiplier: float = 1.5
@@ -30,6 +35,7 @@ class ScoringConfig(BaseModel):
 
 class AppSafetySummary(BaseModel):
     """Consolidated safety metrics for a specific application."""
+
     app_name: str
     score: float = 100.0
     top_categories: List[str] = Field(default_factory=list)
@@ -40,6 +46,7 @@ class AppSafetySummary(BaseModel):
 
 class AppSafetyReport(BaseModel):
     """Global report containing safety summaries for all apps in the workspace."""
+
     apps: List[AppSafetySummary] = Field(default_factory=list)
     overall_score: float = 100.0
     scoring_version: int = 1
@@ -49,7 +56,7 @@ class ScoringEngine:
     """
     Centralized service for calculating manifest health scores.
     """
-    
+
     # Shipped Defaults (Tier 0)
     DEFAULT_PENALTIES = {
         "LEX_FLUSH_LEFT": 2,
@@ -71,16 +78,16 @@ class ScoringEngine:
     def calculate_penalty(self, rule_id: str, severity: str = "WARNING", has_blast_impact: bool = False) -> int:
         """
         Returns the deduction points for a specific rule violation.
-        
+
         Why: To provide a deterministic, config-aware penalty calculation.
         """
         sev = severity.upper()
-        
+
         # 1. Config override -> 2. Default mapping -> 3. Severity fallback
         penalty = self.config.penalties.get(rule_id)
         if penalty is None:
             penalty = self.DEFAULT_PENALTIES.get(rule_id)
-        
+
         if penalty is None:
             if sev == "CRITICAL":
                 penalty = 25
@@ -94,33 +101,41 @@ class ScoringEngine:
         # Apply Blast Radius Multiplier if applicable
         if has_blast_impact:
             penalty = int(penalty * self.config.blast_radius_multiplier)
-            
+
         return penalty
 
     def generate_app_report(self, app_results: Dict[str, List[Any]]) -> AppSafetyReport:
         """
         Aggregates findings per app and generates a global safety report.
-        
+
         Why: To provide the 'App Safety Score' headline metric for IDPs and CI.
         """
         summaries = []
         total_score_sum = 0
-        
+
         for app_name, results in app_results.items():
             score = 100.0
             category_penalties: Dict[RuleCategory, int] = {}
             rule_penalties: Dict[str, int] = {}
-            total_findings = 0
-            detailed_findings: List[Dict[str, Any]] = []
-            
+            # [GOOGLE-SCALE] Pre-calculate total findings for Compounding Risk Multiplier
+            # Why: Systems with >5 findings often indicate a systemic failure pattern.
+            # We apply a 1.2x penalty to prioritize remediation of dense failure sets.
+            total_findings = sum(
+                len(r.get("findings", []) if isinstance(r, dict) else getattr(r, "findings", [])) for r in results
+            )
+            risk_multiplier = 1.2 if total_findings > 5 else 1.0
+
             for result in results:
                 # Support both HealFileResult objects and dicts
                 findings = result.get("findings", []) if isinstance(result, dict) else getattr(result, "findings", [])
-                total_findings += len(findings)
-                
+
                 # Check for blast impact (traffic path to Ingress)
-                has_blast = result.get("is_on_critical_path", False) if isinstance(result, dict) else getattr(result, "is_on_critical_path", False)
-                
+                has_blast = (
+                    result.get("is_on_critical_path", False)
+                    if isinstance(result, dict)
+                    else getattr(result, "is_on_critical_path", False)
+                )
+
                 for f in findings:
                     # Robust attribute extraction (finding can be AnalysisResult obj or dict)
                     if isinstance(f, dict):
@@ -129,18 +144,21 @@ class ScoringEngine:
                     else:
                         rid = getattr(f, "rule_id", "unknown")
                         sev = getattr(f, "severity", "WARNING")
-                        
+
                     points = self.calculate_penalty(rid, sev, has_blast_impact=has_blast)
-                    
+
+                    # Apply Compounding Risk Multiplier
+                    points = int(points * risk_multiplier)
+
                     score -= points
-                    
+
                     # Track categories
                     cat = Rules.get_category(rid)
                     category_penalties[cat] = category_penalties.get(cat, 0) + points
-                    
+
                     # Track rule contributors
                     rule_penalties[rid] = rule_penalties.get(rid, 0) + points
-                    
+
                     # [Round 13] Collect detailed context for IDP alerts
                     f_detail = {
                         "rule_id": rid,
@@ -148,34 +166,36 @@ class ScoringEngine:
                         "message": f.get("message", "") if isinstance(f, dict) else getattr(f, "message", ""),
                         "line": f.get("line_no", 0) if isinstance(f, dict) else getattr(f, "line_no", 0),
                         "col": f.get("column_no", 0) if isinstance(f, dict) else getattr(f, "column_no", 0),
-                        "file": result.get("file_path", "") if isinstance(result, dict) else getattr(result, "file_path", "")
+                        "file": result.get("file_path", "")
+                        if isinstance(result, dict)
+                        else getattr(result, "file_path", ""),
                     }
-                    if len(detailed_findings) < 50: # Cap per app to prevent payload bloat
+                    if len(detailed_findings) < 50:  # Cap per app to prevent payload bloat
                         detailed_findings.append(f_detail)
-            
+
             # Clamp score
             score = max(0.0, score)
-            
+
             # Sort categories and rules by impact
             top_cats = sorted(category_penalties.items(), key=lambda x: x[1], reverse=True)[:3]
             top_rids = sorted(rule_penalties.items(), key=lambda x: x[1], reverse=True)[:3]
-            
-            summaries.append(AppSafetySummary(
-                app_name=app_name,
-                score=score,
-                top_categories=[c[0].value for c in top_cats],
-                top_rules=[r[0] for r in top_rids],
-                findings_count=total_findings,
-                detailed_findings=sorted(detailed_findings, key=lambda x: x["line"])[:10] if 'detailed_findings' in locals() else []
-            ))
+
+            summaries.append(
+                AppSafetySummary(
+                    app_name=app_name,
+                    score=score,
+                    top_categories=[c[0].value for c in top_cats],
+                    top_rules=[r[0] for r in top_rids],
+                    findings_count=total_findings,
+                    detailed_findings=sorted(detailed_findings, key=lambda x: x["line"])[:10]
+                    if "detailed_findings" in locals()
+                    else [],
+                )
+            )
             total_score_sum += score
-            
+
         overall = total_score_sum / len(summaries) if summaries else 100.0
-        return AppSafetyReport(
-            apps=summaries,
-            overall_score=overall,
-            scoring_version=self.config.version
-        )
+        return AppSafetyReport(apps=summaries, overall_score=overall, scoring_version=self.config.version)
 
     @staticmethod
     def get_severity_label(severity: str) -> str:

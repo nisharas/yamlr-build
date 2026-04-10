@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-13041
+  labels:
+    app: ms-13041
+    dependency: ms-13042
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-13041
+  template:
+    metadata:
+      labels:
+        app: ms-13041
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-13042

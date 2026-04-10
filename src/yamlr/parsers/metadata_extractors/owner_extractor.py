@@ -8,12 +8,16 @@ Extracts:
 """
 
 from __future__ import annotations
+
 from typing import List
+
 from yamlr.models import ManifestIdentity, Shard
-__all__ = ['OwnerExtractor']
+
+__all__ = ["OwnerExtractor"]
 
 
 from .base_extractor import BaseMetadataExtractor
+
 
 class OwnerExtractor(BaseMetadataExtractor):
     """Extracts OwnerReferences from metadata."""
@@ -34,7 +38,8 @@ class OwnerExtractor(BaseMetadataExtractor):
                 return False
 
             if shard.is_list_item:
-                if identity.owner_refs is None: identity.owner_refs = []
+                if identity.owner_refs is None:
+                    identity.owner_refs = []
                 identity.owner_refs.append({})
 
             if not identity.owner_refs:

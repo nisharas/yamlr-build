@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from yamlr.core.context import HealContext
 
 logger = logging.getLogger("yamlr.healers.probes")
-__all__ = ['ProbeHealer']
+__all__ = ["ProbeHealer"]
 
 
 class ProbeHealer:
@@ -18,14 +18,11 @@ class ProbeHealer:
     Ensures all containers have liveness and readiness probes defined.
     Mapped to: yamlr heal --enforce-probes
     """
-    
+
     DEFAULT_PORT = 8080
-    
+
     def heal_doc(
-        self, 
-        doc: Dict[str, Any], 
-        enforce_probes: bool = False,
-        context: Optional[HealContext] = None
+        self, doc: Dict[str, Any], enforce_probes: bool = False, context: Optional[HealContext] = None
     ) -> bool:
         """
         Detects and optionally fixes missing probes.
@@ -33,9 +30,10 @@ class ProbeHealer:
         """
         has_finding_liveness = False
         has_finding_readiness = False
-        
+
         if context:
             from yamlr.analyzers.rules import Rules
+
             has_finding_liveness = any(f.rule_id == Rules.MISSING_LIVENESS for f in context.findings)
             has_finding_readiness = any(f.rule_id == Rules.MISSING_READINESS for f in context.findings)
 
@@ -47,7 +45,7 @@ class ProbeHealer:
         modified = False
         # Use cached containers if context is available
         containers = context.container_context if context else extract_containers(doc)
-        
+
         for c in containers:
             if not isinstance(c, dict):
                 continue
@@ -59,20 +57,20 @@ class ProbeHealer:
         return modified
 
     def _ensure_probes(
-        self, 
-        container: Dict[str, Any], 
-        enforce_all: bool, 
-        liveness_finding: bool, 
+        self,
+        container: Dict[str, Any],
+        enforce_all: bool,
+        liveness_finding: bool,
         readiness_finding: bool,
-        context: Optional[HealContext] = None
+        context: Optional[HealContext] = None,
     ) -> bool:
         """Injects default probes if missing."""
         modified = False
-        
+
         # 1. Determine port and protocol
         port = self.DEFAULT_PORT
-        protocol = "http" # Default to http if we find web ports
-        
+        protocol = "http"  # Default to http if we find web ports
+
         ports = container.get("ports") or []
         if isinstance(ports, list) and len(ports) > 0:
             first_port = ports[0]
@@ -91,18 +89,9 @@ class ProbeHealer:
 
         # 2. Build probe structure
         if protocol == "http":
-            handler = {
-                "httpGet": {
-                    "path": "/healthz",
-                    "port": port
-                }
-            }
+            handler = {"httpGet": {"path": "/healthz", "port": port}}
         else:
-            handler = {
-                "tcpSocket": {
-                    "port": port
-                }
-            }
+            handler = {"tcpSocket": {"port": port}}
 
         default_probe = {
             **handler,
@@ -110,7 +99,7 @@ class ProbeHealer:
             "periodSeconds": 10,
             "timeoutSeconds": 1,
             "successThreshold": 1,
-            "failureThreshold": 3
+            "failureThreshold": 3,
         }
 
         if "livenessProbe" not in container and (enforce_all or liveness_finding):
@@ -119,17 +108,20 @@ class ProbeHealer:
             if context:
                 from yamlr.core.stages.boundaries import MutationScope
                 from yamlr.models import HealAction
-                context.prescribe(HealAction(
-                    stage="Shield",
-                    action_type="harden",
-                    target=f"containers[{container.get('name', 'unknown')}].livenessProbe",
-                    description=f"Injected default livenessProbe ({protocol})",
-                    rationale="Liveness probes ensure that the container is restarted if it enters an unhealthy state.",
-                    suggestion="Define liveness probes for all production containers.",
-                    severity="warning",
-                    rule_id="rule/missing-liveness",
-                    scope=MutationScope.SPEC_PROBES
-                ))
+
+                context.prescribe(
+                    HealAction(
+                        stage="Shield",
+                        action_type="harden",
+                        target=f"containers[{container.get('name', 'unknown')}].livenessProbe",
+                        description=f"Injected default livenessProbe ({protocol})",
+                        rationale="Liveness probes ensure that the container is restarted if it enters an unhealthy state.",
+                        suggestion="Define liveness probes for all production containers.",
+                        severity="warning",
+                        rule_id="rule/missing-liveness",
+                        scope=MutationScope.SPEC_PROBES,
+                    )
+                )
             logger.info(f"Injected default livenessProbe ({protocol}) for container {container.get('name', 'unknown')}")
 
         if "readinessProbe" not in container and (enforce_all or readiness_finding):
@@ -138,17 +130,22 @@ class ProbeHealer:
             if context:
                 from yamlr.core.stages.boundaries import MutationScope
                 from yamlr.models import HealAction
-                context.prescribe(HealAction(
-                    stage="Shield",
-                    action_type="harden",
-                    target=f"containers[{container.get('name', 'unknown')}].readinessProbe",
-                    description=f"Injected default readinessProbe ({protocol})",
-                    rationale="Readiness probes ensure that the container only receives traffic when it is ready to handle it.",
-                    suggestion="Define readiness probes for all production containers.",
-                    severity="warning",
-                    rule_id="rule/missing-readiness",
-                    scope=MutationScope.SPEC_PROBES
-                ))
-            logger.info(f"Injected default readinessProbe ({protocol}) for container {container.get('name', 'unknown')}")
+
+                context.prescribe(
+                    HealAction(
+                        stage="Shield",
+                        action_type="harden",
+                        target=f"containers[{container.get('name', 'unknown')}].readinessProbe",
+                        description=f"Injected default readinessProbe ({protocol})",
+                        rationale="Readiness probes ensure that the container only receives traffic when it is ready to handle it.",
+                        suggestion="Define readiness probes for all production containers.",
+                        severity="warning",
+                        rule_id="rule/missing-readiness",
+                        scope=MutationScope.SPEC_PROBES,
+                    )
+                )
+            logger.info(
+                f"Injected default readinessProbe ({protocol}) for container {container.get('name', 'unknown')}"
+            )
 
         return modified

@@ -11,7 +11,7 @@ Yamlr unifies its capabilities under the **Yamlr Healing Engine**, tailored for 
 *   **Healing Mode (Surgeon):** Automated remediation and "Self-Healing" capabilities. Free users are gifted **5 files per day** to keep manifests healthy.
 
 > [!IMPORTANT]
-> **Audit mode (`yamlr scan`) never modifies files. Active Healing (`yamlr heal`) only changes manifests when explicitly invoked and backed by backups/receipts/contracts.**
+> **Audit mode (`yamlr scan`) never modifies files. Active Healing (`yamlr heal`) only changes manifests when explicitly invoked and backed by Global Atomic Sessions and automatic backups.**
 
 Runs 100% locally. No data leaves your machine.
 
@@ -43,6 +43,15 @@ yamlr version
 ### 🆕 New User? 
 Run `yamlr welcome` for an interactive dashboard and guided tour of all capabilities.
 Run `yamlr manual` to read this entire guide or specific command help (e.g., `yamlr manual scan`) directly in your terminal.
+
+### 🏗️ Building from Source (Nuitka Protocol)
+If you are a contributor or require a custom sovereign build, use the official Nuitka build orchestrator:
+
+1. **Install Dependencies**: `pip install -r requirements.txt`
+2. **Establish Baseline**: `python scripts/capture_baseline.py` (Mandatory Trust Gate)
+3. **Run Build**: `python scripts/build_nuitka.py` (Use `--pro` for Enterprise)
+
+The native binary will be generated in `dist/yamlr` (or `dist/yamlr.exe`).
 
 ---
 
@@ -186,6 +195,13 @@ yamlr graph blast-radius --resource Deployment/my-app
 yamlr graph export --format mermaid
 ```
 
+### 7️⃣ Drift Doctor (Pro)
+Reconcile live cluster state against local manifests to detect unauthorized manual changes.
+```bash
+yamlr drift .
+```
+Reporting-only: Detects divergence without modifying the cluster.
+
 ---
 
 # 🧬 Semantic DNA & Restoration
@@ -235,7 +251,8 @@ Before any modification:
 * Instant rollback via:
 
 ```bash
-yamlr restore <path>
+yamlr restore <path> # Restore a single file
+yamlr rollback       # Revert an entire atomic session
 ```
 
 ---
@@ -261,6 +278,7 @@ Clean diffs. GitOps-friendly.
 ```bash
 yamlr scan .   # Also: yamlr audit .
 yamlr check .  # Strict validation
+```
 Perfect for GitHub Actions / GitLab CI.
 
 ### 🛡️ GitOps Guard (Regression Testing)
@@ -536,10 +554,15 @@ yamlr idp-export init --format prometheus --output prometheus-scrape.yml
 | `--experimental-rust`        | [Hybrid] Enable Rust scanner | ✅ Free |
 | `--timing`                   | [Performance] Show execution breakdown | ✅ Free |
 | `--timing-file FILE`          | [Performance] Save profile to JSON | ✅ Free |
+| `--from-report FILE`         | [Heal] Ingest OPA/Kyverno reports | 💎 Pro |
+| `--complement-mode T:P`      | [Pro] External tool reconciliation | 💎 Pro |
 | `--adapters-dir DIR`         | [Pro] Custom remediation scripts | 💎 Pro |
 | `--receipt`                  | Generate DNA receipts | 💎 Pro |
 | `--sovereign`                | High-fidelity export | 💎 Pro |
+| `--stream-to FILE`           | Ultra-scale: Stream to NDJSON | ✅ Free |
+| `--output sbom`             | Generate CycloneDX SBOM | 💎 Pro |
 | `--fast`                     | Max-speed Rust scanning | 💎 Pro |
+| `--rollback`                 | Global atomic transaction reversal | 💎 Pro |
 
 ---
 
@@ -645,9 +668,22 @@ yamlr heal . --from-report policy-report.json
 # (Legacy) Ingest Kyverno reports specifically
 yamlr heal . --kyverno-report policy-report.json
 
+# Complement Mode: Ingest findings from external security tools
+# Format: --complement-mode <tool>:<path_to_report>
+yamlr heal . --complement-mode checkov:checkov_report.json kubeconform:kube_results.json
+
 # Generate cryptographic DNA receipts
 yamlr evidence ./receipts --format pdf --output report.pdf
 ```
+
+### 🛡️ Complement Mode (Reconciliation Engine)
+Yamlr acts as a **remediation adapter** for the broader K8s security ecosystem. Using **Complement Mode**, you can ingest raw JSON findings from third-party auditors and have Yamlr auto-heal the manifests using its high-fidelity surgical engine.
+
+Supported Tools:
+*   **Checkov**: Bridge the gap between Infrastructure-as-Code (IaC) scanning and manifest remediation.
+*   **Kubeconform**: Convert structural validation errors into automated structural repairs.
+
+This ensures that security findings from external tools don't just stay as "tickets" but are actually solved automatically within the Yamlr healing loop.
 
 Aggregates cryptographic DNA receipts into auditor-ready PDF reports.
 
@@ -733,6 +769,14 @@ To prevent accidental information disclosure in CI/CD logs or portable audit rep
 ### 3. Verification & Trust
 *   **Signatures**: Pro features utilize HMAC-SHA256 JWT validation with constant-time cryptographic comparisons.
 *   **Local-First**: 100% of analysis happens locally. No source code or manifest content is ever transmitted to Yamlr servers.
+
+---
+
+### 4. Expert Diagnostic Assets (PII-Redacted Forensics)
+For deep forensic analysis, Yamlr provides expert-level logs that are redacted by default:
+*   **--forensic-debug**: Enables 	ree_dna.log and pe_debug.log.
+*   **Redaction**: System paths (CWD, HOME, TMP) and sensitive keys are masked to ensure zero PII leaks during forensic debugging.
+*   **Off-by-Default**: These assets are only generated when explicitly requested for deep-dive support cycles.
 
 ---
 

@@ -15,109 +15,127 @@ Architecture:
 Author: Nishar A Sunkesala / Yamlr Team
 Date: 2026-02-28
 """
-from __future__ import annotations
-from rich.table import Table
+
+from typing import Any, Dict, List, Optional
+
 from rich.panel import Panel
-from yamlr.cli.constants import CommandTier, COMMAND_TIER_MAP
-__all__ = ['print_kubectl_help', 'print_subcommand_help']
+from rich.table import Table
+
+from yamlr.cli.constants import COMMAND_TIER_MAP, CommandTier
+
+__all__ = ["print_kubectl_help", "print_subcommand_help"]
 
 DIM_WHITE = "dim white"
 
+# All commands with task-oriented descriptions
+# Why: Moved to module level to reduce cognitive complexity of help functions.
+DESCRIPTIONS = {
+    "scan": "Check manifests for issues (read-only, safe default)",
+    "heal": "Preview and apply fixes (interactive by default)",
+    "check": "Fast syntax & schema validation (great for CI)",
+    "upgrade": "Migrate deprecated APIs to a target K8s version",
+    "status": "Show backups, receipts, and recent heal activity",
+    "doctor": "Check Yamlr installation, catalogs, and environment",
+    "rules": "List protections and rule IDs",
+    "explain": "Explain a specific rule or finding",
+    "secure": "Analyze & suggest security hardening (Pro)",
+    # Advanced (Advanced help only)
+    "graph": "Visual Observability: Relational topology & blast-radius",
+    "stats": "Engineering Efficiency: Surgical impact & team mastery",
+    "roi": "Executive Portfolio: Financial impact & budget justification",
+    "dna": "Calculate/Verify Semantic SHA-256 DNA for provenance",
+    "pulse": "Founder Intelligence: Global rule efficacy & ROI telemetry",
+    "evidence": "Generate Auditor-Ready compliance reports (PDF/JSON)",
+    "mcp": "Model Context Protocol: Connect Yamlr to AI Agents (Pro)",
+    "baseline": "Snapshot current violations to ignore them in future scans",
+    "idp-export": "Platform Integration: Export safety truth [backstage|prometheus]",
+    "init": "Initialize a new project with .yamlr.yaml",
+    "restore": "Restore files from backups",
+    "diagnose": "Run deep-dive analysis with debug support bundles",
+    "auth": "Manage Yamlr Enterprise (Pro) authentication",
+    "version": "Display version info and license status",
+    "welcome": "Onboarding: Quick start & branding",
+    "completion": "Generate shell autocompletion scripts",
+    "catalog": "Manage Kubernetes schema definitions",
+    "manual": "Open command manuals or full user guide",
+    "demo": "Watch Yamlr heal a broken cluster (interactive simulation)",
+    "lsp": "Start the Protocol (LSP) Server for VS Code (Pro)",
+    "drift": "Reconcile live cluster state against local manifests (Pro)",
+    "rollback": "Roll back the last atomic healing session (Omega)",
+}
+
+GROUPINGS = {
+    "scan": ["audit"],
+    "upgrade": ["migrate"],
+}
+ALIASES = ["audit", "migrate"]
+
+
+def _add_help_tier(console, title, tier, color, show_all: bool):
+    """Helper to add rows to tier tables.
+
+    Why: Extracted to reduce cognitive complexity of print_kubectl_help.
+    """
+    # We only show Non-PRIMARY tiers if show_all is true
+
+    if not show_all and tier == CommandTier.ADVANCED:
+        return
+
+    console.print(f"\n[bold gold1]┌─ {title}[/bold gold1]")
+    table = Table(show_header=False, box=None, padding=(0, 2, 0, 0))
+    table.add_column(style=f"bold {color}", width=18)
+    table.add_column(style="italic grey70")
+
+    found = False
+    for cmd, cmd_tier in COMMAND_TIER_MAP.items():
+        if cmd_tier == tier:
+            if cmd in ALIASES:
+                continue
+
+            display_cmd = cmd
+            if cmd in GROUPINGS:
+                display_cmd = f"{cmd} / {' / '.join(GROUPINGS[cmd])}"
+
+            desc = DESCRIPTIONS.get(cmd, "...")
+            table.add_row(display_cmd, desc)
+            found = True
+
+    if found:
+        console.print(table)
 
 
 def print_kubectl_help(console, invoked_as: str, show_all: bool = False):
     """Displays the main help menu in a tiered, journey-inspired format.
-    
-    Why: Minimizing cognitive load for new users while preserving 
+
+    Why: Minimizing cognitive load for new users while preserving
          power-user features behind a progressive disclosure gate (--all).
     """
+
     # Header - Minimalist
-    console.print(Panel(
-        f"[bold cyan]{invoked_as.lower()}[/bold cyan] — Kubernetes manifest safety & healing engine",
-        border_style="cyan",
-        expand=False
-    ))
-
-    # All commands with task-oriented descriptions
-    DESCRIPTIONS = {
-        "scan": "Check manifests for issues (read-only, safe default)",
-        "heal": "Preview and apply fixes (interactive by default)",
-        "check": "Fast syntax & schema validation (great for CI)",
-        "upgrade": "Migrate deprecated APIs to a target K8s version",
-        "status": "Show backups, receipts, and recent heal activity",
-        "doctor": "Check Yamlr installation, catalogs, and environment",
-        "rules": "List protections and rule IDs",
-        "explain": "Explain a specific rule or finding",
-        "secure": "Analyze & suggest security hardening (Pro)",
-        
-        # Advanced (Advanced help only)
-        "graph": "Visual Observability: Relational topology & blast-radius",
-        "stats": "Engineering Efficiency: Surgical impact & team mastery",
-        "roi": "Executive Portfolio: Financial impact & budget justification",
-        "dna": "Calculate/Verify Semantic SHA-256 DNA for provenance",
-        "pulse": "Founder Intelligence: Global rule efficacy & ROI telemetry",
-        "evidence": "Generate Auditor-Ready compliance reports (PDF/JSON)",
-        "mcp": "Model Context Protocol: Connect Yamlr to AI Agents (Pro)",
-        "baseline": "Snapshot current violations to ignore them in future scans",
-        "idp-export": "Platform Integration: Export safety truth [backstage|prometheus]",
-        "init": "Initialize a new project with .yamlr.yaml",
-        "restore": "Restore files from backups",
-        "diagnose": "Run deep-dive analysis with debug support bundles",
-        "auth": "Manage Yamlr Enterprise (Pro) authentication",
-        "version": "Display version info and license status",
-        "welcome": "Onboarding: Quick start & branding",
-        "completion": "Generate shell autocompletion scripts",
-        "catalog": "Manage Kubernetes schema definitions",
-        "manual": "Open command manuals or full user guide",
-        "demo": "Watch Yamlr heal a broken cluster (interactive simulation)",
-    }
-
-    GROUPINGS = {
-        "scan": ["audit"],
-        "upgrade": ["migrate"],
-    }
-    ALIASES = ["audit", "migrate"]
-
-    # Helper to add rows to tier tables
-    def add_tier(title, tier, color):
-        # We only show Non-PRIMARY tiers if show_all is true
-        if not show_all and tier == CommandTier.ADVANCED:
-            return
-
-        console.print(f"\n[bold gold1]┌─ {title}[/bold gold1]")
-        table = Table(show_header=False, box=None, padding=(0, 2, 0, 0))
-        table.add_column(style=f"bold {color}", width=18)
-        table.add_column(style="italic grey70")
-        
-        found = False
-        for cmd, cmd_tier in COMMAND_TIER_MAP.items():
-            if cmd_tier == tier:
-                if cmd in ALIASES: continue
-                
-                display_cmd = cmd
-                if cmd in GROUPINGS:
-                    display_cmd = f"{cmd} / {' / '.join(GROUPINGS[cmd])}"
-                
-                desc = DESCRIPTIONS.get(cmd, "...")
-                table.add_row(display_cmd, desc)
-                found = True
-        
-        if found:
-            console.print(table)
+    console.print(
+        Panel(
+            f"[bold cyan]{invoked_as.lower()}[/bold cyan] — Kubernetes manifest safety & healing engine",
+            border_style="cyan",
+            expand=False,
+        )
+    )
 
     # Journey Tiers
-    add_tier("START HERE", CommandTier.PRIMARY, "green")
-    add_tier("WHEN YOU'RE READY", CommandTier.SECONDARY, "cyan")
-    
+    _add_help_tier(console, "START HERE", CommandTier.PRIMARY, "green", show_all)
+    _add_help_tier(console, "WHEN YOU'RE READY", CommandTier.SECONDARY, "cyan", show_all)
+
     # Advanced Tier (Only shown with --all)
     if show_all:
-        add_tier("ADVANCED & PLATFORM", CommandTier.ADVANCED, "magenta")
+        _add_help_tier(console, "ADVANCED & PLATFORM", CommandTier.ADVANCED, "magenta", show_all)
 
     # Global Options
     console.print("\n[bold gold1]┌─ GLOBAL OPTIONS[/bold gold1]")
     opt_table = Table(show_header=False, box=None, padding=(0, 2, 0, 0))
     opt_table.add_column(style="yellow", width=24)
-    opt_table.add_column(style="dim white" if getattr(console, "_yamlr_plain", False) else DIM_WHITE)
+
+    # Logic: if plain, use no style, otherwise use DIM_WHITE
+    desc_style = "" if getattr(console, "_yamlr_plain", False) else DIM_WHITE
+    opt_table.add_column(style=desc_style)
     opt_table.add_row("-h, --help", "Show this help")
     opt_table.add_row("--all", "Show all commands (advanced)")
     opt_table.add_row("--kube-version VERSION", "Target K8s version (e.g., 1.28, v1.31)")
@@ -132,7 +150,7 @@ def print_kubectl_help(console, invoked_as: str, show_all: bool = False):
     console.print("\n[bold gold1]┌─ QUICK EXAMPLES[/bold gold1]")
     qs_table = Table(show_header=False, box=None, padding=(0, 2, 0, 0))
     qs_table.add_column(style="cyan", width=24)
-    qs_table.add_column(style="dim white" if getattr(console, "_yamlr_plain", False) else DIM_WHITE)
+    qs_table.add_column(style="" if getattr(console, "_yamlr_plain", False) else DIM_WHITE)
     qs_table.add_row("yamlr scan .", "Audit all YAML files (no changes)")
     qs_table.add_row("yamlr heal pod.yaml", "Preview a repair with visual diff")
     qs_table.add_row("yamlr check .", "Fast syntax & schema validation")
@@ -160,18 +178,39 @@ def print_subcommand_help(console, command: str, invoked_as: str, show_all: bool
          module under cli/help/.
     """
     # Lazy imports to avoid circular dependencies
+    from yamlr.cli.help.help_toolbox import (
+        help_diagnose,
+        help_drift,
+        help_dna,
+        help_evidence,
+        help_secure,
+        help_upgrade,
+    )
     from yamlr.cli.help.help_scan import help_scan, help_check, help_audit
     from yamlr.cli.help.help_heal import help_heal
-    from yamlr.cli.help.help_toolbox import (
-        help_diagnose, help_secure, help_upgrade, help_dna, help_evidence,
+    from yamlr.cli.help.help_observability import (
+        help_graph,
+        help_idp_export,
+        help_pulse,
     )
     from yamlr.cli.help.help_utils import (
-        help_catalog, help_version, help_explain, help_auth, help_init,
-        help_restore, help_demo, help_welcome, help_completion,
-        help_status, help_rules, help_stats, help_roi, help_manual, help_mcp,
-    )
-    from yamlr.cli.help.help_observability import (
-        help_graph, help_idp_export, help_pulse,
+        help_auth,
+        help_catalog,
+        help_completion,
+        help_demo,
+        help_explain,
+        help_init,
+        help_lsp,
+        help_manual,
+        help_mcp,
+        help_restore,
+        help_roi,
+        help_rollback,
+        help_rules,
+        help_stats,
+        help_status,
+        help_version,
+        help_welcome,
     )
 
     # Dispatch table — deterministic, no duplicate elif entries
@@ -204,6 +243,9 @@ def print_subcommand_help(console, command: str, invoked_as: str, show_all: bool
         "pulse": lambda: help_pulse(console, invoked_as),
         "manual": lambda: help_manual(console, invoked_as),
         "mcp": lambda: help_mcp(console, invoked_as),
+        "lsp": lambda: help_lsp(console, invoked_as),
+        "drift": lambda: help_drift(console, invoked_as, show_all),
+        "rollback": lambda: help_rollback(console, invoked_as),
     }
 
     handler = dispatch.get(command)

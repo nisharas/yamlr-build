@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-2352
+  labels:
+    app: ms-2352
+    dependency: ms-2353
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-2352
+  template:
+    metadata:
+      labels:
+        app: ms-2352
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-2353

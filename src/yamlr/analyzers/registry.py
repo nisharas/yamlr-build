@@ -20,8 +20,7 @@ from yamlr.analyzers.base import BaseAnalyzer
 from yamlr.analyzers.content.missing_configmap_target import MissingConfigMapTargetAnalyzer
 
 logger = logging.getLogger("yamlr.analyzers.registry")
-__all__ = ['AnalyzerRegistry']
-
+__all__ = ["AnalyzerRegistry"]
 
 
 class AnalyzerRegistry:
@@ -92,6 +91,7 @@ class AnalyzerRegistry:
                 ImageAnalyzer,
                 NetworkPolicyAnalyzer,
                 ProbeAnalyzer,
+                ReliabilityAnalyzer,
                 ResourceAnalyzer,
                 ServiceAnalyzer,
             )
@@ -112,6 +112,7 @@ class AnalyzerRegistry:
             cls.register(ApiDeprecationAnalyzer)
             cls.register(RegistryAnalyzer)
             cls.register(ServiceAnalyzer)
+            cls.register(ReliabilityAnalyzer)
             cls.register(NamespaceEnforcementAnalyzer)
 
             cls._defaults_registered = True
@@ -136,6 +137,7 @@ class AnalyzerRegistry:
                 try:
                     # [ROUND-10] Handle catalog-aware vs legacy initialization
                     import inspect
+
                     sig = inspect.signature(analyzer_cls.__init__)
                     if "catalog" in sig.parameters:
                         instance = analyzer_cls(catalog=catalog)

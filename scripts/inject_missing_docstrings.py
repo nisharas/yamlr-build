@@ -21,17 +21,18 @@ if audit_file.exists():
                     path = ROOT / path_str
                 files_with_issues.add(str(path.resolve()))
 
+
 def inject_docstrings(filepath):
     with open(filepath, "r", encoding="utf-8") as f:
         lines = f.readlines()
-    
+
     new_lines = []
     i = 0
     while i < len(lines):
         line = lines[i]
         new_lines.append(line)
-        
-        match = re.match(r'^(\s*)(def|class)\s+\w+', line)
+
+        match = re.match(r"^(\s*)(def|class)\s+\w+", line)
         if match:
             indent = match.group(1)
             # Find the end of the signature
@@ -39,30 +40,31 @@ def inject_docstrings(filepath):
             def_str = ""
             while j < len(lines):
                 def_str += lines[j]
-                if re.search(r':\s*(?:#.*)?$', lines[j].rstrip("\r\n")):
+                if re.search(r":\s*(?:#.*)?$", lines[j].rstrip("\r\n")):
                     break
                 j += 1
-            
+
             if j < len(lines):
                 # Copy until the end of signature
                 while i < j:
                     i += 1
                     new_lines.append(lines[i])
-                
+
                 # Check next line
                 k = i + 1
                 while k < len(lines) and lines[k].strip() == "":
                     k += 1
-                
+
                 if k < len(lines) and not lines[k].strip().startswith(('"""', "'''")):
                     # Inject
                     doc_indent = indent + "    "
                     docstring = f'{doc_indent}"""\n{doc_indent}Why: Internal documentation policy compliance.\n{doc_indent}What: Auto-generated summary.\n{doc_indent}"""\n'
                     new_lines.append(docstring)
         i += 1
-        
+
     with open(filepath, "w", encoding="utf-8") as f:
         f.writelines(new_lines)
+
 
 count = 0
 for filepath in files_with_issues:

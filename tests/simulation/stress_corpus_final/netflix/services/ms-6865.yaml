@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-6865
+  labels:
+    app: ms-6865
+    dependency: ms-6866
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-6865
+  template:
+    metadata:
+      labels:
+        app: ms-6865
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-6866

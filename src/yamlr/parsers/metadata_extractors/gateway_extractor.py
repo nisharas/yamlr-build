@@ -7,12 +7,16 @@ Extracts:
 """
 
 from __future__ import annotations
+
 from typing import List
+
 from yamlr.models import ManifestIdentity, Shard
-__all__ = ['GatewayExtractor']
+
+__all__ = ["GatewayExtractor"]
 
 
 from .base_extractor import BaseMetadataExtractor
+
 
 class GatewayExtractor(BaseMetadataExtractor):
     """Extracts GatewayClass references from Gateway resources."""

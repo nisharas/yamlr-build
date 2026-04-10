@@ -1,16 +1,18 @@
 from __future__ import annotations
+
 from typing import Any, Dict
 
 from .base import BaseHeuristic
-__all__ = ['FragmentedSequenceHeuristic']
+
+__all__ = ["FragmentedSequenceHeuristic"]
 
 
 class FragmentedSequenceHeuristic(BaseHeuristic):
     """
     Heals broken or fragmented YAML sequence indicators.
-    
-    Why: LEGACY AUDIT V3. Bad copy-pastes often result in '- - item' 
-         or '-- item'. Many users also omit the space in '-item'. 
+
+    Why: LEGACY AUDIT V3. Bad copy-pastes often result in '- - item'
+         or '-- item'. Many users also omit the space in '-item'.
          Yamlr normalizes these to '- item' for structural clarity.
     """
 

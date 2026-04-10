@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-2172
+  labels:
+    app: ms-2172
+    dependency: ms-2173
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-2172
+  template:
+    metadata:
+      labels:
+        app: ms-2172
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-2173

@@ -18,6 +18,7 @@ from yamlr.core.context import HealContext
 
 logger = logging.getLogger("yamlr.healers.namespace")
 
+
 class NamespaceHealer:
     """
     Heals missing namespaces using smart context inference.
@@ -25,9 +26,16 @@ class NamespaceHealer:
 
     # Cluster-scoped resources that do NOT need a namespace
     CLUSTER_SCOPED = {
-        "Namespace", "Node", "ClusterRole", "ClusterRoleBinding",
-        "PersistentVolume", "StorageClass", "CustomResourceDefinition",
-        "PriorityClass", "RuntimeClass", "VolumeAttachment"
+        "Namespace",
+        "Node",
+        "ClusterRole",
+        "ClusterRoleBinding",
+        "PersistentVolume",
+        "StorageClass",
+        "CustomResourceDefinition",
+        "PriorityClass",
+        "RuntimeClass",
+        "VolumeAttachment",
     }
 
     def __init__(self, enact: bool = True, default_ns: Optional[str] = None):
@@ -48,7 +56,7 @@ class NamespaceHealer:
 
         # 2. Smart Inference: Scan all existing docs for a dominant namespace
         inferred_ns = self._infer_namespace(context.docs)
-        
+
         # Priority: Inferred > Configured Default > Global 'default'
         target_ns = inferred_ns or self.default_ns or "default"
 
@@ -69,17 +77,20 @@ class NamespaceHealer:
                 if context:
                     from yamlr.core.stages.boundaries import MutationScope
                     from yamlr.models import HealAction
-                    context.prescribe(HealAction(
-                        stage="NamespaceHealer",
-                        action_type="repair",
-                        target=f"{kind}/{metadata.get('name')}.metadata.namespace",
-                        description=f"Injected inferred namespace '{target_ns}'",
-                        rationale="Resource was missing a namespace and was healed using smart inference from other resources in the same session.",
-                        suggestion="Define explicit namespaces to avoid non-deterministic deployment targetting.",
-                        severity="info",
-                        rule_id="rule/missing-namespace",
-                        scope=MutationScope.SPEC_NAMESPACE
-                    ))
+
+                    context.prescribe(
+                        HealAction(
+                            stage="NamespaceHealer",
+                            action_type="repair",
+                            target=f"{kind}/{metadata.get('name')}.metadata.namespace",
+                            description=f"Injected inferred namespace '{target_ns}'",
+                            rationale="Resource was missing a namespace and was healed using smart inference from other resources in the same session.",
+                            suggestion="Define explicit namespaces to avoid non-deterministic deployment targetting.",
+                            severity="info",
+                            rule_id="rule/missing-namespace",
+                            scope=MutationScope.SPEC_NAMESPACE,
+                        )
+                    )
 
         if applied_count > 0:
             logger.info(f"NamespaceHealer: Applied '{target_ns}' to {applied_count} resource(s).")
@@ -93,12 +104,12 @@ class NamespaceHealer:
             ns = doc.get("metadata", {}).get("namespace")
             if ns:
                 namespaces.add(ns)
-        
+
         # If there's exactly one unique namespace used elsewhere, we trust it.
         # If there are multiple, we don't guess (safer to return None).
         if len(namespaces) == 1:
             ns = list(namespaces)[0]
             logger.debug(f"Inferred namespace '{ns}' from existing resources.")
             return ns
-            
+
         return None

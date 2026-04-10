@@ -1,19 +1,21 @@
 from __future__ import annotations
+
 import logging
 from typing import Any, Dict, List, Optional
 
 from yamlr.models import Shard
+
 from .base import BaseHeuristic
 
 logger = logging.getLogger("yamlr.lexer.heuristics")
-__all__ = ['ListIndentationHeuristic']
+__all__ = ["ListIndentationHeuristic"]
 
 
 class ListIndentationHeuristic(BaseHeuristic):
     """
     Enforces structural list indentation rules.
-    
-    Why: LEGACY AUDIT V3. Fixes 'flush-left' lists that belong to a parent 
+
+    Why: LEGACY AUDIT V3. Fixes 'flush-left' lists that belong to a parent
          and 'floating' items that don't align with the 2-space grid.
     """
 
@@ -41,7 +43,7 @@ class ListIndentationHeuristic(BaseHeuristic):
             return line
 
         current_indent = len(line) - len(stripped)
-        
+
         # [HEAL] Find last structural parent
         last_shard = None
         for i in range(len(shards) - 1, -1, -1):
@@ -54,7 +56,7 @@ class ListIndentationHeuristic(BaseHeuristic):
             return line
 
         parent_indent = last_shard.indent
-        
+
         # 1. Flush-Left Recovery: "- item" at 0 but parent is at N
         if current_indent == 0 and parent_indent >= 0:
             expected_indent = parent_indent + 2
@@ -69,8 +71,8 @@ class ListIndentationHeuristic(BaseHeuristic):
             if abs(current_indent - expected_indent) <= 1:
                 final_indent = expected_indent
             else:
-                final_indent = current_indent + 1 # Round up to even
-            
+                final_indent = current_indent + 1  # Round up to even
+
             if "stats" in context:
                 context["stats"]["nested_lists_normalized"] = context["stats"].get("nested_lists_normalized", 0) + 1
                 context["stats"]["floating_list_items_fixed"] = context["stats"].get("floating_list_items_fixed", 0) + 1

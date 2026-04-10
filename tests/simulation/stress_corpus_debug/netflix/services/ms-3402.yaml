@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-3402
+  labels:
+    app: ms-3402
+    dependency: ms-3403
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-3402
+  template:
+    metadata:
+      labels:
+        app: ms-3402
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-3403

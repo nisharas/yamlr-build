@@ -9,17 +9,20 @@ Allows customization of:
 """
 
 from __future__ import annotations
+
 import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("yamlr.config")
 
+
 class ConfigManager:
     """Manages user configuration and workspace state.
 
     Why: To provide a centralized store for rules, security policies, and environment-specific settings.
     """
+
     DEFAULT_RUNTIME_DIR = ".yamlr_runtime"
     DEFAULT_INFERENCE_FALLBACK_VERSION = "1.28"
 
@@ -39,9 +42,7 @@ class ConfigManager:
             "check_deprecations": False,
             "enforce_namespace": False,
         },
-        "ignore": {
-            "files": []
-        }
+        "ignore": {"files": []},
     }
 
     def __init__(self, workspace_root: Path, app_name: str = "Yamlr"):
@@ -65,13 +66,14 @@ class ConfigManager:
         Stops walking if it hits a .git directory or the filesystem root.
         """
         from yamlr.core.utils import get_hardened_yaml
+
         loader = get_hardened_yaml(typ="safe")
         current_dir = self.workspace.resolve()
 
         while True:
             if self._try_load_from_dir(current_dir, loader):
                 return
-            
+
             if self._is_root_or_git(current_dir):
                 break
             current_dir = current_dir.parent
@@ -89,7 +91,9 @@ class ConfigManager:
                 try:
                     loaded = loader.load(path)
                     if loaded:
-                        self._merge_config(loaded)
+                        # Ensure we have a plain dict for merging
+                        config_data = loaded.to_dict() if hasattr(loaded, "to_dict") else loaded
+                        self._merge_config(config_data)
                     self.config_path = path
                     logger.debug(f"Loaded configuration from {path}")
                     return True
@@ -106,6 +110,9 @@ class ConfigManager:
         # Simple depth-1 merge for now, can be expanded if needed
         if "rules" in user_config:
             self.config["rules"].update(user_config["rules"])
+            # Alias support: exclude -> ignore
+            if "exclude" in user_config["rules"]:
+                self.config["rules"].setdefault("ignore", []).extend(user_config["rules"]["exclude"])
         if "analyzers" in user_config:
             self.config["analyzers"].update(user_config["analyzers"])
         if "security" in user_config:
@@ -121,7 +128,7 @@ class ConfigManager:
                 self.config["ignore"]["files"].extend(user_ignore)
             elif isinstance(user_ignore, dict):
                 self.config["ignore"].update(user_ignore)
-        
+
         # Invalidate compiled pattern cache
         self._compiled_ignore = None
         self._rule_ignore_cache = None
@@ -133,16 +140,16 @@ class ConfigManager:
 
         import re
         from fnmatch import translate
-        
+
         rule_ignores = self.config["rules"].get("ignore", [])
         file_ignores = self.config["ignore"].get("files", [])
-        
+
         # Consolidate all wildcard/path patterns
         all_patterns = list(file_ignores)
         all_patterns.extend([p for p in rule_ignores if "*" in p or "/" in p])
-        
+
         if not all_patterns:
-            self._compiled_ignore = False # Sentinel for active but empty
+            self._compiled_ignore = False  # Sentinel for active but empty
             return False
 
         # Translate globs to regex and join with OR
@@ -152,7 +159,7 @@ class ConfigManager:
         except Exception as e:
             logger.warning(f"Failed to compile ignore patterns: {e}")
             self._compiled_ignore = False
-            
+
         return self._compiled_ignore
 
     def is_ignored(self, file_path: str, rule_id: Optional[str] = None) -> bool:
@@ -160,7 +167,8 @@ class ConfigManager:
         Determines if a file or rule should be ignored.
         Uses pre-compiled regex for O(1) matching vs patterns.
         """
-        if not file_path: return False
+        if not file_path:
+            return False
 
         # 1. Check Rule-specific ignores (Exact string matching)
         if rule_id:
@@ -171,7 +179,7 @@ class ConfigManager:
 
         # 2. Check File-level patterns (Regex matching)
         pattern = self._get_compiled_ignore()
-        if pattern: # If it's a compiled re object
+        if pattern:  # If it's a compiled re object
             # Normalize path for matching (standardize separators)
             match_path = file_path.replace("\\", "/")
             if pattern.match(match_path):
@@ -181,12 +189,13 @@ class ConfigManager:
 
     def load_baseline(self, baseline_path: Optional[str] = None):
         """Loads violation fingerprints from a baseline file.
-        
+
         Why: To enable regression testing by ignoring known, existing issues.
         """
         import json
+
         path = Path(baseline_path) if baseline_path else self.workspace / ".yamlr-baseline.json"
-        
+
         if path.exists():
             try:
                 data = json.loads(path.read_text(encoding="utf-8"))
@@ -202,19 +211,19 @@ class ConfigManager:
         """Checks if a finding matches a fingerprint in the baseline."""
         if not self.baseline_set:
             return False
-        
+
         fingerprint = self.generate_finding_fingerprint(finding)
         return fingerprint in self.baseline_set
 
     @staticmethod
     def generate_finding_fingerprint(finding: Dict[str, Any]) -> str:
         """Generates a stable SHA256 fingerprint for a finding.
-        
-        Why: To uniquely identify a violation across different runs, 
+
+        Why: To uniquely identify a violation across different runs,
              even if line numbers change.
         """
         import hashlib
-        
+
         # Key stability components: Rule, Target Resource, File Path (normalized), and Message
         # Note: Line number is EXCLUDED to ensure stability during file edits.
         rule_id = finding.get("rule_id", "unknown")
@@ -222,7 +231,7 @@ class ConfigManager:
         name = finding.get("resource_name", "unknown")
         file_path = finding.get("file_path", "unknown").replace("\\", "/")
         message = finding.get("message", "")
-        
+
         raw = f"{rule_id}|{kind}|{name}|{file_path}|{message}"
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
@@ -237,8 +246,8 @@ class ConfigManager:
     @property
     def allowed_host_paths(self) -> List[str]:
         """Returns the list of filesystem paths allowed for hostPath volumes.
-        
-        Why: To prevent security scanners from flagging legitimate 
+
+        Why: To prevent security scanners from flagging legitimate
              infrastructure paths used by the platform.
         """
         return self.config["security"].get("allowed_host_paths", [])
@@ -246,8 +255,8 @@ class ConfigManager:
     @property
     def enforce_limits(self) -> bool:
         """Whether to automatically inject resource limits if missing.
-        
-        Why: Ensures all workloads have defined resource boundaries to 
+
+        Why: Ensures all workloads have defined resource boundaries to
              prevent cluster-wide noisy neighbor issues.
         """
         return self.config["healing"].get("enforce_limits", False)
@@ -255,8 +264,8 @@ class ConfigManager:
     @property
     def harden(self) -> bool:
         """Whether to apply security hardening patches (e.g., readOnlyRootFilesystem).
-        
-        Why: To enforce a 'Secure by Default' posture for all 
+
+        Why: To enforce a 'Secure by Default' posture for all
              manifests processed by the healing engine.
         """
         return self.config["healing"].get("harden", False)
@@ -264,8 +273,8 @@ class ConfigManager:
     @property
     def enforce_probes(self) -> bool:
         """Whether to inject liveness/readiness probes if missing.
-        
-        Why: To improve the reliability of workloads by ensuring 
+
+        Why: To improve the reliability of workloads by ensuring
              Kubelet can monitor their health.
         """
         return self.config["healing"].get("enforce_probes", False)
@@ -273,8 +282,8 @@ class ConfigManager:
     @property
     def fix_tags(self) -> bool:
         """Whether to pin image tags to their digest or latest stable version.
-        
-        Why: To ensure deployment determinism and prevent 'Latest' 
+
+        Why: To ensure deployment determinism and prevent 'Latest'
              tag drift in production environments.
         """
         return self.config["healing"].get("fix_tags", False)
@@ -282,8 +291,8 @@ class ConfigManager:
     @property
     def kubernetes_version(self) -> Optional[str]:
         """The target Kubernetes version for validation and deprecation checks.
-        
-        Why: To ensure that Yamlr validates manifests against the 
+
+        Why: To ensure that Yamlr validates manifests against the
              correct OpenAPI schema for the target cluster.
         """
         return self.config.get("kubernetes", {}).get("version")
@@ -291,8 +300,8 @@ class ConfigManager:
     @property
     def enforce_namespace(self) -> bool:
         """Whether to force a specific namespace on all resources.
-        
-        Why: To ensure organizational compliance and prevent accidental 
+
+        Why: To ensure organizational compliance and prevent accidental
              deployment into the 'default' namespace.
         """
         return self.config.get("healing", {}).get("enforce_namespace", False)
@@ -300,8 +309,8 @@ class ConfigManager:
     @property
     def trusted_registries(self) -> List[str]:
         """The list of container registries trusted by the organization.
-        
-        Why: To prevent supply chain attacks by blocking images 
+
+        Why: To prevent supply chain attacks by blocking images
              from untrusted or public anonymous registries.
         """
         return self.config.get("security", {}).get("trusted_registries", [])

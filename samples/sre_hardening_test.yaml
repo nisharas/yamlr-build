@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sre-nightmare
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: sre-nightmare
+  template:
+    metadata:
+      labels:
+        app: sre-nightmare
+    spec:
+      # MISSING: readinessGates
+      # MISSING: topologySpreadConstraints
+      # MISSING: priorityClassName
+      # MISSING: terminationGracePeriodSeconds (defaults to 30, but let's set it low)
+      terminationGracePeriodSeconds: 10
+      
+      securityContext:
+        # MISSING: seccompProfile
+        # MISSING: runAsGroup
+        # MISSING: fsGroup
+        runAsNonRoot: true
+        runAsUser: 1000
+        
+      containers:
+      - name: app
+        image: nginx:latest
+        resources:
+          requests:
+            cpu: 100m
+        ports:
+        - containerPort: 80

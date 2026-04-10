@@ -4,8 +4,9 @@ from pathlib import Path
 # Add src to sys.path
 sys.path.append(str(Path(__file__).parent.parent / "src"))
 
-from yamlr.core.engine.base import YamlrEngine
 import os
+
+from yamlr.core.engine.base import YamlrEngine
 
 # Create a fake report for the test
 report_path = "tests/fixtures/phase9_opa_report.json"

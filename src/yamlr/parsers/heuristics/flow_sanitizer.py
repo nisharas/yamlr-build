@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import logging
 import re
 from typing import Any, Dict
@@ -6,14 +7,14 @@ from typing import Any, Dict
 from .base import BaseHeuristic
 
 logger = logging.getLogger("yamlr.lexer.heuristics")
-__all__ = ['FlowStyleHeuristic']
+__all__ = ["FlowStyleHeuristic"]
 
 
 class FlowStyleHeuristic(BaseHeuristic):
     """
     Surgically removes trailing commas in flow-style collections.
-    
-    Why: Flow style like [a, b, ] is technically valid in some YAML versions 
+
+    Why: Flow style like [a, b, ] is technically valid in some YAML versions
     but causes "trailing comma" errors in many strict parsers (e.g., standard Python yaml).
     Yamlr cleans these up to maximize interoperability.
     """
@@ -39,9 +40,9 @@ class FlowStyleHeuristic(BaseHeuristic):
         # Pattern: comma + optional space + closing bracket
         # Group 1: The part before the comma
         # Group 2: The closing bracket
-        
+
         repaired = line
-        
+
         # Iteratively fix for cases with multiple nested flows on one line
         # but usually one skip is enough for typical K8s manifests
         repaired = re.sub(r",\s*(\])", r"\1", repaired)

@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-171
+  labels:
+    app: ms-171
+    dependency: ms-172
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-171
+  template:
+    metadata:
+      labels:
+        app: ms-171
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-172

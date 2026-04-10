@@ -3,31 +3,35 @@ WELCOME COMMAND - The Interactive Onboarding
 --------------------------------------------
 Displays the brand banner and quick-start guide.
 """
+
 from __future__ import annotations
-from yamlr.core.entrypoints.display import print_custom_header
-from yamlr.core.entrypoints.base import get_console
-from yamlr.core.bridge import YamlrBridge
+
 from rich.align import Align
 from rich.columns import Columns
 from rich.console import Group
 from rich.panel import Panel
 from rich.table import Table
-__all__ = ['handle_welcome_command']
+
+from yamlr.core.bridge import YamlrBridge
+from yamlr.core.entrypoints.base import get_console
+from yamlr.core.entrypoints.display import print_custom_header
+
+__all__ = ["handle_welcome_command"]
 
 
 def handle_welcome_command(_, engine, is_pro: bool):
     """
     Displays the Yamlr welcome experience with a 'Premium' dashboard layout.
-    
-    Why: Habit formation. Converts Yamlr from a one-off tool into a 
+
+    Why: Habit formation. Converts Yamlr from a one-off tool into a
          persistent project guardian by showing cumulative progress.
     """
     console = get_console()
     invoked_as = YamlrBridge.get_invoked_command()
-    
+
     # 1. Print Bolder Header
     print_custom_header(invoked_as, is_pro, center=True)
-    
+
     # 2. Layout construction
     # Core Actions Panel
     core_actions = Table(show_header=False, box=None, padding=(0, 1))
@@ -41,12 +45,9 @@ def handle_welcome_command(_, engine, is_pro: bool):
     core_actions.add_row("baseline", "Snapshot violations for GitOps Guard")
     core_actions.add_row("restore", "Revert changes from backups")
     core_actions.add_row("demo", "Launch 'Safety Engine' showcase")
-    
+
     core_panel = Panel(
-        core_actions, 
-        title="[bold white]⚡ Core Workflows[/bold white]", 
-        border_style="cyan", 
-        padding=(1, 2)
+        core_actions, title="[bold white]⚡ Core Workflows[/bold white]", border_style="cyan", padding=(1, 2)
     )
 
     # Scaling & CI Panel
@@ -61,10 +62,7 @@ def handle_welcome_command(_, engine, is_pro: bool):
     scaling_info.add_row("status", "System & Catalog health")
 
     help_panel = Panel(
-        scaling_info, 
-        title="[bold white]🚀 Enterprise Readiness[/bold white]", 
-        border_style="magenta", 
-        padding=(1, 2)
+        scaling_info, title="[bold white]🚀 Enterprise Readiness[/bold white]", border_style="magenta", padding=(1, 2)
     )
 
     # 3. Quick Audit CTA & Storytelling
@@ -72,7 +70,7 @@ def handle_welcome_command(_, engine, is_pro: bool):
         "[bold white]Ready for a Quick Win?[/bold white]\n"
         f"Run [cyan bold]yamlr scan .[/cyan bold] to see how your manifests rank against [green bold]v{engine.cluster_version}[/green bold] standards."
     )
-    
+
     norway_tip = (
         "[bold yellow]Did you know?[/bold yellow]\n"
         "The 'Norway Problem' (country code [bold]NO[/bold] becoming [bold]false[/bold]) "
@@ -83,14 +81,11 @@ def handle_welcome_command(_, engine, is_pro: bool):
         Align.center(cta_text),
         title="[bold green]🎯 Recommended Next Step[/bold green]",
         border_style="green",
-        padding=(1, 1)
+        padding=(1, 1),
     )
-    
+
     tip_panel = Panel(
-        Align.center(norway_tip),
-        title="[bold yellow]💡 Pro Tip[/bold yellow]",
-        border_style="yellow",
-        padding=(1, 1)
+        Align.center(norway_tip), title="[bold yellow]💡 Pro Tip[/bold yellow]", border_style="yellow", padding=(1, 1)
     )
 
     # 4. Capability Spotlight Panel
@@ -106,7 +101,7 @@ def handle_welcome_command(_, engine, is_pro: bool):
         spotlight_text,
         title="[bold green]🦾 Surgical Engine Spotlight[/bold green]",
         border_style="green",
-        padding=(1, 2)
+        padding=(1, 2),
     )
 
     # Privacy, Safety & Docs Panel
@@ -124,7 +119,7 @@ def handle_welcome_command(_, engine, is_pro: bool):
         Group(discovery_text, privacy_text),
         title="[bold cyan]📖 Privacy, Safety & Documentation[/bold cyan]",
         border_style="cyan",
-        padding=(1, 2)
+        padding=(1, 2),
     )
 
     # 5. Project Mastery Dashboard (Telemetry)
@@ -132,17 +127,20 @@ def handle_welcome_command(_, engine, is_pro: bool):
     mastery_table = Table(show_header=False, box=None, padding=(0, 2))
     mastery_table.add_column(style="bold cyan")
     mastery_table.add_column(style="bold green")
-    
+
     mastery_table.add_row("Total Scans Run", f"{stats.get('total_scans', 0):,}")
     mastery_table.add_row("Issues Auto-Fixed", f"{stats.get('total_fixed_issues', 0):,}")
     mastery_table.add_row("Est. SRE Time Saved", f"{int(stats.get('total_time_saved_minutes', 0))} mins")
-    
+
     efficiency = stats.get("surgical_efficiency", 0.0)
     rank = "Novice"
-    if efficiency > 100: rank = "Grandmaster"
-    elif efficiency > 50: rank = "Architect"
-    elif efficiency > 10: rank = "Surgical Lead"
-    
+    if efficiency > 100:
+        rank = "Grandmaster"
+    elif efficiency > 50:
+        rank = "Architect"
+    elif efficiency > 10:
+        rank = "Surgical Lead"
+
     mastery_table.add_row("Surgical Efficiency", f"{efficiency:.1f}x")
     mastery_table.add_row("Project Rank", f"[{'green' if rank != 'Novice' else 'yellow'}]{rank}[/]")
 
@@ -150,7 +148,7 @@ def handle_welcome_command(_, engine, is_pro: bool):
         mastery_table,
         title="[bold magenta]🏆 Engineering Efficiency Dashboard[/bold magenta]",
         border_style="magenta",
-        padding=(1, 2)
+        padding=(1, 2),
     )
 
     # Display Dashboard
@@ -158,13 +156,14 @@ def handle_welcome_command(_, engine, is_pro: bool):
     console.print(Columns([help_panel, discovery_panel], equal=True, expand=True))
     console.print(spotlight_panel)
     console.print(Columns([cta_panel, tip_panel], equal=True, expand=True))
-    
+
     tier_label = "Enterprise" if is_pro else "Free Version"
     from yamlr.core.entrypoints.base import CORE_VERSION
+
     footer = (
         f"  [dim]Version: {CORE_VERSION} | Build: Stable | Identity: {tier_label}[/dim]\n"
         f"  [dim]Documentation: [link=https://yamlr.dev]https://yamlr.dev[/link] | Use [bold]yamlr completion --install[/bold] for autocomplete.[/dim]"
     )
     console.print(footer)
-    
+
     return 0

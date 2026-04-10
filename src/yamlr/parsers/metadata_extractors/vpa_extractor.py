@@ -8,12 +8,16 @@ Extracts:
 """
 
 from __future__ import annotations
+
 from typing import List
+
 from yamlr.models import ManifestIdentity, Shard
-__all__ = ['VPAExtractor']
+
+__all__ = ["VPAExtractor"]
 
 
 from .base_extractor import BaseMetadataExtractor
+
 
 class VPAExtractor(BaseMetadataExtractor):
     """Extracts target workload from VerticalPodAutoscaler."""

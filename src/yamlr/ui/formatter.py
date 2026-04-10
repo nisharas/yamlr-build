@@ -16,18 +16,20 @@ Version: 1.1.0 (Modular Decomposition)
 """
 
 from __future__ import annotations
-from typing import Any, Dict, List, Union, TYPE_CHECKING
+
+from typing import TYPE_CHECKING, Any, Dict, List, Union
+
 from rich.panel import Panel
 from rich.table import Table
 
 if TYPE_CHECKING:
     from yamlr.models import HealFileResult
 
-from yamlr.ui.formatter_report import ReportMixin, get_score_emoji
+from yamlr.core.entrypoints.base import get_console
 from yamlr.ui.formatter_batch import BatchMixin
-from yamlr.ui.formatter_summary import SummaryMixin
 from yamlr.ui.formatter_bench import BenchMixin
-from yamlr.cli.commands.base import get_console
+from yamlr.ui.formatter_report import ReportMixin, get_score_emoji
+from yamlr.ui.formatter_summary import SummaryMixin
 
 console = get_console()
 

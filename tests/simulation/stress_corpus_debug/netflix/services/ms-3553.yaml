@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-3553
+  labels:
+    app: ms-3553
+    dependency: ms-3554
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-3553
+  template:
+    metadata:
+      labels:
+        app: ms-3553
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-3554

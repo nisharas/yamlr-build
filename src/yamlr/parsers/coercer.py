@@ -1,9 +1,10 @@
 from __future__ import annotations
+
 import logging
-from typing import Any, Optional, Dict
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger("yamlr.parsers.coercer")
-__all__ = ['TypeCoercer']
+__all__ = ["TypeCoercer"]
 
 
 class TypeCoercer:
@@ -35,13 +36,38 @@ class TypeCoercer:
         if "x-kubernetes-int-or-string" in schema_def:
             return v
 
+        # [HEAL-6.5] Enum Typo Correction (e.g., 'Alway' -> 'Always')
+        enum_list = schema_def.get("enum")
+        if enum_list and isinstance(v, str):
+            v_lower = v.lower().strip()
+            # Exact match first
+            for e in enum_list:
+                if str(e).lower() == v_lower:
+                    v = e
+                    break
+            else:
+                # Fuzzy match if no exact match (Tier 0 Forensic)
+                if len(v) > 2:
+                    from difflib import get_close_matches
+
+                    # [PHASE 20 OMEGA FIX] Case-insensitive fuzzy matching for enums
+                    matches = get_close_matches(v_lower, [str(e).lower() for e in enum_list], n=1, cutoff=0.7)
+                    if matches:
+                        # Map back to original case from the enum definition
+                        for e in enum_list:
+                            if str(e).lower() == matches[0]:
+                                logger.debug(f"Coercer: Enum Typo Corrected '{v}' -> '{e}'")
+                                v = e
+                                break
+
         expected_type = schema_def.get("type")
         if not expected_type:
             return v
 
         # 2. Coerce to integer
         if expected_type == "integer":
-            if v == "": return None
+            if v == "":
+                return None
             try:
                 if isinstance(v, str):
                     # Handle float/scientific strings first (e.g., "1.0", "1e3")
@@ -55,7 +81,8 @@ class TypeCoercer:
 
         # 3. Coerce to boolean
         if expected_type == "boolean":
-            if v == "": return None
+            if v == "":
+                return None
             if isinstance(v, str):
                 v_lower = v.lower()
                 if v_lower in ("true", "yes", "on"):
@@ -68,7 +95,8 @@ class TypeCoercer:
 
         # 4. Coerce to number (float)
         if expected_type == "number":
-            if v == "": return None
+            if v == "":
+                return None
             try:
                 return float(v)
             except (ValueError, TypeError):

@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-7247
+  labels:
+    app: ms-7247
+    dependency: ms-7248
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-7247
+  template:
+    metadata:
+      labels:
+        app: ms-7247
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-7248

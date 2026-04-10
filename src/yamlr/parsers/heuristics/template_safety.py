@@ -11,7 +11,9 @@ Why: GitOps manifests often contain template logic that is technically
 
 import re
 from typing import Any, Dict
+
 from .base import BaseHeuristic
+
 
 class TemplateSafetyHeuristic(BaseHeuristic):
     """
@@ -27,7 +29,7 @@ class TemplateSafetyHeuristic(BaseHeuristic):
         return "Protects Helm/Jinja2 template variables"
 
     # Matches {{ ... }}, {% ... %}, and {# ... #}
-    TEMPLATE_PATTERN = re.compile(r'(\{\{.*?\}\}|\{\%.*?\%\}|\{\#.*?\#\})')
+    TEMPLATE_PATTERN = re.compile(r"(\{\{.*?\}\}|\{\%.*?\%\}|\{\#.*?\#\})")
 
     def apply(self, line: str, context: Dict[str, Any]) -> str:
         """
@@ -38,9 +40,9 @@ class TemplateSafetyHeuristic(BaseHeuristic):
             # We don't necessarily modify the line here, but we set a flag
             # in the context that subsequent heuristics in the pipeline can check.
             context["has_templates"] = True
-            
-            # [Aggressive Forgiveness] 
-            # If the line is JUST a template block, we should probably 
+
+            # [Aggressive Forgiveness]
+            # If the line is JUST a template block, we should probably
             # avoid ANY punctuation healing.
             stripped = line.strip()
             if stripped.startswith("{{") and stripped.endswith("}}"):

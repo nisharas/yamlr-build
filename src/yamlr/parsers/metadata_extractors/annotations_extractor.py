@@ -7,14 +7,16 @@ Extracts:
 """
 
 from __future__ import annotations
+
 from typing import List
 
 from yamlr.models import ManifestIdentity, Shard
-__all__ = ['AnnotationsExtractor']
 
+__all__ = ["AnnotationsExtractor"]
 
 
 from .base_extractor import BaseMetadataExtractor
+
 
 class AnnotationsExtractor(BaseMetadataExtractor):
     """Extracts annotation fields for cross-resource matching."""
@@ -41,7 +43,7 @@ class AnnotationsExtractor(BaseMetadataExtractor):
         if "metadata" in path_keys and "annotations" in path_keys:
             try:
                 if path_keys.index("metadata") == 0:
-                     return AnnotationsExtractor._apply_dict_extraction(shard, key, val, identity, "annotations")
+                    return AnnotationsExtractor._apply_dict_extraction(shard, key, val, identity, "annotations")
             except ValueError:
                 pass
 

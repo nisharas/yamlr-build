@@ -18,58 +18,64 @@ Automatically aligns Service selectors with Workload labels.
 """
 
 from __future__ import annotations
-import logging
+
 import difflib
-from typing import List, Dict, Any, Optional, TYPE_CHECKING
-from yamlr.models import ManifestIdentity, WORKLOAD_KINDS
+import logging
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
+
+from yamlr.models import WORKLOAD_KINDS, ManifestIdentity
 
 if TYPE_CHECKING:
     from yamlr.core.context import HealContext
 
 logger = logging.getLogger("yamlr.healers.semantic.selector")
-__all__ = ['ServiceSelectorHealer']
+__all__ = ["ServiceSelectorHealer"]
 
 
 class ServiceSelectorHealer:
     """Aligns Service selectors with workload labels."""
-    
-    def heal_docs(self, docs: List[Dict[str, Any]], identities: List[ManifestIdentity], context: Optional["HealContext"] = None) -> int:
+
+    def heal_docs(
+        self, docs: List[Dict[str, Any]], identities: List[ManifestIdentity], context: Optional["HealContext"] = None
+    ) -> int:
         """
         Scan and align selectors in-place within the documents.
         Returns the number of services fixed.
-        
+
         Why: Decomposed to resolve SonarQube complexity warnings per Audit Round 24.
         """
         modified_count = 0
         workloads = [ident for ident in identities if ident.kind in WORKLOAD_KINDS]
-        
+
         for doc in docs:
             if doc.get("kind") != "Service":
                 continue
-                
+
             if self._heal_service(doc, workloads, context):
                 modified_count += 1
-                    
+
         return modified_count
 
-    def _heal_service(self, doc: Dict[str, Any], workloads: List[ManifestIdentity], context: Optional["HealContext"]) -> bool:
+    def _heal_service(
+        self, doc: Dict[str, Any], workloads: List[ManifestIdentity], context: Optional["HealContext"]
+    ) -> bool:
         """Orchestrates healing for a single Service document."""
         spec = doc.get("spec")
         if not spec or not isinstance(spec, dict):
             return False
-            
+
         selector = spec.get("selector")
         if not selector or not isinstance(selector, dict):
             return False
-            
+
         svc_meta = doc.get("metadata", {})
         svc_name = svc_meta.get("name", "unknown")
         svc_ns = svc_meta.get("namespace", "default")
-        
+
         # 1. Skip if already functional
         if self._matches_existing(selector, svc_ns, workloads):
             return False
-            
+
         # 2. Find target and align
         target = self._find_best_target(svc_name, svc_ns, selector, workloads)
         if target and target.labels:
@@ -77,30 +83,35 @@ class ServiceSelectorHealer:
             if new_selector != selector:
                 spec["selector"] = new_selector
                 if context:
-                    from yamlr.models import HealAction
                     from yamlr.core.stages.boundaries import MutationScope
-                    context.prescribe(HealAction(
-                        stage="SelectorHealer",
-                        action_type="repair",
-                        target=f"Service/{svc_name}.spec.selector",
-                        description=f"Aligned Service selector with workload labels (Target: {target.name})",
-                        rationale=f"The Service selector was either misaligned or contained typos. Aligned to match the actual labels of workload '{target.name}'.",
-                        suggestion="Ensure Service selectors exactly match one or more labels on the target Pods.",
-                        severity="warning",
-                        rule_id="rule/selector-misalignment",
-                        scope=MutationScope.SPEC_SELECTOR
-                    ))
+                    from yamlr.models import HealAction
+
+                    context.prescribe(
+                        HealAction(
+                            stage="SelectorHealer",
+                            action_type="repair",
+                            target=f"Service/{svc_name}.spec.selector",
+                            description=f"Aligned Service selector with workload labels (Target: {target.name})",
+                            rationale=f"The Service selector was either misaligned or contained typos. Aligned to match the actual labels of workload '{target.name}'.",
+                            suggestion="Ensure Service selectors exactly match one or more labels on the target Pods.",
+                            severity="warning",
+                            rule_id="rule/selector-misalignment",
+                            scope=MutationScope.SPEC_SELECTOR,
+                        )
+                    )
                 return True
-            
+
         return False
 
-    def _find_best_target(self, name: str, namespace: str, selector: Dict[str, str], workloads: List[ManifestIdentity]) -> Optional[ManifestIdentity]:
+    def _find_best_target(
+        self, name: str, namespace: str, selector: Dict[str, str], workloads: List[ManifestIdentity]
+    ) -> Optional[ManifestIdentity]:
         """Finds the most likely intended workload target."""
         # A: Name match (Highest confidence)
         target = self._find_target_by_name(name, namespace, workloads)
         if target:
             return target
-            
+
         # B: Fuzzy match (Fallback)
         return self._find_best_fuzzy_match(selector, namespace, workloads)
 
@@ -112,34 +123,38 @@ class ServiceSelectorHealer:
                     return True
         return False
 
-    def _find_target_by_name(self, name: str, namespace: str, workloads: List[ManifestIdentity]) -> Optional[ManifestIdentity]:
+    def _find_target_by_name(
+        self, name: str, namespace: str, workloads: List[ManifestIdentity]
+    ) -> Optional[ManifestIdentity]:
         """Finds workload with the same name (often intended target)."""
         for w in workloads:
             if w.name == name and (w.namespace or "default") == namespace:
                 return w
         return None
 
-    def _find_best_fuzzy_match(self, selector: Dict[str, str], namespace: str, workloads: List[ManifestIdentity]) -> Optional[ManifestIdentity]:
+    def _find_best_fuzzy_match(
+        self, selector: Dict[str, str], namespace: str, workloads: List[ManifestIdentity]
+    ) -> Optional[ManifestIdentity]:
         """Finds workload with most similar label set."""
         best_w = None
-        best_score = 0.5 # Minimum 50% similarity
-        
+        best_score = 0.5  # Minimum 50% similarity
+
         for w in workloads:
             if (w.namespace or "default") != namespace or not w.labels:
                 continue
-                
+
             score = self._calculate_label_similarity(selector, w.labels)
             if score > best_score:
                 best_score = score
                 best_w = w
-                
+
         return best_w
 
     def _calculate_label_similarity(self, selector: Dict[str, str], labels: Dict[str, str]) -> float:
         """Calculates similarity score (0.0 to 1.0)."""
         matches = 0.0
         total = len(selector)
-        
+
         for k, v in selector.items():
             if labels.get(k) == v:
                 matches += 1.0
@@ -147,7 +162,7 @@ class ServiceSelectorHealer:
                 matches += self._fuzzy_value_match(str(v), str(labels[k]))
             else:
                 matches += self._fuzzy_key_match(k, v, labels)
-        
+
         return matches / total
 
     def _fuzzy_value_match(self, val1: str, val2: str) -> float:
@@ -208,36 +223,42 @@ class ServiceSelectorHealer:
             spec["selector"] = {"matchLabels": labels}
             modified = True
             if context:
-                from yamlr.models import HealAction
                 from yamlr.core.stages.boundaries import MutationScope
-                context.prescribe(HealAction(
-                    stage="SelectorHealer",
-                    action_type="repair",
-                    target=f"Deployment/{doc.get('metadata', {}).get('name', 'unknown')}.spec.selector",
-                    description="Inferred Deployment selector from template labels",
-                    rationale="Deployments require a selector to manage their underlying Pods. Aligned with template labels for consistency.",
-                    suggestion="Always define a .spec.selector that matches the .spec.template.metadata.labels.",
-                    severity="info",
-                    rule_id="rule/missing-deployment-selector",
-                    scope=MutationScope.STRUCTURAL
-                ))
+                from yamlr.models import HealAction
+
+                context.prescribe(
+                    HealAction(
+                        stage="SelectorHealer",
+                        action_type="repair",
+                        target=f"Deployment/{doc.get('metadata', {}).get('name', 'unknown')}.spec.selector",
+                        description="Inferred Deployment selector from template labels",
+                        rationale="Deployments require a selector to manage their underlying Pods. Aligned with template labels for consistency.",
+                        suggestion="Always define a .spec.selector that matches the .spec.template.metadata.labels.",
+                        severity="info",
+                        rule_id="rule/missing-deployment-selector",
+                        scope=MutationScope.STRUCTURAL,
+                    )
+                )
         elif isinstance(selector, dict) and "matchLabels" not in selector:
             selector["matchLabels"] = labels
             modified = True
             if context:
-                from yamlr.models import HealAction
                 from yamlr.core.stages.boundaries import MutationScope
-                context.prescribe(HealAction(
-                    stage="SelectorHealer",
-                    action_type="repair",
-                    target=f"Deployment/{doc.get('metadata', {}).get('name', 'unknown')}.spec.selector.matchLabels",
-                    description="Upgraded Deployment selector to matchLabels",
-                    rationale="Modern Kubernetes Deployments use matchLabels for selecting Pods.",
-                    suggestion="Ensure selectors use the matchLabels format.",
-                    severity="info",
-                    rule_id="rule/legacy-selector",
-                    scope=MutationScope.STRUCTURAL
-                ))
+                from yamlr.models import HealAction
+
+                context.prescribe(
+                    HealAction(
+                        stage="SelectorHealer",
+                        action_type="repair",
+                        target=f"Deployment/{doc.get('metadata', {}).get('name', 'unknown')}.spec.selector.matchLabels",
+                        description="Upgraded Deployment selector to matchLabels",
+                        rationale="Modern Kubernetes Deployments use matchLabels for selecting Pods.",
+                        suggestion="Ensure selectors use the matchLabels format.",
+                        severity="info",
+                        rule_id="rule/legacy-selector",
+                        scope=MutationScope.STRUCTURAL,
+                    )
+                )
 
         return modified
 

@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-2974
+  labels:
+    app: ms-2974
+    dependency: ms-2975
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-2974
+  template:
+    metadata:
+      labels:
+        app: ms-2974
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-2975

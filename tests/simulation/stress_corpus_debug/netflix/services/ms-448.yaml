@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-448
+  labels:
+    app: ms-448
+    dependency: ms-449
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-448
+  template:
+    metadata:
+      labels:
+        app: ms-448
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-449

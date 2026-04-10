@@ -1,11 +1,15 @@
 import os
 import time
-import yamlr_native
+
 import psutil
+
+import yamlr_native
+
 
 def get_memory_usage():
     process = psutil.Process(os.getpid())
     return process.memory_info().rss / (1024 * 1024)  # MB
+
 
 def test_memory_efficiency():
     # Synthetic manifest for stability
@@ -42,8 +46,9 @@ data:
     # Clear memory
     del full_docs
     import gc
+
     gc.collect()
-    
+
     # Measure Metadata Extraction (New Way)
     mem_before = get_memory_usage()
     start = time.time()
@@ -55,14 +60,17 @@ data:
     # Parity Check on metadata
     assert len(meta_docs) > 0
     print(f"Parity Check: {len(meta_docs)} documents extracted.")
-    
+
     # Efficiency Check
-    saving_ratio = (mem_after_full - mem_before) / (mem_after_meta - mem_before) if (mem_after_meta - mem_before) > 0 else 100
+    saving_ratio = (
+        (mem_after_full - mem_before) / (mem_after_meta - mem_before) if (mem_after_meta - mem_before) > 0 else 100
+    )
     print(f"Memory Saving Ratio: {saving_ratio:.2f}x")
-    
+
     # Threshold check: Metadata extraction should be MUCH leaner
     # (Actually, for 20MB content, metadata extraction should use < 50MB extra)
-    assert (mem_after_meta - mem_before) < 100 
+    assert (mem_after_meta - mem_before) < 100
+
 
 if __name__ == "__main__":
     test_memory_efficiency()

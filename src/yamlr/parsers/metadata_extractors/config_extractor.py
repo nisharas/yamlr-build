@@ -10,14 +10,16 @@ Extracts:
 """
 
 from __future__ import annotations
+
 from typing import List
 
 from yamlr.models import ManifestIdentity, Shard
-__all__ = ['ConfigExtractor']
 
+__all__ = ["ConfigExtractor"]
 
 
 from .base_extractor import BaseMetadataExtractor
+
 
 class ConfigExtractor(BaseMetadataExtractor):
     """Extracts ConfigMap/Secret references from Pod specs."""

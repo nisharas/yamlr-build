@@ -10,13 +10,17 @@ Decoupled from YamlrEngine to support future S3/Remote backends.
 """
 
 from __future__ import annotations
-import os
-import time
-import shutil
+
 import logging
+import os
+import shutil
 import subprocess
+import time
 from pathlib import Path
-from typing import Generator, List, Tuple, Dict, Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, Dict, Generator, List, Optional, Tuple
+
+if TYPE_CHECKING:
+    pass
 
 logger = logging.getLogger("yamlr.dev")
 
@@ -27,13 +31,13 @@ class FileSystemManager:
     """
     Abstration layer for local file system operations.
     """
-    
+
     # [Security] Prevent OOM by limiting file reading size (50MB default)
-    MAX_FILE_SIZE = 50 * 1024 * 1024 
+    MAX_FILE_SIZE = 50 * 1024 * 1024
 
     def __init__(self, workspace_root: Path, app_name: str = "yamlr"):
         """Initializes the file system manager for a given workspace.
-        
+
         Why: To establish a secure root for all manifest-related I/O and telemetry persistence.
         """
         self.workspace = workspace_root.resolve()
@@ -44,8 +48,8 @@ class FileSystemManager:
     def _is_safe_path(self, path: Path) -> bool:
         """
         Verifies if a path is contained within the authorized workspace.
-        
-        Why: To prevent Path Traversal attacks (CWE-22) where a malicious 
+
+        Why: To prevent Path Traversal attacks (CWE-22) where a malicious
              manifest could trick the engine into reading or writing system files.
         Args:
             path: The path to validate.
@@ -74,7 +78,7 @@ class FileSystemManager:
             except (PermissionError, IOError) as e:
                 # On Windows, PermissionError is common during lock contention
                 if os.name == "nt" and attempt < max_attempts - 1:
-                    time.sleep(delay * (2 ** attempt)) # Exponential backoff
+                    time.sleep(delay * (2**attempt))  # Exponential backoff
                     last_err = e
                     continue
                 raise e
@@ -92,7 +96,7 @@ class FileSystemManager:
         # Ensure hidden state dir exists
         if not self.state_dir.exists():
             self.state_dir.mkdir(exist_ok=True)
-            
+
         # [Security] Self-Healing: Cleanup stale cleartext fragments on startup
         self.cleanup_fragments()
 
@@ -101,12 +105,15 @@ class FileSystemManager:
         if not self.backup_dir.exists():
             # [Security] Guard against TOCTOU and symlink races (VULN-009)
             if self.backup_dir.is_symlink():
-                logger.error(f"Security Alert: Backup directory {self.backup_dir} is a symlink. Potential hijacking attempt.")
+                logger.error(
+                    f"Security Alert: Backup directory {self.backup_dir} is a symlink. Potential hijacking attempt."
+                )
                 from yamlr.core.exceptions import YamlrSecurityError
+
                 raise YamlrSecurityError(f"Secure vault path {self.backup_dir} is a symlink.")
 
-            # Potential Race Condition: Another process could create it as a symlink 
-            # between check and mkdir. Python 3.12+ mkdir(exist_ok=True) is mostly 
+            # Potential Race Condition: Another process could create it as a symlink
+            # between check and mkdir. Python 3.12+ mkdir(exist_ok=True) is mostly
             # atomic, but we double-check permissions.
             try:
                 # 0o700 = Only current user can read/write/execute
@@ -124,17 +131,18 @@ class FileSystemManager:
         # [Security] Prevent Path Traversal (Read-side)
         if not self._is_safe_path(path):
             from yamlr.core.exceptions import YamlrSecurityError
+
             raise YamlrSecurityError(
                 f"Security violation: Refusing to read file outside workspace: {path}",
-                remediation="Ensure all scanned files are contained within the project root."
+                remediation="Ensure all scanned files are contained within the project root.",
             )
 
         # [Security] Guard against massive files (OOM/DoS)
         try:
             if path.stat().st_size > self.MAX_FILE_SIZE:
-                raise IOError(f"File too large: {path.name} (Max {self.MAX_FILE_SIZE // (1024*1024)}MB)")
+                raise IOError(f"File too large: {path.name} (Max {self.MAX_FILE_SIZE // (1024 * 1024)}MB)")
         except (FileNotFoundError, PermissionError):
-            pass # Let read_text handle these naturally
+            pass  # Let read_text handle these naturally
 
         return path.read_text(encoding="utf-8-sig")
 
@@ -142,12 +150,12 @@ class FileSystemManager:
         """
         Atomically writes content to file with fsync for durability.
 
-        This method ensures that the file is never left in a partially-written 
-        state. It writes to a temporary file first, flushes it to physical disk, 
+        This method ensures that the file is never left in a partially-written
+        state. It writes to a temporary file first, flushes it to physical disk,
         and then uses an atomic rename.
 
         Security Measures:
-        - Prevents symlink traversal: Explicitly refuses to write if the 
+        - Prevents symlink traversal: Explicitly refuses to write if the
           target is a symlink.
 
         Args:
@@ -160,9 +168,10 @@ class FileSystemManager:
         # [Security] Prevent Path Traversal (Write-side)
         if not self._is_safe_path(target_path):
             from yamlr.core.exceptions import YamlrSecurityError
+
             raise YamlrSecurityError(
                 f"Security violation: Refusing to write to file outside workspace: {target_path}",
-                remediation="Yamlr strictly enforces workspace boundaries for all write operations."
+                remediation="Yamlr strictly enforces workspace boundaries for all write operations.",
             )
 
         # [Security] Prevent symlink traversal attacks (TOCTOU Hardening [HIGH-3])
@@ -170,23 +179,31 @@ class FileSystemManager:
         try:
             target_stat = target_path.lstat()
             import stat
+
             if stat.S_ISLNK(target_stat.st_mode):
                 from yamlr.core.exceptions import YamlrSecurityError
+
                 raise YamlrSecurityError(f"Security violation: Refusing to write to symlink '{target_path}'")
         except FileNotFoundError:
-            pass # Target doesn't exist, safe to proceed
+            pass  # Target doesn't exist, safe to proceed
+
+        # Atomic write with local retry for Windows resilience
+        # [PHASE 40 REVELATION] Transational batching removed in favor of atomic_write primitive.
 
         # [Security] Centralized Tmp Isolation
         # Why: Prevents 'Cleartext Fragment' leaks by isolating .tmp files in a restricted dir.
         tmp_dir = self.state_dir / "tmp"
         tmp_dir.mkdir(exist_ok=True)
-        if os.name != "nt": os.chmod(tmp_dir, 0o700)
-        else: self._set_windows_permissions(tmp_dir)
+        if os.name != "nt":
+            os.chmod(tmp_dir, 0o700)
+        else:
+            self._set_windows_permissions(tmp_dir)
 
         # Unique temp name to prevent collisions/races
         import uuid
+
         temp_file = tmp_dir / f"{target_path.name}.{uuid.uuid4().hex}.tmp"
-        
+
         try:
             with open(temp_file, "w", encoding="utf-8") as f:
                 f.write(content)
@@ -205,17 +222,18 @@ class FileSystemManager:
     def cleanup_fragments(self):
         """
         Clears stale .tmp files from the secure state-dir.
-        
+
         Why: Eliminates 'Cleartext Fragments' left behind by abnormal exits/crashes.
         """
         tmp_dir = self.state_dir / "tmp"
         if not tmp_dir.exists():
             return
-            
+
         try:
             for f in tmp_dir.glob("*.tmp"):
                 # Prune if older than 1 hour (safety buffer for concurrent runs)
                 import time
+
                 if time.time() - f.stat().st_mtime > 3600:
                     f.unlink()
         except Exception as e:
@@ -231,9 +249,10 @@ class FileSystemManager:
         # [Security] Prevent Arbitrary File Read via Mirroring (VULN-005)
         if not self._is_safe_path(target_path):
             from yamlr.core.exceptions import YamlrSecurityError
+
             raise YamlrSecurityError(
                 f"Security violation: Refusing to backup file outside workspace: {target_path}",
-                remediation="Yamlr only performs backups for files within the active project root."
+                remediation="Yamlr only performs backups for files within the active project root.",
             )
 
         try:
@@ -250,6 +269,7 @@ class FileSystemManager:
         # [Hardening] Race-proof & Unique backup naming
         import time
         import uuid
+
         timestamp = int(time.time())
         unique_id = uuid.uuid4().hex[:8]
         backup_name = f"{target_path.stem}.{timestamp}-{unique_id}{target_path.suffix}"
@@ -258,6 +278,7 @@ class FileSystemManager:
         # Baseline MAX_PATH is 260. We use 200 as a safe threshold for the parent dir.
         if len(str(backup_dest_dir)) > 200:
             import hashlib
+
             path_hash = hashlib.sha256(str(rel_path.parent).encode()).hexdigest()[:12]
             backup_dest_dir = self.backup_dir / "sharded" / path_hash
 
@@ -287,11 +308,13 @@ class FileSystemManager:
             username = os.environ.get("USERNAME")
             if username:
                 from yamlr.core.logging_config import mask_path
+
                 cmd = ["icacls", str(path), "/inheritance:r", "/grant:r", f"{username}:F"]
                 subprocess.run(cmd, capture_output=True, check=True, text=True)
                 logger.debug(f"Applied Windows ACLs to {mask_path(path)}")
         except Exception as e:
             from yamlr.core.logging_config import mask_path
+
             logger.warning(f"Failed to apply Windows ACLs to {mask_path(path)}: {e}")
 
     def _rotate_backups(self, backup_dir: Path, stem: str, suffix: str, keep: int = 5) -> None:
@@ -314,16 +337,12 @@ class FileSystemManager:
         except Exception as e:
             logger.warning(f"Backup rotation warning: {e}")
 
-    def crawl(
-        self, root_path: Path, extensions: List[str], max_depth: int
-    ) -> Generator[Tuple[Path, str], None, None]:
+    def crawl(self, root_path: Path, extensions: List[str], max_depth: int) -> Generator[Tuple[Path, str], None, None]:
         """
         Generator that yields (absolute_path, relative_path_str) for matching files.
         Handles depth limiting and security checks.
         """
-        ext_set = {
-            e.strip() if e.startswith(".") else f".{e.strip()}" for e in extensions
-        }
+        ext_set = {e.strip() if e.startswith(".") else f".{e.strip()}" for e in extensions}
 
         # Verify root exists
         if not root_path.exists():

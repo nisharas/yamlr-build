@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import os
 
 files = [
@@ -18,15 +19,15 @@ files = [
     r"D:\yamlr\scripts\compute_metrics.py",
     r"D:\yamlr\scripts\fuzz_lexer.py",
     r"D:\yamlr\scripts\package.py",
-    r"D:\yamlr\scripts\sync_actions.py"
+    r"D:\yamlr\scripts\sync_actions.py",
 ]
 
 for file_path in files:
     if os.path.exists(file_path):
-        with open(file_path, 'r', encoding='utf-8') as f:
+        with open(file_path, "r", encoding="utf-8") as f:
             content = f.read()
-        if 'from __future__ import annotations' not in content:
-            new_content = 'from __future__ import annotations\n' + content
-            with open(file_path, 'w', encoding='utf-8') as f:
+        if "from __future__ import annotations" not in content:
+            new_content = "from __future__ import annotations\n" + content
+            with open(file_path, "w", encoding="utf-8") as f:
                 f.write(new_content)
             print(f"Updated {file_path}")

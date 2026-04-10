@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-3297
+  labels:
+    app: ms-3297
+    dependency: ms-3298
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-3297
+  template:
+    metadata:
+      labels:
+        app: ms-3297
+    spec:
+      containers:
+      - name: main
+        image: netflix/service:latest
+        env:
+        - name: TARGET_SERVICE
+          value: ms-3298

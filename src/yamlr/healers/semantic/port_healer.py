@@ -11,10 +11,12 @@ name (e.g. 'http-svc') and the container defines a close match (e.g. 'http').
 """
 
 from __future__ import annotations
+
 import difflib
 import logging
-from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
-from yamlr.models import ManifestIdentity, WORKLOAD_KINDS
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+
+from yamlr.models import WORKLOAD_KINDS, ManifestIdentity
 
 if TYPE_CHECKING:
     from yamlr.core.context import HealContext
@@ -25,8 +27,7 @@ logger = logging.getLogger("yamlr.healers.semantic.port")
 # 0.60 captures realistic K8s port-name suffix typos (e.g. 'http-svc' → 'http')
 # while rejecting completely unrelated names (e.g. 'redis-port' vs 'http' ~0.25).
 _NAMED_PORT_SIMILARITY_THRESHOLD = 0.60
-__all__ = ['PortMismatchHealer']
-
+__all__ = ["PortMismatchHealer"]
 
 
 class PortMismatchHealer:
@@ -38,9 +39,12 @@ class PortMismatchHealer:
            A. Single-container-port ambiguity (original strategy).
            B. Named-port typos on multi-port workloads (new PRO-12-05 strategy).
     """
-    def heal_docs(self, docs: List[Dict[str, Any]], identities: List[ManifestIdentity], context: Optional["HealContext"] = None) -> int:
+
+    def heal_docs(
+        self, docs: List[Dict[str, Any]], identities: List[ManifestIdentity], context: Optional["HealContext"] = None
+    ) -> int:
         """Scan and align ports in-place within the documents.
-        
+
         Why: Decomposed to resolve SonarQube complexity warnings per Audit Round 24.
         """
         modified_count = 0
@@ -49,68 +53,92 @@ class PortMismatchHealer:
         for doc in docs:
             if doc.get("kind") != "Service":
                 continue
-            
+
             if self._heal_service_ports(doc, workloads, docs, context):
                 modified_count += 1
-                
+
         return modified_count
 
-    def _heal_service_ports(self, doc: Dict[str, Any], workloads: List[ManifestIdentity], all_docs: List[Dict[str, Any]], context: Optional["HealContext"]) -> bool:
+    def _heal_service_ports(
+        self,
+        doc: Dict[str, Any],
+        workloads: List[ManifestIdentity],
+        all_docs: List[Dict[str, Any]],
+        context: Optional["HealContext"],
+    ) -> bool:
         """Heals ports for a single Service document."""
         spec = doc.get("spec")
         if not (isinstance(spec, dict) and spec.get("selector") and isinstance(spec.get("ports"), list)):
             return False
-            
+
         svc_meta = doc.get("metadata", {})
         svc_name = svc_meta.get("name", "unknown")
         svc_ns = svc_meta.get("namespace", "default")
-        
+
         target_workload = self._find_matching_workload(spec["selector"], svc_ns, workloads)
         if not (target_workload and target_workload.container_ports):
             return False
-            
+
         w_ports = [str(p) for p in target_workload.container_ports]
         w_port_names = self._extract_named_ports(target_workload, all_docs)
-        
+
         doc_modified = False
         for s_port in spec["ports"]:
             if not isinstance(s_port, dict):
                 continue
             if self._align_port_entry(s_port, w_ports, w_port_names, svc_name, target_workload, context):
                 doc_modified = True
-                
+
         return doc_modified
 
-    def _find_matching_workload(self, selector: Dict[str, str], namespace: str, workloads: List[ManifestIdentity]) -> Optional[ManifestIdentity]:
+    def _find_matching_workload(
+        self, selector: Dict[str, str], namespace: str, workloads: List[ManifestIdentity]
+    ) -> Optional[ManifestIdentity]:
         """Finds the workload targeted by the Service selector."""
         for w in workloads:
             if (w.namespace or "default") == namespace and self._labels_match(selector, w.labels):
                 return w
         return None
 
-    def _align_port_entry(self, s_port: Dict[str, Any], w_ports: List[str], w_port_names: Dict[str, int], svc_name: str, target_workload: ManifestIdentity, context: Optional["HealContext"]) -> bool:
+    def _align_port_entry(
+        self,
+        s_port: Dict[str, Any],
+        w_ports: List[str],
+        w_port_names: Dict[str, int],
+        svc_name: str,
+        target_workload: ManifestIdentity,
+        context: Optional["HealContext"],
+    ) -> bool:
         """Aligns a single port entry using multi-strategy logic."""
         target = s_port.get("targetPort", s_port.get("port"))
         if not target or str(target) in w_ports:
             return False
-            
+
         # Strategy A: Single-port ambiguity
         if len(w_ports) == 1:
             return self._apply_strategy_a(s_port, target, w_ports[0], svc_name, target_workload, context)
-            
+
         # Strategy B: Named-port fuzzy matching
         if isinstance(target, str) and w_port_names:
             return self._apply_strategy_b(s_port, target, w_port_names, svc_name, context)
-            
+
         return False
 
-    def _apply_strategy_a(self, s_port: Dict[str, Any], old_target: Any, new_target: str, svc_name: str, target_workload: ManifestIdentity, context: Optional["HealContext"]) -> bool:
+    def _apply_strategy_a(
+        self,
+        s_port: Dict[str, Any],
+        old_target: Any,
+        new_target: str,
+        svc_name: str,
+        target_workload: ManifestIdentity,
+        context: Optional["HealContext"],
+    ) -> bool:
         """Strategy A: Single-container-port auto-alignment."""
         try:
             val = int(new_target)
         except ValueError:
             val = new_target
-            
+
         s_port["targetPort"] = val
         logger.info(
             f"✨ Port Surgery [A]: Service '{svc_name}' targetPort "
@@ -118,22 +146,32 @@ class PortMismatchHealer:
             f"{target_workload.kind}/{target_workload.name})"
         )
         if context:
-            from yamlr.models import HealAction
             from yamlr.core.stages.boundaries import MutationScope
-            context.prescribe(HealAction(
-                stage="PortHealer",
-                action_type="repair",
-                target=f"Service/{svc_name}.spec.ports",
-                description=f"Aligned Service targetPort {old_target} -> {val}",
-                rationale=f"The Service targetPort was ambiguous or mismatched. Aligned with the single available container port in workload {target_workload.kind}/{target_workload.name}.",
-                suggestion="Ensure targetPort matches a valid containerPort or port name in the target Pod.",
-                severity="warning",
-                rule_id="rule/port-mismatch",
-                scope=MutationScope.SPEC_PORTS
-            ))
+            from yamlr.models import HealAction
+
+            context.prescribe(
+                HealAction(
+                    stage="PortHealer",
+                    action_type="repair",
+                    target=f"Service/{svc_name}.spec.ports",
+                    description=f"Aligned Service targetPort {old_target} -> {val}",
+                    rationale=f"The Service targetPort was ambiguous or mismatched. Aligned with the single available container port in workload {target_workload.kind}/{target_workload.name}.",
+                    suggestion="Ensure targetPort matches a valid containerPort or port name in the target Pod.",
+                    severity="warning",
+                    rule_id="rule/port-mismatch",
+                    scope=MutationScope.SPEC_PORTS,
+                )
+            )
         return True
 
-    def _apply_strategy_b(self, s_port: Dict[str, Any], target_name: str, w_port_names: Dict[str, int], svc_name: str, context: Optional["HealContext"]) -> bool:
+    def _apply_strategy_b(
+        self,
+        s_port: Dict[str, Any],
+        target_name: str,
+        w_port_names: Dict[str, int],
+        svc_name: str,
+        context: Optional["HealContext"],
+    ) -> bool:
         """Strategy B: Named-port fuzzy matching."""
         best_num, ratio = self._fuzzy_match_named_port(target_name, w_port_names)
         if best_num is not None and ratio >= _NAMED_PORT_SIMILARITY_THRESHOLD:
@@ -144,19 +182,22 @@ class PortMismatchHealer:
                 f"score={ratio:.2f})"
             )
             if context:
-                from yamlr.models import HealAction
                 from yamlr.core.stages.boundaries import MutationScope
-                context.prescribe(HealAction(
-                    stage="PortHealer",
-                    action_type="repair",
-                    target=f"Service/{svc_name}.spec.ports",
-                    description=f"Aligned fuzzy Service targetPort '{target_name}' -> {best_num}",
-                    rationale=f"The Service targetPort name '{target_name}' was a fuzzy match for container port {best_num} (score: {ratio:.2f}).",
-                    suggestion="Use the exact containerPort number or name defined in the Pod spec.",
-                    severity="warning",
-                    rule_id="rule/fuzzy-port-match",
-                    scope=MutationScope.SPEC_PORTS
-                ))
+                from yamlr.models import HealAction
+
+                context.prescribe(
+                    HealAction(
+                        stage="PortHealer",
+                        action_type="repair",
+                        target=f"Service/{svc_name}.spec.ports",
+                        description=f"Aligned fuzzy Service targetPort '{target_name}' -> {best_num}",
+                        rationale=f"The Service targetPort name '{target_name}' was a fuzzy match for container port {best_num} (score: {ratio:.2f}).",
+                        suggestion="Use the exact containerPort number or name defined in the Pod spec.",
+                        severity="warning",
+                        rule_id="rule/fuzzy-port-match",
+                        scope=MutationScope.SPEC_PORTS,
+                    )
+                )
             return True
         return False
 
@@ -164,9 +205,7 @@ class PortMismatchHealer:
     # Helpers
     # ------------------------------------------------------------------
 
-    def _labels_match(
-        self, selector: Dict[str, str], labels: Optional[Dict[str, str]]
-    ) -> bool:
+    def _labels_match(self, selector: Dict[str, str], labels: Optional[Dict[str, str]]) -> bool:
         """Returns True if all selector keys/values are present in the labels.
 
         Why: Services select Pods by labels; we replicate that matching logic.
@@ -177,6 +216,7 @@ class PortMismatchHealer:
             if labels.get(k) != v:
                 return False
         return True
+
     def _extract_named_ports(
         self,
         workload: ManifestIdentity,
@@ -186,22 +226,14 @@ class PortMismatchHealer:
         doc = self._find_workload_doc(workload, docs)
         if not doc:
             return {}
-            
-        containers = (
-            doc.get("spec", {})
-            .get("template", {})
-            .get("spec", {})
-            .get("containers", [])
-        )
+
+        containers = doc.get("spec", {}).get("template", {}).get("spec", {}).get("containers", [])
         return self._collect_container_ports(containers)
 
     def _find_workload_doc(self, workload: ManifestIdentity, docs: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         """Finds the raw document corresponding to a ManifestIdentity."""
         for doc in docs:
-            if (
-                doc.get("kind") == workload.kind
-                and doc.get("metadata", {}).get("name") == workload.name
-            ):
+            if doc.get("kind") == workload.kind and doc.get("metadata", {}).get("name") == workload.name:
                 return doc
         return None
 
@@ -240,9 +272,7 @@ class PortMismatchHealer:
         best_ratio: float = 0.0
 
         for port_name, port_number in named_ports.items():
-            ratio = difflib.SequenceMatcher(
-                None, target_name.lower(), port_name.lower()
-            ).ratio()
+            ratio = difflib.SequenceMatcher(None, target_name.lower(), port_name.lower()).ratio()
             if ratio > best_ratio:
                 best_ratio = ratio
                 best_number = port_number

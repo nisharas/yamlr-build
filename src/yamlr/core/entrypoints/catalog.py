@@ -3,13 +3,14 @@ CATALOG COMMAND (Hidden)
 """
 
 from __future__ import annotations
+
 import logging
+
 from yamlr.core.catalog_manager import CatalogManager
 from yamlr.core.entrypoints.base import get_console
 
 logger = logging.getLogger("yamlr.cli.catalog")
-__all__ = ['handle_catalog_command']
-
+__all__ = ["handle_catalog_command"]
 
 
 def handle_catalog_command(args, target_cluster_version):
@@ -64,10 +65,11 @@ def _handle_sync(console, catalog_mgr):
 
 def _handle_status(console, catalog_mgr, target_v):
     from yamlr.core.engine.version_utils import get_default_cluster_version
+
     v = target_v or get_default_cluster_version() or "v1.31"
     resolved = catalog_mgr.resolve_catalog(v)
     source = "Local Cache" if ".yamlr" in resolved.lower() else "Bundled/Fallback"
-    
+
     console.print(f"Target Version: [green]{v}[/green]")
     console.print(f"Resolved Path:  [dim]{resolved}[/dim]")
     console.print(f"Source:         [bold cyan]{source}[/bold cyan]")

@@ -2,31 +2,48 @@
 Yamlr CATALOG PIPELINE
 ----------------------
 Automates the retrieval and distillation of Kubernetes OpenAPI schemas.
-This ensures Yamlr stays compatible with the latest K8s releases without 
+This ensures Yamlr stays compatible with the latest K8s releases without
 manual updates.
 
 Usage:
   python scripts/catalog_pipeline.py --version 1.31
 """
 
-import json
 import argparse
-import urllib.request
+import json
 import logging
 import sys
+import urllib.request
 from pathlib import Path
-from typing import Dict, Any, List, Set, Optional
+from typing import Any, Dict, List, Optional, Set
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger("catalog-pipeline")
 
 # Core resources that Yamlr focuses on for validation and healing
 CORE_RESOURCES = [
-    "Namespace", "ServiceAccount", "Pod", "PodTemplateSpec", "PodSpec", 
-    "PodSecurityContext", "ContainerSecurityContext", "Probe", "Deployment", 
-    "StatefulSet", "DaemonSet", "JobSpec", "Job", "JobTemplateSpec", "CronJob", 
-    "Service", "Ingress", "ConfigMap", "Secret", "ReplicaSet", 
-    "PersistentVolume", "PersistentVolumeClaim"
+    "Namespace",
+    "ServiceAccount",
+    "Pod",
+    "PodTemplateSpec",
+    "PodSpec",
+    "PodSecurityContext",
+    "ContainerSecurityContext",
+    "Probe",
+    "Deployment",
+    "StatefulSet",
+    "DaemonSet",
+    "JobSpec",
+    "Job",
+    "JobTemplateSpec",
+    "CronJob",
+    "Service",
+    "Ingress",
+    "ConfigMap",
+    "Secret",
+    "ReplicaSet",
+    "PersistentVolume",
+    "PersistentVolumeClaim",
 ]
 
 # Mapping of distilled names to their full OpenAPI definition paths (heuristics)
@@ -66,8 +83,9 @@ FLATTEN_COMPONENTS = [
     "io.k8s.api.core.v1.TCPSocketAction",
     "io.k8s.api.core.v1.ExecAction",
     "io.k8s.api.core.v1.ResourceList",
-    "io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta"
+    "io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta",
 ]
+
 
 class CatalogDistiller:
     def __init__(self, openapi_data: Dict[str, Any]):
@@ -89,30 +107,30 @@ class CatalogDistiller:
 
     def _process_definition(self, def_full_name: str, depth: int) -> Dict[str, Any]:
         """Process a definition into distilled format."""
-        if depth > 5: # Safety break for deep recursions
+        if depth > 5:  # Safety break for deep recursions
             return {"type": "object"}
 
         definition = self.definitions.get(def_full_name, {})
         result = {"fields": {}}
-        
+
         properties = definition.get("properties", {})
         for prop_name, prop_data in properties.items():
             result["fields"][prop_name] = self._process_property(prop_data, depth + 1)
-            
+
         return result
 
     def _process_property(self, prop_data: Dict[str, Any], depth: int) -> Dict[str, Any]:
         """Convert an OpenAPI property to Yamlr format."""
-        
+
         # Handle References
         if "$ref" in prop_data:
             ref_path = prop_data["$ref"]
             ref_full_name = ref_path.split("/")[-1]
-            
+
             # If it's a top-level distilled resource, use its ref name
             if ref_full_name in self.full_to_short:
                 return {"ref": self.full_to_short[ref_full_name]}
-            
+
             # If it's a component we want to FLATTEN, recursively process it
             if ref_full_name in FLATTEN_COMPONENTS or depth < 3:
                 expanded = self._process_definition(ref_full_name, depth)
@@ -124,10 +142,10 @@ class CatalogDistiller:
         if prop_data.get("type") == "array":
             items = prop_data.get("items", {})
             res = {"type": "array"}
-            
+
             # Recurse into item type
             item_distilled = self._process_property(items, depth)
-            
+
             if "ref" in item_distilled:
                 res["item_type"] = "object"
                 # If we have the definition for the ref, try to include fields for validation
@@ -143,7 +161,7 @@ class CatalogDistiller:
                 res["item_type"] = item_distilled["type"]
             else:
                 res["item_type"] = "object"
-                
+
             return res
 
         # Handle Simple Types
@@ -156,19 +174,21 @@ class CatalogDistiller:
             return {"type": "boolean"}
         if openapi_type == "number":
             return {"type": "number"}
-        
+
         # Special K8s int-or-string
         if "x-kubernetes-int-or-string" in prop_data:
             return {"type": "int_or_string"}
 
         return {"type": "object"}
 
+
 def get_openapi_url(version: str) -> str:
     # v1.31 -> v1.31.0
     tag = f"v{version.lstrip('v')}"
-    if tag.count('.') == 1:
+    if tag.count(".") == 1:
         tag += ".0"
     return f"https://raw.githubusercontent.com/kubernetes/kubernetes/{tag}/api/openapi-spec/swagger.json"
+
 
 def main():
     parser = argparse.ArgumentParser(description="Distill K8s OpenAPI to Yamlr Catalog")
@@ -178,7 +198,7 @@ def main():
 
     url = get_openapi_url(args.version)
     logger.info(f"Downloading OpenAPI spec for {args.version} from {url}...")
-    
+
     try:
         with urllib.request.urlopen(url) as response:
             data = json.loads(response.read().decode())
@@ -194,6 +214,7 @@ def main():
         json.dump(distilled_data, f, indent=2)
 
     logger.info(f"Successfully distilled catalog to {output_path}")
+
 
 if __name__ == "__main__":
     main()
