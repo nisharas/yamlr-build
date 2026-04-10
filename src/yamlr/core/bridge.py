@@ -294,11 +294,11 @@ class YamlrBridge:
 
     @staticmethod
     def has_pro_license_file() -> bool:
-        """Verifies if a pro license key file exists on the local machine.
-
-        Why: Quick filesystem check to determine if Pro features should be considered.
-        """
-        return (Path.home() / ".yamlr" / "license.key").exists()
+        """Verifies if a pro session exists on the local machine."""
+        # Check both legacy and modern paths [Hardening]
+        modern = (Path.home() / ".yamlr" / "credentials").exists()
+        legacy = (Path.home() / ".yamlr" / "license.key").exists()
+        return modern or legacy
 
     @staticmethod
     def is_offline_mode() -> bool:

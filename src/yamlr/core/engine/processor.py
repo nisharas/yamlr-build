@@ -15,6 +15,7 @@ from typing import Any, Dict, Generator, List, Optional
 
 from yamlr.core.forensics import ForensicLogger
 from yamlr.models import HealFileResult, HealStatus
+from yamlr.core.utils.journal import HealJournal
 
 logger = logging.getLogger("yamlr.engine.processor")
 
@@ -79,42 +80,59 @@ def batch_heal(
 
     # 2. Execution Cycle
     results = []
+    
+    # 🧪 Forensic Journaling: Initialize WAL
+    journal = None
+    if not dry_run:
+        journal = HealJournal(engine.workspace)
+        engine.journal = journal
+        journal.start_batch()
 
     from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        BarColumn(),
-        TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-        TimeElapsedColumn(),
-        transient=True,
-    ) as progress:
-        heal_task = progress.add_task(f"[cyan]{task_label}...", total=len(files_to_process))
+    try:
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            TimeElapsedColumn(),
+            transient=True,
+        ) as progress:
+            heal_task = progress.add_task(f"[cyan]{task_label}...", total=len(files_to_process))
 
-        # 🛡️ APEX SOVEREIGN: Delegate execution to the parallel pool
-        # This caller handles yield and progress update
-        for res in run_parallel_surgery_pool(
-            engine, chunks, concurrency, stream_to, is_ultra_scale, context, progress, heal_task
-        ):
-            # 🛡️ Memory Guardrail: Drop large buffers for non-essential results
-            if is_ultra_scale or len(results) > 100:
-                # We keep the metadata but drop the heavy content
-                # only if it was already written or not needed for the aggregator
-                res.original_content = None
-                if not dry_run:
-                    res.healed_content = None
-            
-            results.append(res)
-            yield res
+            # 🛡️ APEX SOVEREIGN: Delegate execution to the parallel pool
+            # This caller handles yield and progress update
+            for res in run_parallel_surgery_pool(
+                engine, chunks, concurrency, stream_to, is_ultra_scale, context, progress, heal_task
+            ):
+                # 🛡️ Memory Guardrail: Drop large buffers for non-essential results
+                if is_ultra_scale or len(results) > 100:
+                    res.original_content = None
+                    if not dry_run:
+                        res.healed_content = None
+                
+                # Update journal status
+                if journal and res.status == HealStatus.HEALED:
+                    journal.mark_done(res.file_path)
 
-    # 3. Telemetry and Cleanup
-    record_batch_telemetry(engine, results, dry_run, PROCESS_START)
+                results.append(res)
+                yield res
 
-    # Final cleanup logic moves here to avoid memory bloat
-    import gc
+        # 3. Telemetry and Cleanup
+        record_batch_telemetry(engine, results, dry_run, PROCESS_START)
+        
+        if journal:
+            journal.cleanup()
 
-    gc.collect()
+    except Exception as e:
+        logger.error(f"Batch healing failed: {e}")
+        raise e
+    finally:
+        engine.journal = None
+        # Final cleanup logic moves here to avoid memory bloat
+        import gc
+        gc.collect()
 
 
 def _execute_batch_execution(*args, **kwargs):

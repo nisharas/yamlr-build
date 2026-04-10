@@ -195,7 +195,9 @@ def _enrich_and_attach_finding(finding: Any, norm_file_map: Dict[str, HealFileRe
         rule_meta = RuleManager().get_rule(finding.rule_id)
         if rule_meta:
             finding.impact_description = rule_meta.get("impact_description")
-            finding.rationale = finding.rationale or rule_meta.get("rationale")
+            # [PRO] Only use static rationale if the detector hasn't provided a contextual one
+            if not getattr(finding, "rationale", None):
+                finding.rationale = rule_meta.get("rationale")
 
     msg = f"Graph Analysis: {finding.message} ({finding.suggestion})"
     target_res.logic_logs.append(msg)

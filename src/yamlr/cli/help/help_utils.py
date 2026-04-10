@@ -34,6 +34,9 @@ __all__ = [
     "help_mcp",
     "help_lsp",
     "help_rollback",
+    "help_features",
+    "help_baseline",
+    "help_doctor",
     "render_upgrade_advisory",
 ]
 
@@ -197,6 +200,30 @@ def help_lsp(console, invoked_as: str) -> None:
         "forensics, schema validation, and safe healing directly in your IDE."
     )
     console.print("\n[dim]✨ Yamlr Enterprise (Pro) license is required for LSP features.[/dim]")
+
+
+def help_features(console, invoked_as: str) -> None:
+    """Display help for the 'features' command."""
+    console.print(f"\n[bold green]USAGE:[/bold green] [bold white]{invoked_as} features[/bold white]")
+    console.print("\nDisplays the [bold cyan]Yamlr Capability Matrix[/bold cyan].")
+    console.print("Use this to discover which features are available in your current tier (Free vs. Pro).")
+
+
+def help_baseline(console, invoked_as: str) -> None:
+    """Display help for the 'baseline' command."""
+    console.print(f"\n[bold green]USAGE:[/bold green] [bold white]{invoked_as} baseline <action> [path...][/bold white]")
+    console.print("\n[bold cyan]ACTIONS[/bold cyan]")
+    console.print("  create     Capture current violations as an ignore-baseline")
+    console.print("  check      Verify current state against a baseline file")
+    console.print("  clear      Flush the local baseline cache")
+    console.print("\n[dim]Baselines allow you to adopt Yamlr on legacy clusters without solving all legacy issues at once.[/dim]")
+
+
+def help_doctor(console, invoked_as: str) -> None:
+    """Display help for the 'doctor' command."""
+    console.print(f"\n[bold green]USAGE:[/bold green] [bold white]{invoked_as} doctor[/bold white]")
+    console.print("\nEnvironment Audit: Diagnoses local installation, kubeconfigs, and catalogs.")
+    console.print("Use this to verify system readiness before performing deep-healing operations.")
 
 
 def help_rollback(console, invoked_as: str) -> None:

@@ -67,6 +67,12 @@ def create_parser(invoked_as: str, show_all: bool = False) -> argparse.ArgumentP
         if not any(opt in audit_parser._option_string_actions for opt in action.option_strings):
             audit_parser._add_action(action)
 
+    # FEATURES (Capability Matrix)
+    features_parser = subparsers.add_parser(
+        "features", add_help=False, help="Show comprehensive list of engine capabilities and tiers"
+    )
+    features_parser.add_argument("-h", "--help", action="store_true")
+
     diagnose_parser = subparsers.add_parser(
         "diagnose", add_help=False, help="[PRO] Deep-dive analysis: Path masking, forensics & environment audit"
     )

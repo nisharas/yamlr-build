@@ -37,14 +37,26 @@ def help_heal(console, invoked_as: str, show_all: bool = False) -> None:
 
     console.print("\n[bold cyan]┌─ OPTIONS[/bold cyan]")
     console.print("  target              File(s), directory(s), or '-' for stdin")
-    console.print("  --dry-run           Show visual diff (S1) without modifying files")
-    console.print("  --diff              Show visual diff (Recommended)")
-    console.print("  -y, --yes           Auto-confirm all proposed changes")
-    console.print("  --receipt           Generate cryptographic DNA evidence receipts")
+    console.print("  --dry-run, --diff   Show proposed fixes without writing")
+    console.print("  -y, --yes-all       Auto-confirm all repairs (Safe Batch)")
+    console.print("  --receipt           Generate DNA-signed compliance receipt")
 
     if show_all:
+        console.print("\n[bold magenta]┌─ SURGICAL INJECTION[/bold magenta]")
+        console.print("  --enforce-limits    Inject standard CPU/RAM requests & limits")
+        console.print("  --enforce-probes    Inject default Liveness/Readiness probes")
+        console.print("  --enforce-namespace Inject default namespace if missing")
+        console.print("  --fix-tags          Auto-remediate :latest or missing image tags")
+        
+        console.print("\n[bold magenta]┌─ ENTERPRISE REMEDIATION (PRO)[/bold magenta]")
+        console.print("  --fix-refs          Cross-Resource Auto-Fix: Repair selectors and port mismatches")
+        console.print("  --complement-mode   Ingest findings from Checkov/Kubeconform (tool:path)")
+        console.print("  --evidence-dir DIR  Compile receipts into auditor-ready reports")
+        console.print("  --adapters-dir DIR  Ingest custom Python/Shell remediation adapters")
+        
+        console.print("\n[bold magenta]┌─ ADVANCED[/bold magenta]")
+        console.print("  --unsafe [kind]     Allow healing of sensitive resources (e.g. Secret)")
         console.print("  --no-backup         Skip creation of .yamlr/backups/ (Dangerous)")
-        console.print("  --pro-preview       Enable Pro features for preview/diffing (Free Tier)")
         print_shared_analysis_options(console, show_all)
         print_semantic_protection_options(console, is_heal=True, show_all=show_all)
 

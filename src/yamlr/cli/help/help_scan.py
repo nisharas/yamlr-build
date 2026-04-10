@@ -57,11 +57,16 @@ def help_check(console, invoked_as: str, show_all: bool = False) -> None:
     console.print("[dim]Optimized for CI/CD: Defaults to --strict --summary-only.[/dim]")
 
     console.print("\n[bold cyan]┌─ OPTIONS[/bold cyan]")
-    console.print("  target              File(s) or directory(s) to check")
-    console.print("  --output FORMAT     Report format (text, json, sarif)")
+    console.print("  target              File(s), directory(s), or '-' for stdin")
+    console.print("  --dry-run           Perform a read-only audit (Default)")
+    console.print("  --diff              Show visual diff of proposed fixes")
+    console.print("  --output <fmt>      Output format: text (default), json, sarif, sbom")
 
     if show_all:
-        console.print("  --fast              Always enabled for check")
+        console.print("  --emulate <tool>    Simulate sidecars (e.g. istiod, linkerd) to reduce false positives")
+        console.print("  --shadow            Capture dynamic mutations via server-side dry-run")
+        console.print("  --patch             Generate yamlr-patches.yaml instead of direct output")
+        console.print("  --fast              [PRO] Enable native Rust scanner for hyperscale audits")
         print_shared_analysis_options(console, show_all)
 
 

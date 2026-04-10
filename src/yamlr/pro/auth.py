@@ -20,12 +20,46 @@ import os
 import subprocess
 import time
 import uuid
+import threading
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Dict, Optional, Set
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from urllib.parse import parse_qs, urlparse
 
 logger = logging.getLogger("yamlr.pro.auth")
 __all__ = ["AuthManager", "IdentityService", "ClerkIdentityService", "get_checkout_url"]
+
+
+class CallbackHandler(BaseHTTPRequestHandler):
+    """Handles the OIDC redirect from Clerk to localhost."""
+
+    def do_GET(self):
+        query = parse_qs(urlparse(self.path).query)
+        token = query.get("token", [None])[0]
+
+        self.send_response(200)
+        self.send_header("Content-type", "text/html")
+        self.end_headers()
+
+        if token:
+            self.server.token = token
+            message = """
+            <html>
+                <body style="font-family: sans-serif; text-align: center; padding-top: 50px; background: #0f172a; color: white;">
+                    <h1 style="color: #38bdf8;">✅ Authentication Successful</h1>
+                    <p>You can now close this window and return to the terminal.</p>
+                </body>
+            </html>
+            """
+        else:
+            message = "<h1>Authentication failed. No token received.</h1>"
+
+        self.wfile.write(message.encode())
+
+    def log_message(self, format, *args):
+        # Silence server logs
+        return
 
 
 class IdentityService(ABC):
@@ -36,13 +70,13 @@ class IdentityService(ABC):
     """
 
     @abstractmethod
-    def get_device_code(self) -> Dict[str, Any]:
-        """Requests a device code from the provider."""
+    def get_login_url(self) -> str:
+        """Generates the interactive login URL."""
         pass
 
     @abstractmethod
-    def poll_for_token(self, device_code: str, interval: int, expires_in: int) -> Optional[str]:
-        """Polls for the access token."""
+    def poll_for_token(self) -> Optional[str]:
+        """Waits for the access token via loopback."""
         pass
 
     @abstractmethod
@@ -57,23 +91,36 @@ class ClerkIdentityService(IdentityService):
     Why: Best-in-class DX and generous free tier for startups.
     """
 
-    def __init__(self, clerk_api_url: str = "https://api.clerk.com/v1"):
+    def __init__(self, clerk_api_url: str = "https://clerk.yamlr.dev"):
         self.api_url = clerk_api_url
+        self.port = 54321
+        self._server: Optional[HTTPServer] = None
 
-    def get_device_code(self) -> Dict[str, Any]:
-        # [PRO-STUB] Phase 1: Return Clerk-compatible device code response
-        return {
-            "device_code": str(uuid.uuid4()),
-            "user_code": f"{uuid.uuid4().hex[:4].upper()}-{uuid.uuid4().hex[:4].upper()}",
-            "verification_uri": "https://yamlr.dev/activate/clerk",
-            "expires_in": 300,
-            "interval": 5,
-        }
+    def get_login_url(self) -> str:
+        """Returns the sign-in URL with loopback redirect."""
+        # Note: In production, this points to our Clerk-authenticated gateway
+        return f"{self.api_url}/sign-in?callback=http://localhost:{self.port}"
 
-    def poll_for_token(self, device_code: str, interval: int, expires_in: int) -> Optional[str]:
-        # [PRO-STUB] In production, this hits Clerk's oauth/token endpoint
-        time.sleep(2)  # Simulate network
-        return "clerk_live_token_simulated_2026"
+    def poll_for_token(self) -> Optional[str]:
+        """Starts the loopback server and waits for the token."""
+        self._server = HTTPServer(("127.0.0.1", self.port), CallbackHandler)
+        self._server.token = None
+
+        thread = threading.Thread(target=self._server.serve_forever, daemon=True)
+        thread.start()
+
+        # Wait up to 5 minutes
+        start_time = time.time()
+        try:
+            while time.time() - start_time < 300:
+                if self._server.token:
+                    return self._server.token
+                time.sleep(1)
+        finally:
+            self._server.shutdown()
+            self._server.server_close()
+
+        return None
 
     def refresh_token(self, refresh_token: str) -> Optional[str]:
         return "refreshed_clerk_token"
@@ -100,7 +147,7 @@ class AuthManager:
         self.provider = identity_provider or ClerkIdentityService()
 
     def login(self) -> bool:
-        """Initiates the OIDC Device Authorization Flow.
+        """Initiates the OIDC Loopback Flow.
 
         Why: To provide a secure, browser-based SSO experience that
              doesn't require users to handle raw secrets in the terminal,
@@ -109,13 +156,8 @@ class AuthManager:
         self.config_dir.mkdir(parents=True, exist_ok=True)
 
         try:
-            # Step 1: Request Device Code from Identity Provider (Abstacted)
-            device_data = self.provider.get_device_code()
-            device_code = device_data["device_code"]
-            user_code = device_data["user_code"]
-            verification_uri = device_data["verification_uri"]
-            expires_in = device_data.get("expires_in", 300)
-            interval = device_data.get("interval", 5)
+            # Step 1: Generate Login URL
+            verification_uri = self.provider.get_login_url()
         except Exception as e:
             logger.error(f"Failed to initiate login: {e}")
             # [Security] Block mock fallback in production (Critical-1)
@@ -129,7 +171,6 @@ class AuthManager:
                     self.save_credentials(mock_token)
                     return True
 
-            # Explicitly fail if in prod or not dev-enabled
             if not is_prod:
                 logger.info("Tip: Set YAMLR_DEV_LOGIN=true and YAMLR_ENV!=production for local testing.")
             return False
@@ -141,7 +182,7 @@ class AuthManager:
 
         console.print("\n[bold cyan]🔐 Yamlr Enterprise (Pro) Login[/bold cyan]")
         console.print(f"1. Open your browser: [link={verification_uri}]{verification_uri}[/link]")
-        console.print(f"2. Enter this code: [bold white]{user_code}[/bold white]\n")
+        console.print("2. Sign in to your Yamlr Enterprise account.\n")
 
         # Automatically try to open the browser
         try:
@@ -151,13 +192,34 @@ class AuthManager:
         except Exception:
             pass
 
-        # Step 3: Poll for the token via Provider
-        logger.info(f"Waiting for authorization (Expires in {expires_in // 60}m)...")
-        token = self.provider.poll_for_token(device_code, interval, expires_in)
+        # Step 3: Wait for the token via Loopback Listener
+        console.print("[yellow]Waiting for authentication... (press Ctrl+C to cancel)[/yellow]")
+        try:
+            token = self.provider.poll_for_token()
+        except KeyboardInterrupt:
+            console.print("\n[red]Login cancelled by user.[/red]")
+            return False
+
         if token:
+            # Check if it was a manual token paste redirect
+            if token.startswith("MANUAL:"):
+                token = token.split(":", 1)[1]
+
             self.save_credentials(token)
-            logger.info("✅ Successfully authenticated!")
+            console.print("✅ [bold green]Successfully authenticated![/bold green]")
             return True
+
+        # Fallback for headless/blocked loopback
+        console.print("\n[bold yellow]⚠️  Loopback listener timed out or was blocked.[/bold yellow]")
+        console.print("If you are in a headless environment, please sign in on another device")
+        console.print("and paste your [bold white]Enterprise Session Key[/bold white] below:")
+        
+        manual_token = console.input("[cyan]Session Key > [/cyan]").strip()
+        if manual_token:
+            self.save_credentials(manual_token)
+            console.print("✅ [bold green]Successfully authenticated (Manual Mode)![/bold green]")
+            return True
+
         return False
 
     def logout(self):

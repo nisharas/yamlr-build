@@ -77,6 +77,9 @@ class YamlrEngine:
         # [Zero-Blindspot] Support engine.pipeline boundary 
         self.pipeline = self
 
+        # Forensic Journal (WAL)
+        self.journal: Optional[Any] = None
+
     @property
     def parser(self) -> Any:
         """Lazy-loaded shared parser instance."""
@@ -164,6 +167,14 @@ class YamlrEngine:
                  self.fs.create_backup(patch_path)
             
             PatchGenerator.generate_and_append(patch_path, content, final_telemetry.content)
+
+        # 10. Forensic Integrity: Record intent and status in journal
+        if not kwargs.get("dry_run", True) and self.journal:
+             if status == HealStatus.HEALED:
+                 self.journal.log_pending(relative_path, hashlib.sha256(content.encode()).hexdigest())
+                 # The actual write happens in the FS layer; we mark as DONE in the processor loop
+             elif status == HealStatus.FAILED:
+                 self.journal.mark_failed(relative_path)
 
         return HealFileResult(
             file_path=relative_path,

@@ -127,9 +127,15 @@ CATALOG_VERSION = f"k8s-{MATRIX.default_recommended}-distilled"
 
 def __getattr__(name):
     if name == "CORE_VERSION":
-        from scripts.version_helper import get_version
-
-        return f"{get_version()}-stable"
+        # [Hardening] Sovereign Version Authority
+        # We import from yamlr.version which is the packaged SSOT.
+        # Fallback to hardcoded v0.1.0 if the file is missing in extremely isolated builds.
+        try:
+            from yamlr.version import __version__
+            return f"{__version__}-stable"
+        except ImportError:
+            return "0.1.0-stable"
+            
     raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
 
 

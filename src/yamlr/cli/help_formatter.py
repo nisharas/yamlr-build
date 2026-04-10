@@ -161,13 +161,19 @@ def print_kubectl_help(console, invoked_as: str, show_all: bool = False):
     console.print("\n[bold gold1]┌─ TRUST GUARANTEE[/bold gold1]")
     console.print("Yamlr analyzes manifests locally and never sends your YAML to external servers.")
 
+    console.print("\n[bold gold1]┌─ NEXT STEPS[/bold gold1]")
+    console.print("  [bold deep_sky_blue1]• Discover:[/bold deep_sky_blue1] Run [bold light_cyan1]yamlr features[/bold light_cyan1] to see the capability matrix")
+    console.print("  [bold deep_sky_blue1]• Audit:[/bold deep_sky_blue1]    Run [bold light_cyan1]yamlr scan[/bold light_cyan1] [bold bright_magenta].[/bold bright_magenta] to check your current workspace")
+    console.print("  [bold deep_sky_blue1]• Heal:[/bold deep_sky_blue1]     Run [bold light_cyan1]yamlr heal[/bold light_cyan1] [bold bright_magenta].[/bold bright_magenta] for interactive, safe remediation")
+
     # Discovery Tips
     tip_text = (
-        f"• Run [bold cyan]{invoked_as} <command> --help[/bold cyan] for subcommand flags.\n"
-        f"• Run [bold cyan]{invoked_as} --help --all[/bold cyan] to see all advanced commands.\n"
+        f"• Run [bold deep_sky_blue1]{invoked_as} <command> --help[/bold deep_sky_blue1] for subcommand flags\n"
+        f"• Run [bold deep_sky_blue1]{invoked_as} manual <command>[/bold deep_sky_blue1] for deep technical user guides\n"
+        f"• Run [bold deep_sky_blue1]{invoked_as} --help --all[/bold deep_sky_blue1] to see all advanced commands\n"
         "• Docs: [link=https://yamlr.dev]https://yamlr.dev[/link]"
     )
-    console.print(Panel(tip_text, title="[bold magenta]💡 TIP[/bold magenta]", border_style="magenta", expand=False))
+    console.print(Panel(tip_text, title="[bold gold1]💡 TIP[/bold gold1]", border_style="gold1", expand=False))
 
 
 def print_subcommand_help(console, command: str, invoked_as: str, show_all: bool = False):
@@ -246,6 +252,9 @@ def print_subcommand_help(console, command: str, invoked_as: str, show_all: bool
         "lsp": lambda: help_lsp(console, invoked_as),
         "drift": lambda: help_drift(console, invoked_as, show_all),
         "rollback": lambda: help_rollback(console, invoked_as),
+        "features": lambda: help_features(console, invoked_as),
+        "baseline": lambda: help_baseline(console, invoked_as),
+        "doctor": lambda: help_doctor(console, invoked_as),
     }
 
     handler = dispatch.get(command)

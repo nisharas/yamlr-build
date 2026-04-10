@@ -12,6 +12,8 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from yamlr.core.dna_utils import calculate_semantic_dna
+
 logger = logging.getLogger("yamlr.core.receipts")
 __all__ = ["ReceiptManager"]
 
@@ -127,8 +129,8 @@ class ReceiptManager:
         if expected_sig != receipt["signature"]:
             logger.warning("Signature Mismatch: This receipt may have been tampered with.")
             return False
-
-    logger.info("Receipt verified: DNA and Signature match manifest content.")
+        
+        logger.info("Receipt verified: DNA and Signature match manifest content.")
         return True
 
     def save_to_journal(self, receipt: Dict[str, Any]):

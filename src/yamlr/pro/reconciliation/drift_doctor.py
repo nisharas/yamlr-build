@@ -185,9 +185,38 @@ class DriftDoctor:
         ]
 
     def _is_semantically_equal(self, local: Dict[str, Any], live: Dict[str, Any]) -> bool:
-        """Deep comparison of manifest structure."""
-        # Simple string comparison of canonical YAML to catch structural drift
-        return yaml.dump(local, sort_keys=True) == yaml.dump(live, sort_keys=True)
+        """Deep comparison of manifest structure.
+
+        Why: String comparison of YAML is O(N) and inconsistent across parsers.
+             Deep dict comparison ensures we only flag real structural drift.
+        """
+        return self._dict_compare(local, live)
+
+    def _dict_compare(self, d1: Any, d2: Any) -> bool:
+        """Recursive semantic comparison of nested structures."""
+        if type(d1) is not type(d2):
+            return False
+
+        if isinstance(d1, dict):
+            if len(d1) != len(d2):
+                return False
+            for k, v in d1.items():
+                if k not in d2:
+                    return False
+                if not self._dict_compare(v, d2[k]):
+                    return False
+            return True
+
+        if isinstance(d1, list):
+            if len(d1) != len(d2):
+                return False
+            # [Hardening] Order-sensitive list comparison for K8s arrays
+            for i in range(len(d1)):
+                if not self._dict_compare(d1[i], d2[i]):
+                    return False
+            return True
+
+        return d1 == d2
 
     def _clean_manifest(self, manifest: Dict[str, Any]) -> Dict[str, Any]:
         """Removes status and transient metadata for semantic comparison."""

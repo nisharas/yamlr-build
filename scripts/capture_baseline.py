@@ -25,7 +25,7 @@ TESTS_DIR = ROOT_DIR / "tests"
 YAML_PATTERN = "*.yaml"
 
 def capture():
-    print("🛡️ Establishing Universal Golden Shield Baseline...")
+    print("[GATE] Establishing Universal Golden Shield Baseline...")
     
     # 1. Initialize
     if BASELINE_DIR.exists():
@@ -48,7 +48,7 @@ def capture():
     if perf_dir.exists():
         targets.extend(list(perf_dir.glob(YAML_PATTERN))[:50])
         
-    print(f"🔍 Selected {len(targets)} representative baseline manifests.")
+    print(f"[SCAN] Selected {len(targets)} representative baseline manifests.")
     
     # 3. Capture SARIF artifacts
     for t in targets:
@@ -56,7 +56,7 @@ def capture():
         safe_name = str(rel_path).replace(os.sep, "_").replace(".yaml", "")
         out_path = OUTPUT_DIR / f"{safe_name}.sarif"
         
-        print(f"🚀 Baseline Capturing: {rel_path}")
+        print(f"[RUN] Baseline Capturing: {rel_path}")
         
         cmd = [
             sys.executable, "-m", "yamlr.cli", "main", "scan",
@@ -67,8 +67,8 @@ def capture():
         with open(out_path, "w") as f:
             subprocess.run(cmd, env=env, stdout=f, stderr=subprocess.STDOUT)
             
-    print("\n✅ Universal Golden Shield Baseline Established!")
-    print(f"📦 Location: {BASELINE_DIR}")
+    print("\n[OK] Universal Golden Shield Baseline Established!")
+    print(f"[DONE] Location: {BASELINE_DIR}")
 
 if __name__ == "__main__":
     capture()

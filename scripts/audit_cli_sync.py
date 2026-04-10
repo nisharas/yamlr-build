@@ -11,7 +11,7 @@ from yamlr.cli.parser_factory import create_parser
 
 
 def test_cli_sync():
-    print("🔍 Auditing CLI Command Synchronization...")
+    print("AUDIT: Auditing CLI Command Synchronization...")
     parser = create_parser(invoked_as="yamlr")
 
     # Get all subcommands
@@ -45,15 +45,30 @@ def test_cli_sync():
     for cmd in commands:
         if cmd not in help_commands:
             missing_help.append(cmd)
-            print(f"❌ [MISSING HELP] Command '{cmd}' has no logic in help_formatter.py dispatch.")
+            print(f"[MISSING HELP] Command '{cmd}' has no logic in help_formatter.py dispatch.")
         else:
-            print(f"✅ [OK] Command '{cmd}' is synchronized.")
+            print(f"[OK] Command '{cmd}' is synchronized.")
 
-    if missing_help:
-        print(f"\n🚨 FOUND {len(missing_help)} SYNCHRONIZATION ERRORS.")
+    # Check for Markdown Manual Parity (docs/cli/)
+    docs_cli_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../docs/cli"))
+    missing_manuals = []
+    
+    for cmd in commands:
+        # Normalize command name to file name (dashes to underscores)
+        file_cmd = cmd.replace("-", "_")
+        manual_path = os.path.join(docs_cli_dir, f"yamlr_{file_cmd}.md")
+        
+        if not os.path.exists(manual_path):
+            missing_manuals.append(cmd)
+            print(f"[MISSING MANUAL] Command '{cmd}' has no physical manual file at docs/cli/yamlr_{file_cmd}.md")
+        else:
+            print(f"[OK] Documentation file for '{cmd}' exists.")
+
+    if missing_help or missing_manuals:
+        print(f"\nERR: FOUND {len(missing_help)} HELP ERRORS AND {len(missing_manuals)} MANUAL ERRORS.")
         sys.exit(1)
     else:
-        print("\n✨ ALL COMMANDS ARE 100% SYNCHRONIZED.")
+        print("\nOK: ALL COMMANDS ARE 100% SYNCHRONIZED (HELP + MANUAL).")
 
 
 if __name__ == "__main__":

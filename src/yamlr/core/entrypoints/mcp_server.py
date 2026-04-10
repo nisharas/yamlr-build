@@ -80,13 +80,26 @@ def scan_manifest(path: str) -> str:
 
         # Return as a formatted markdown list for the agent
         report = [f"### Safety Scan Results for `{path}`"]
+        
+        # Calculate Impact Summary
+        critical_count = sum(1 for f in findings_summary if f["severity"] == "CRITICAL")
+        error_count = sum(1 for f in findings_summary if f["severity"] == "ERROR")
+        
+        if critical_count > 0:
+            report.append(f"🚨 **IMPACT ALERT**: {critical_count} CRITICAL vulnerabilities detected. Infrastructure at risk.")
+        elif error_count > 0:
+            report.append(f"⚠️ **IMPACT WARNING**: {error_count} ERRORS detected. Reliability compromised.")
+        
+        report.append("")
+
         for f in findings_summary:
-            report.append(f"- **[{f['severity']}]** `{f['rule_id']}` in {f['file']} ({f['kind']})")
-            report.append(f"  - *Message*: {f['message']}")
-            report.append(f"  - *Rationale*: {f['rationale']}")
-            report.append(f"  - *Impact*: {f['impact_description']}")
-            report.append(f"  - *Risk Level*: {f['risk_level']}")
-            report.append(f"  - *Suggestion*: {f['suggestion']}")
+            severity_emoji = "🚨" if f['severity'] == "CRITICAL" else "⚠️" if f['severity'] == "ERROR" else "ℹ️"
+            report.append(f"#### {severity_emoji} {f['rule_id']} ({f['file']})")
+            report.append(f"- **Resource**: {f['kind']}")
+            report.append(f"- **Rationale**: {f['rationale']}")
+            report.append(f"- **Impact**: {f['impact_description']}")
+            report.append(f"- **Risk Level**: {f['risk_level']}")
+            report.append(f"- **Suggestion**: {f['suggestion']}")
             report.append("")
 
         return "\n".join(report)

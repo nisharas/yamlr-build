@@ -39,7 +39,8 @@ def _get_base_cmd(app_name: str) -> list[str]:
         sys.executable,
         "-m",
         "nuitka",
-        "--standalone",
+        "--onefile",
+        "--onefile-tempdir-spec={CACHE_DIR}/yamlr/v1",
         "--low-memory",  # 🛡️ MANDATORY: Prevent MSVC C1002 (Heap Exhaustion)
         "--follow-imports",
         "--jobs=2",      # 🛡️ Safety: Reduce peak memory during heavy module compilation
@@ -69,6 +70,12 @@ def _get_base_cmd(app_name: str) -> list[str]:
         "--include-package=pydantic_core._pydantic_core",
         "--include-package=rich",
         "--include-package=jwt",
+        "--include-package=cryptography",  # 🛡️ Hardening: Required for encrypted auth
+        "--include-module=socket",         # 🛡️ Hardening: Fix missing _socket.pyd
+        "--include-module=_socket",        # 🛡️ Hardening: Fix missing _socket.pyd
+        "--include-module=select",         # 🛡️ Hardening: Companion to socket
+        "--include-module=ssl",            # 🛡️ Hardening: Required for HTTPS/Clerk
+        "--include-module=multiprocessing", # 🛡️ Hardening: Fix dynamic import failures
         "--report=dist/nuitka-build-report.xml",
     ]
 
@@ -118,7 +125,7 @@ def build():
     binary_name = f"{app_name}.exe" if sys.platform == "win32" else app_name
     version = get_version()
 
-    print(f"🚀 Starting Native {app_name.upper()} Build...")
+    print(f"[START] Starting Native {app_name.upper()} Build...")
 
     _check_baseline()
 
@@ -147,13 +154,13 @@ def build():
     env = os.environ.copy()
     env["PYTHONPATH"] = str(SRC_DIR)
 
-    print(f"🛠️ Executing: {' '.join(cmd)}")
+    print(f"[TOOLS] Executing: {' '.join(cmd)}")
 
     try:
         subprocess.run(cmd, check=True, env=env)
-        print(f"\n✅ Compilation successful! Native binary: {DIST_DIR}/{binary_name}")
+        print(f"\n[OK] Compilation successful! Native binary: {DIST_DIR}/{binary_name}")
     except subprocess.CalledProcessError as e:
-        print(f"\n❌ Compilation failed: {e}")
+        print(f"\n[FAIL] Compilation failed: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":

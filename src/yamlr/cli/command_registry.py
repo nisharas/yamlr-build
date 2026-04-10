@@ -34,13 +34,12 @@ class CLICommand(BaseModel):
 
 # The "One True Registry" for CLI operations
 COMMAND_REGISTRY: List[CLICommand] = [
-    # 🏁 Core Operational Entrypoints (Tier 0)
     CLICommand(
         name="scan",
         help="Audit manifests and validate schema compliance",
         handler_module="yamlr.core.entrypoints.scan",
         handler_func="handle_scan_command",
-        aliases=["check", "diagnose"],
+        aliases=["check", "audit"],
         args=[
             CLIArgument(name="--output", choices=["text", "json", "sarif", "sbom"], default="text", help="Output format"),
             CLIArgument(name="--diff", action="store_true", help="Show proposed fixes"),
@@ -59,6 +58,12 @@ COMMAND_REGISTRY: List[CLICommand] = [
         ]
     ),
     CLICommand(
+        name="features",
+        help="Show comprehensive list of engine capabilities and their status",
+        handler_module="yamlr.core.entrypoints.features",
+        handler_func="handle_features_command",
+    ),
+    CLICommand(
         name="baseline",
         help="Capture or compare against a resource fingerprint baseline",
         handler_module="yamlr.core.entrypoints.baseline",
@@ -75,6 +80,7 @@ COMMAND_REGISTRY: List[CLICommand] = [
         help="Start the Model Context Protocol (MCP) server for AI assistants",
         handler_module="yamlr.core.entrypoints.mcp_server",
         handler_func="handle_mcp_command",
+        tier="PRO",
     ),
     CLICommand(
         name="drift",
@@ -86,6 +92,13 @@ COMMAND_REGISTRY: List[CLICommand] = [
             CLIArgument(name="--context", help="Kubeconfig context to use"),
             CLIArgument(name="--namespace", help="Namespace to filter (default: all)"),
         ]
+    ),
+    CLICommand(
+        name="secure",
+        help="Analyze & suggest security hardening automatically (Pro)",
+        handler_module="yamlr.core.entrypoints.heal",
+        handler_func="handle_heal_command",
+        tier="PRO",
     ),
     CLICommand(
         name="init",
@@ -133,6 +146,27 @@ COMMAND_REGISTRY: List[CLICommand] = [
         handler_module="yamlr.core.entrypoints.upgrade",
         handler_func="handle_upgrade_command",
         aliases=["migrate"],
+        tier="PRO",
+    ),
+    CLICommand(
+        name="rollback",
+        help="Roll back the last atomic healing session (Omega)",
+        handler_module="yamlr.core.entrypoints.restore",
+        handler_func="handle_restore_command",
+    ),
+    CLICommand(
+        name="idp-export",
+        help="Export safety truth to Backstage or Prometheus (Pro)",
+        handler_module="yamlr.core.idp_exporter",
+        handler_func="handle_idp_command",
+        tier="PRO",
+    ),
+    CLICommand(
+        name="lsp",
+        help="Start the Protocol (LSP) Server for VS Code (Pro)",
+        handler_module="yamlr.cli.lsp",
+        handler_func="handle_lsp_command",
+        tier="PRO",
     ),
     CLICommand(
         name="completion",
@@ -152,8 +186,6 @@ COMMAND_REGISTRY: List[CLICommand] = [
         handler_module="yamlr.core.entrypoints.restore",
         handler_func="handle_restore_command",
     ),
-
-    # 🔧 Utility & Compliance (Tier 1)
     CLICommand(
         name="rules",
         help="List available healing rules and their remediation DNA",
@@ -162,27 +194,31 @@ COMMAND_REGISTRY: List[CLICommand] = [
     ),
     CLICommand(
         name="evidence",
-        help="Manage or verify DNA-signed compliance receipts",
+        help="Manage or verify DNA-signed compliance receipts (Pro)",
         handler_module="yamlr.core.entrypoints.evidence",
         handler_func="handle_evidence_command",
+        tier="PRO",
     ),
     CLICommand(
         name="stats",
-        help="Show impact analysis & organizational efficiency metrics",
+        help="Show impact analysis & organizational efficiency metrics (Pro)",
         handler_module="yamlr.core.entrypoints.stats",
         handler_func="handle_stats_command",
+        tier="PRO",
     ),
     CLICommand(
         name="roi",
-        help="Calculate cost savings from automated healing",
+        help="Calculate cost savings from automated healing (Pro)",
         handler_module="yamlr.core.entrypoints.roi",
         handler_func="handle_roi_command",
+        tier="PRO",
     ),
     CLICommand(
         name="doctor",
         help="Diagnose system configuration and license issues",
         handler_module="yamlr.core.entrypoints.doctor",
         handler_func="handle_doctor_command",
+        aliases=["diagnose"],
     ),
     CLICommand(
         name="auth",

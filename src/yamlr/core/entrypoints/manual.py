@@ -120,19 +120,21 @@ def print_toc(console, cli_docs_dir):
     table.add_column("Tier", style="dim white")
     table.add_column("Command", style="green")
 
-    # [EPIC-13] Strategic Tiering: Define Pro/Executive commands
+    # [Strategic Tiering] Define Enterprise-tier chapters
     PRO_COMMANDS = {
         "secure",
         "dna",
         "evidence",
         "roi",
         "stats",
-        "audit",
-        "graph",
+        "drift",
+        "upgrade",
+        "migrate",
         "idp_export",
         "pulse",
         "mcp",
-        "rollback",
+        "lsp",
+        "diagnose",
     }
 
     # Get all yamlr_*.md files
