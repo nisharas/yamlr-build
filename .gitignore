@@ -163,6 +163,7 @@ scripts/debug/
 *.log
 
 # Project-specific
+.yamlr-baseline/
 catalog/k8sv1distilled.json
 testworkspace/catalog.json
 .agent/
@@ -171,6 +172,9 @@ website/
 docs/man/
 k8s-issues-dataset/
 dummy_receipts/
+
+# Documentation Whitelist
+!docs/**/*.md
 
 .continue/
 .vscode/
