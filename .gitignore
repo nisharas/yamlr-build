@@ -148,6 +148,12 @@ PyInstaller__main__.py
 !AI_SAFETY_STRATEGY.md
 !OUTREACH_TEMPLATES.md
 !README.md
+!CHANGELOG.md
+!SECURITY.md
+!CODE_OF_CONDUCT.md
+!**/README.md
+!community/*.md
+!actions/**/*.md
 
 # Debug / Temp
 debug_backup.py
