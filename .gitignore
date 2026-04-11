@@ -173,8 +173,15 @@ docs/man/
 k8s-issues-dataset/
 dummy_receipts/
 
-# Documentation Whitelist
+# Documentation Sovereign Whitelist
+!docs/*.md
+!docs/cli/
+!docs/strategy/
+!docs/marketing/
+!docs/assessment/
 !docs/**/*.md
+!docs/**/*.png
+!docs/**/*.svg
 
 .continue/
 .vscode/
