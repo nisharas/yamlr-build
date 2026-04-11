@@ -176,16 +176,25 @@ dummy_receipts/
 # Documentation Sovereign Whitelist
 !docs/*.md
 !docs/cli/
-!docs/strategy/
-!docs/marketing/
-!docs/assessment/
 !docs/**/*.md
 !docs/**/*.png
 !docs/**/*.svg
 
-# Personal / Sensitive Exclusions
-docs/strategy/VISA_STRATEGY.md
-docs/strategy/VISA_REPO_STRATEGY.md
+# Internal / Strategic / Personal Exclusions (Purged from History)
+docs/strategy/
+docs/marketing/
+docs/assessment/
+docs/ACQUISITION_PLAYBOOK.md
+docs/BRUTAL_DEEP_DIVE.md
+docs/INTERNAL_BLINDSPOTS.md
+docs/MARKET_ASSESSMENT.md
+docs/LAUNCH_PLAN.md
+docs/FEATURE_SCORECARD.md
+docs/Strategic_Pivot.md
+docs/FOUNDER_GUIDE.md
+docs/forensic_sovereign_summary.md
+docs/VISA_STRATEGY.md
+docs/VISA_REPO_STRATEGY.md
 
 .continue/
 .vscode/
