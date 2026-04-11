@@ -169,13 +169,13 @@ testworkspace/catalog.json
 .agent/
 old_codebase/
 website/
-docs/man/
 k8s-issues-dataset/
 dummy_receipts/
 
 # Documentation Sovereign Whitelist
 !docs/*.md
 !docs/cli/
+!docs/man/
 !docs/**/*.md
 !docs/**/*.png
 !docs/**/*.svg

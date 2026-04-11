@@ -1,0 +1,47 @@
+.TH "YAMLR-RESTORE" "1" "March 2026" "Yamlr Manual" "User Commands"
+Accidents happen. \fByamlr restore\fR is your safety net.
+.PP
+Every time \fByamlr heal\fR, \fBupgrade\fR, or \fBsecure\fR modifies a file, it creates a timestamped backup in the \fB.yamlr/backups\fR directory.
+.PP
+.SH "USAGE"
+.SS "List Backups"
+View all available recovery points.
+.PP
+.nf
+.RS
+yamlr restore
+.RE
+.fi
+\fIOutput:\fR
+.PP
+.nf
+.RS
+Found 3 backups:
+1. demo.yaml (2023-10-27 10:00:01)
+2. deployment.yaml (2023-10-27 09:55:00)
+...
+.RE
+.fi
+.SS "Restore Everything"
+Revert to the state immediately before the last operation.
+.PP
+.nf
+.RS
+yamlr restore .
+.RE
+.fi
+.SS "Restore Specific File"
+.nf
+.RS
+yamlr restore ./manifests/deployment.yaml
+.RE
+.fi
+.SH "HOW IT WORKS"
+.IP "\(bu" 2
+  **Location**: Backups are stored in \fB<project_root>/.yamlr/backups/\fR.
+.IP "\(bu" 2
+  **Rotation**: Yamlr automatically rotates backups to prevent disk bloat (keeps last 5 by default).
+.IP "\(bu" 2
+  **Security**: Backup files are created with restricted permissions (\fB0o600\fR).
+> \fBWarning\fR: If you used \fB--unsafe=Secret\fR during healing, your backups may contain sensitive data. Ensure \fB.yamlr/\fR is in your \fB.gitignore\fR.
+.PP

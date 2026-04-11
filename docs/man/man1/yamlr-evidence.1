@@ -1,0 +1,45 @@
+.TH "YAMLR-EVIDENCE" "1" "March 2026" "Yamlr Manual" "User Commands"
+The \fByamlr evidence\fR command aggregates cryptographic DNA receipts (generated during a CI/CD \fB--evidence-dir\fR pipeline) into a single, auditor-ready Compliance Report.
+.PP
+This is an Enterprise feature designed for strict regulatory environments (SOC2, HIPAA, CIS) where infrastructure changes must be mathematically proven tamper-proof.
+.PP
+.SH "USAGE"
+.nf
+.RS
+yamlr evidence <dir> [options]
+.RE
+.fi
+.SH "DESCRIPTION"
+When Yamlr runs with \fB--evidence-dir <dir>\fR, it outputs JSON cryptographic receipts for every file it heals. The \fBevidence\fR command ingests this directory, verifies the \fBHMAC-SHA256\fR signatures to ensure no tampering occurred, maps the violations to their compliance framework (e.g., SOC2: CC6.1), and exports a unified PDF or HTML report.
+.PP
+.SH "OPTIONS"
+.SS "Core Options"
+.IP "\(bu" 2
+  \fB<dir>\fR: (Required) The path to the directory containing the \fBevidence-*.json\fR receipts.
+.IP "\(bu" 2
+  \fB--format FORMAT\fR: The output format for the report. Options are \fBpdf\fR (default) or \fBhtml\fR.
+.IP "\(bu" 2
+  \fB--output FILE\fR: The specific path/filename to save the generated report. If omitted, Yamlr generates a timestamped file (e.g., \fByamlr-audit-report-<timestamp>.pdf\fR).
+.SS "Global Flags"
+\fI(Standard Yamlr global debugging flags apply. See Universal Expert Flags for more.)\fR
+.PP
+.IP "\(bu" 2
+  \fB--verbose\fR: Enable verbose debugging output.
+.SH "EXAMPLES"
+\fBGenerate a PDF report from a CI artifacts directory:\fR
+.PP
+.nf
+.RS
+yamlr evidence ./audit-receipts/ --output final-compliance-report.pdf
+.RE
+.fi
+\fBGenerate an HTML dashboard report:\fR
+.PP
+.nf
+.RS
+yamlr evidence ./audit-receipts/ --format html --output index.html
+.RE
+.fi
+.SH "SECURITY & PROVING"
+If \fByamlr evidence\fR detects that an \fBevidence-*.json\fR receipt has been tampered with (e.g., a bad HMAC signature or a mismatched \fBhealed_content\fR hash), it will securely quarantine the receipt and forcefully mark the PDF report as \fBTAMPERED\fR to protect the integrity of the audit.
+.PP

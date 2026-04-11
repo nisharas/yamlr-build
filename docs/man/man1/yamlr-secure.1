@@ -1,0 +1,120 @@
+.TH "YAMLR-SECURE" "1" "March 2026" "Yamlr Manual" "User Commands"
+\fBAnalyze & suggest security hardening (Pro)\fR
+.PP
+The \fByamlr secure\fR command is a specialized wrapper around the healing engine designed to \fBanalyze and suggest security hardening\fR for your Kubernetes manifests.
+.PP
+It enforces a "Secure by Default" posture aligned with the Kubernetes \fBPod Security Standards (Restricted)\fR profile.
+.PP
+.SH "USAGE"
+.nf
+.RS
+# Audit and propose security fixes
+yamlr secure ./manifests
+
+# Apply security fixes immediately
+yamlr secure ./manifests --yes
+.RE
+.fi
+.SH "WHAT IT ENFORCES"
+When you run \fByamlr secure\fR, the engine attempts to inject the following configurations if they are missing or insecure:
+.PP
+.SS "1. Non-Root Execution"
+Ensures containers do not run as root (UID 0).
+.PP
+.nf
+.RS
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000  # Injected default if missing
+.RE
+.fi
+.SS "2. Read-Only Root Filesystem"
+Prevents attackers from modifying the container's filesystem at runtime.
+.PP
+.nf
+.RS
+securityContext:
+  readOnlyRootFilesystem: true
+.RE
+.fi
+.SS "3. Capability Dropping"
+Drops all Linux capabilities by default, adding back only what is strictly necessary (NET_BIND_SERVICE, etc.).
+.PP
+.nf
+.RS
+securityContext:
+  capabilities:
+    drop: ["ALL"]
+.RE
+.fi
+.SS "4. Privilege Escalation Prevention"
+Prevents a process from gaining more privileges than its parent.
+.PP
+.nf
+.RS
+securityContext:
+  allowPrivilegeEscalation: false
+.RE
+.fi
+.SH "LIMITATIONS"
+.IP "\(bu" 2
+  \fByamlr secure\fR is a **Best-Effort** tool. It cannot know if your specific application *requires* root access to function.
+.IP "\(bu" 2
+  **Testing Required:** Always test your application in a staging environment after applying security hardening.
+.SS "🛡 Universal Expert Flags"
+These flags are available across almost all primary Yamlr commands:
+.PP
+.IP "\(bu" 2
+  **\fB--output FORMAT\fR**: Report format (text, json).
+.IP "\(bu" 2
+  **\fB--dry-run\fR**: Show proposed changes without writing (Preview mode).
+.IP "\(bu" 2
+  **\fB--diff\fR**: Show visual diff of changes (Preview mode).
+.IP "\(bu" 2
+  **\fB--fast\fR**: Skip heavy semantic analysis for maximum speed.
+.IP "\(bu" 2
+  **\fB--kube-version <V>\fR**: Force a specific Kubernetes version (e.g., \fB1.31\fR).
+.IP "\(bu" 2
+  **\fB--max-depth <N>\fR**: Limit recursive scanning depth (Default: 10).
+.IP "\(bu" 2
+  **\fB--ext <list>\fR**: Comma-separated list of file extensions (Default: \fB.yaml,.yml\fR).
+.IP "\(bu" 2
+  **\fB--concurrency <N>\fR**: Number of parallel worker processes.
+.IP "\(bu" 2
+  **\fB--strict\fR**: Treat all schema warnings as hard errors.
+.IP "\(bu" 2
+  **\fB--compact\fR**: Use minimal whitespace (2-space indent) in output.
+.IP "\(bu" 2
+  **\fB--health-threshold <0-100>\fR**: Minimum score to pass (Default: 70).
+.IP "\(bu" 2
+  **\fB--namespace <name>\fR**: Default namespace for generated resources.
+.IP "\(bu" 2
+  **\fB--check-deprecations\fR**: Audit for and record deprecated K8s APIs.
+.IP "\(bu" 2
+  **\fB--cpu-limit <limit>\fR**: Default CPU for auto-injection (e.g., \fB500m\fR).
+.IP "\(bu" 2
+  **\fB--mem-limit <limit>\fR**: Default Memory for auto-injection (e.g., \fB512Mi\fR).
+.IP "\(bu" 2
+  **\fB--enforce-limits\fR**: Auto-inject missing CPU/Memory limits.
+.IP "\(bu" 2
+  **\fB--enforce-probes\fR**: Auto-inject missing Liveness/Readiness probes.
+.IP "\(bu" 2
+  **\fB--enforce-namespace\fR**: Auto-inject default namespace if missing.
+.IP "\(bu" 2
+  **\fB--fix-tags\fR**: Auto-remediate \fB:latest\fR or missing image tags.
+.IP "\(bu" 2
+  **\fB--harden\fR**: Apply security hardening (Non-root, Read-only FS).
+.IP "\(bu" 2
+  **\fB--stream-to <FILE>\fR**: Batch-mode: Stream results to NDJSON (prevents RAM saturation).
+.IP "\(bu" 2
+  **\fB--fail-on <CHOICE>\fR**: Exit 1 if specified severity found (error/warning/any).
+.IP "\(bu" 2
+  **\fB--summary-only\fR**: Show aggregate stats only (recommended for 100+ files).
+.IP "\(bu" 2
+  **\fB--plain\fR**: ASCII-only output mode (Recommended for Log redirection).
+.IP "\(bu" 2
+  **\fB--verbose\fR**: Show full audit logs and engine stages.
+.IP "\(bu" 2
+  **\fB-q\fR, \fB--quiet\fR**: Minimal output mode (CI/CD optimized; errors and exit codes only).
+.IP "\(bu" 2
+  **\fB--identity-mode {infer,strict}\fR**: Control how Yamlr identifies resources (Default: infer).

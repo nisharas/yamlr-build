@@ -1,0 +1,107 @@
+.TH "YAMLR-AUDIT" "1" "March 2026" "Yamlr Manual" "User Commands"
+\fBDeep Compliance Audit (Alias for [scan](yamlr_scan.md))\fR
+.PP
+The \fBaudit\fR command is an alias for \fByamlr scan\fR. It is provided for users who prefer a compliance-focused terminology.
+.PP
+.SH "USAGE"
+.nf
+.RS
+yamlr audit [PATH]... [FLAGS]
+.RE
+.fi
+.SH "DESCRIPTION"
+Performs the same deep semantic auditing as \fByamlr scan\fR, including:
+.PP
+.IP "\(bu" 2
+  **Syntax & Structure Validation**
+.IP "\(bu" 2
+  **Kubernetes Schema Checks**
+.IP "\(bu" 2
+  **OPA Policy Enforcement**
+For a full list of features, flags, and examples, please refer to the [yamlr scan](yamlr_scan.md) manual.
+.PP
+.SH "🔬 SCIENTIFIC MODE (BENCHMARKING)"
+The \fBaudit\fR command includes a specialized \fBScientific Mode\fR for benchmarking the healing engine against a known-good corpus.
+.PP
+.nf
+.RS
+# Run a full benchmark on a directory of manifests
+yamlr audit ./tests/corpus --bench
+
+# Summary-only for CI/CD metrics
+yamlr audit ./tests/corpus --bench --summary-only
+
+# View forensic surgical metrics and HAS scores directly
+yamlr audit ./tests/corpus --bench --stats
+.RE
+.fi
+.SS "Metrics Produced:"
+.IP "\(bu" 2
+  **HAS (Healing Accuracy Score)**: The percentage of manifests successfully healed and validated against the K8s API (or internal oracle).
+.IP "\(bu" 2
+  **Detect Rate**: Percentage of manifests where issues were identified.
+.IP "\(bu" 2
+  **FP Rate**: False Positive rate (aiming for 0.0%).
+.IP "\(bu" 2
+  **Reconstruction Depth**: Classification of repairs as **Light** (Metadata/Indentation), **Medium** (Value coercion), or **Heavy** (Structural/Epistemic).
+.SH "🛡 UNIVERSAL EXPERT FLAGS & OPTIONS"
+These flags are available across almost all primary Yamlr commands, including \fBaudit\fR:
+.PP
+.IP "\(bu" 2
+  **\fB--output FORMAT\fR**: Report format (text, json, sarif).
+.IP "\(bu" 2
+  **\fB--opa-bundle <PATH>\fR**: Path or URL to OPA bundle.
+.IP "\(bu" 2
+  **\fB--kyverno-report <PATH>\fR**: Path to ingest a Kyverno \fBPolicyReport\fR JSON file.
+.IP "\(bu" 2
+  **\fB--diff\fR**: Show visual diff of changes (Preview mode).
+.IP "\(bu" 2
+  **\fB--dry-run\fR**: Alias for \fB--diff\fR.
+.IP "\(bu" 2
+  **\fB--fast\fR**: Skip heavy semantic analysis for maximum speed.
+.IP "\(bu" 2
+  **\fB--kube-version <V>\fR**: Force a specific Kubernetes version (e.g., \fB1.31\fR). Alias: **\fB--k8s-version <V>\fR**.
+.IP "\(bu" 2
+  **\fB--max-depth <N>\fR**: Limit recursive scanning depth (Default: 10).
+.IP "\(bu" 2
+  **\fB--ext <list>\fR**: Comma-separated list of file extensions (Default: \fB.yaml,.yml\fR).
+.IP "\(bu" 2
+  **\fB--concurrency <N>\fR**: Number of parallel worker processes.
+.IP "\(bu" 2
+  **\fB--strict\fR**: Treat all schema warnings as hard errors.
+.IP "\(bu" 2
+  **\fB--compact\fR**: Use minimal whitespace (2-space indent) in output.
+.IP "\(bu" 2
+  **\fB--health-threshold <0-100>\fR**: Minimum score to pass (Default: 70).
+.IP "\(bu" 2
+  **\fB--namespace <name>\fR**: Default namespace for generated resources.
+.IP "\(bu" 2
+  **\fB--check-deprecations\fR**: Audit for and record deprecated K8s APIs.
+.IP "\(bu" 2
+  **\fB--cpu-limit <limit>\fR**: Default CPU for auto-injection (e.g., \fB500m\fR).
+.IP "\(bu" 2
+  **\fB--mem-limit <limit>\fR**: Default Memory for auto-injection (e.g., \fB512Mi\fR).
+.IP "\(bu" 2
+  **\fB--enforce-limits\fR**: Auto-inject missing CPU/Memory limits.
+.IP "\(bu" 2
+  **\fB--enforce-probes\fR**: Auto-inject missing Liveness/Readiness probes.
+.IP "\(bu" 2
+  **\fB--enforce-namespace\fR**: Auto-inject default namespace if missing.
+.IP "\(bu" 2
+  **\fB--fix-tags\fR**: Auto-remediate \fB:latest\fR or missing image tags.
+.IP "\(bu" 2
+  **\fB--harden\fR**: Apply security hardening (Non-root, Read-only FS).
+.IP "\(bu" 2
+  **\fB--stream-to <FILE>\fR**: Batch-mode: Stream results to NDJSON (prevents RAM saturation).
+.IP "\(bu" 2
+  **\fB--fail-on <CHOICE>\fR**: Exit 1 if specified severity found (error/warning/any).
+.IP "\(bu" 2
+  **\fB-s\fR, \fB--summary-only\fR**: Show aggregate stats only (recommended for 100+ files).
+.IP "\(bu" 2
+  **\fB-p\fR, \fB--plain\fR**: ASCII-only output mode (Recommended for Log redirection).
+.IP "\(bu" 2
+  **\fB--verbose\fR**: Show full audit logs and engine stages.
+.IP "\(bu" 2
+  **\fB-q\fR, \fB--quiet\fR**: Minimal output mode (CI/CD optimized; errors and exit codes only).
+.IP "\(bu" 2
+  **\fB--identity-mode {infer,strict}\fR**: Control how Yamlr identifies resources (Default: infer).

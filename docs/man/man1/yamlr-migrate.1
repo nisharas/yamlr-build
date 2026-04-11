@@ -1,0 +1,71 @@
+.TH "YAMLR-MIGRATE" "1" "March 2026" "Yamlr Manual" "User Commands"
+\fBKubernetes API Migration (Alias for [upgrade](yamlr_upgrade.md))\fR
+.PP
+The \fBmigrate\fR command is an alias for \fByamlr upgrade\fR. It is used to transform manifests from deprecated or stale API versions to modern, stable ones.
+.PP
+.SH "USAGE"
+.nf
+.RS
+yamlr migrate --to [VERSION] [PATH]...
+.RE
+.fi
+.SH "DESCRIPTION"
+Performs the same structural reconstruction and API versioning upgrades as \fByamlr upgrade\fR.
+.PP
+For a full list of features, flags, and examples, please refer to the [yamlr upgrade](yamlr_upgrade.md) manual.
+.PP
+.SS "Options"
+.IP "\(bu" 2
+  **\fB--dry-run\fR**: Show proposed changes without writing.
+.IP "\(bu" 2
+  **\fB--diff\fR**: Show visual diff.
+.IP "\(bu" 2
+  **\fB-y\fR, \fB--yes\fR**: Auto-confirm changes.
+.IP "\(bu" 2
+  **\fB--output FORMAT\fR**: Report format.
+.IP "\(bu" 2
+  **\fB--kube-version <V>\fR**: Force a specific Kubernetes version (alias: **\fB--k8s-version <V>\fR**).
+.IP "\(bu" 2
+  **\fB--max-depth <N>\fR**: Limit recursion depth.
+.IP "\(bu" 2
+  **\fB--ext <list>\fR**: Extensions to scan (default: \fB.yaml,.yml\fR).
+.IP "\(bu" 2
+  **\fB--concurrency <N>\fR**: Number of parallel worker processes.
+.IP "\(bu" 2
+  **\fB--verbose\fR**: Detailed execution logs.
+.IP "\(bu" 2
+  **\fB-s\fR, \fB--summary-only\fR**: Show aggregate stats.
+.IP "\(bu" 2
+  **\fB-p\fR, \fB--plain\fR**: ASCII-only output mode.
+.IP "\(bu" 2
+  **\fB--identity-mode {infer,strict}\fR**: Identity detection style.
+.IP "\(bu" 2
+  **\fB-q\fR, \fB--quiet\fR**: Minimal output.
+.IP "\(bu" 2
+  **\fB--strict\fR**: Enable strict schema validation.
+.IP "\(bu" 2
+  **\fB--compact\fR**: Output with minimal whitespace.
+.IP "\(bu" 2
+  **\fB--cpu-limit L\fR**: Override default CPU limit.
+.IP "\(bu" 2
+  **\fB--mem-limit L\fR**: Override default Memory limit.
+.IP "\(bu" 2
+  **\fB--namespace NS\fR**: Default namespace.
+.IP "\(bu" 2
+  **\fB--health-threshold N\fR**: Min score to consider Healthy.
+.IP "\(bu" 2
+  **\fB--enforce-limits\fR**: Auto-inject limits.
+.IP "\(bu" 2
+  **\fB--enforce-probes\fR**: Auto-inject probes.
+.IP "\(bu" 2
+  **\fB--enforce-namespace\fR**: Auto-inject namespace.
+.IP "\(bu" 2
+  **\fB--fix-tags\fR**: Auto-remediate tags.
+.IP "\(bu" 2
+  **\fB--harden\fR**: Apply hardening.
+.IP "\(bu" 2
+  **\fB--stream-to FILE\fR**: Stream results.
+.IP "\(bu" 2
+  **\fB--fail-on CHOICE\fR**: CI/CD Gate.
+.IP "\(bu" 2
+  **\fB--check-deprecations\fR**: Check for deprecated APIs.
