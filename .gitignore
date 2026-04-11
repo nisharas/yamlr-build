@@ -183,6 +183,10 @@ dummy_receipts/
 !docs/**/*.png
 !docs/**/*.svg
 
+# Personal / Sensitive Exclusions
+docs/strategy/VISA_STRATEGY.md
+docs/strategy/VISA_REPO_STRATEGY.md
+
 .continue/
 .vscode/
 
