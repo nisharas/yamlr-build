@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Yamlr scan JSON report contract",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "total_files",
+        "schema_violations",
+        "integrity_violations",
+        "duration_ms",
+        "results"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "passed",
+            "failed"
+          ]
+        },
+        "total_files": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "schema_violations": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "integrity_violations": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "duration_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "results": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "file",
+              "check_type",
+              "rule_id",
+              "message",
+              "severity",
+              "line"
+            ],
+            "properties": {
+              "file": {
+                "type": "string"
+              },
+              "check_type": {
+                "type": "string"
+              },
+              "rule_id": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "severity": {
+                "type": "string"
+              },
+              "line": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "complete",
+        "errors"
+      ],
+      "properties": {
+        "status": {
+          "const": "error"
+        },
+        "complete": {
+          "const": false
+        },
+        "errors": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "target",
+              "message"
+            ],
+            "properties": {
+              "target": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

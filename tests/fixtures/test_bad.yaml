@@ -1,4 +1,0 @@
-apiVersion: v1
-kind: ConfigMap
-metadata: {name: bad-cm}
-data: {key: value: error}

@@ -1,0 +1,42 @@
+.TH "YAMLR-DEMO" "1" "May 2026" "Yamlr Manual" "User Commands"
+.SH "NAME"
+yamlr-demo \- Propose repairs and remediate Kubernetes manifests.
+.SH "DESCRIPTION"
+\fBInteractive Demo Generator\fR
+.PP
+Scaffolds a \fByamlr-demo/\fR directory containing intentionally broken manifests. This is designed for first-time users to safely test \fByamlr scan\fR and \fByamlr heal\fR without risking their own files.
+.PP
+.SH "SYNOPSIS"
+.nf
+.RS
+yamlr demo
+.RE
+.fi
+.SH "DESCRIPTION"
+Creates:
+.PP
+.IP "\(bu" 2
+  \fByamlr-demo/broken-deployment.yaml\fR: Syntax errors, missing selectors.
+.IP "\(bu" 2
+  \fByamlr-demo/legacy-ingress.yaml\fR: Deprecated APIs.
+.IP "\(bu" 2
+  \fByamlr-demo/.yamlr.yaml\fR: Sample config.
+.SH "EXAMPLES"
+.nf
+.RS
+yamlr demo
+cd yamlr-demo
+yamlr scan .
+yamlr heal .
+### Global Performance Flags
+Available across all commands:
+
+*   **`--timing`**: [PERFORMANCE] Output surgical execution timing breakdown.
+*   **`--timing-file <FILE>`**: [PERFORMANCE] Save performance profiling data to a JSON file.
+.RE
+.fi
+.SH "REPORTING BUGS"
+Report bugs to <https://github.com/yamlr/yamlr/issues>
+.PP
+.SH "COPYRIGHT"
+Copyright \(co 2026 Timonel Labs. Proprietary & Commercial Software (All Rights Reserved).

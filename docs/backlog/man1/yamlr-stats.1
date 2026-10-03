@@ -1,0 +1,38 @@
+.TH "YAMLR-STATS" "1" "May 2026" "Yamlr Manual" "User Commands"
+.SH "NAME"
+yamlr-stats \- Propose repairs and remediate Kubernetes manifests.
+.SH "DESCRIPTION"
+[PRO] Display surgical ROI, engineering time saved, and project safety metrics.
+.PP
+.SH "SYNOPSIS"
+.nf
+.RS
+yamlr stats
+yamlr stats --apps
+.RE
+.fi
+.SH "FLAGS"
+.IP "\(bu" 2
+\fB--apps\fR: Group safety scores and top risks by application (inferred from labels or directory structure).
+.IP "\(bu" 2
+\fB--badge\fR: Generate a shareable Markdown ROI badge (Shields.io) for your repository README.
+.IP "\(bu" 2
+\fB--org\fR: Show organization-wide surgical impact across all projects on this machine.
+.IP "\(bu" 2
+\fB--output\fR: Output format (\fBtext\fR or \fBjson\fR).
+.SS " Universal Expert Flags"
+Available across primary commands:
+.PP
+.IP "\(bu" 2
+  \fB\fB--timing\fR\fR: [PERFORMANCE] Output surgical execution timing breakdown.
+.IP "\(bu" 2
+  \fB\fB--timing-file <FILE>\fR\fR: [PERFORMANCE] Save performance profiling data to a JSON file.
+.IP "\(bu" 2
+  \fB\fB--verbose\fR\fR: Full audit logs and engine stages.
+.IP "\(bu" 2
+  \fB-q\fR, \fB--quiet\fR: Minimal output mode (exit codes only).
+.SH "REPORTING BUGS"
+Report bugs to <https://github.com/yamlr/yamlr/issues>
+.PP
+.SH "COPYRIGHT"
+Copyright \(co 2026 Timonel Labs. Proprietary & Commercial Software (All Rights Reserved).

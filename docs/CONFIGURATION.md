@@ -114,6 +114,12 @@ healing:
   # When enabled, findings will appear in reports and affect health scores.
   check_deprecations: false
 
+  # Automatically orchestrate all fixes without prompting (Automated Healing Mode)
+  # yamlr heal . --no-input
+
+  # Scan from stdin (Standard Pipe Integration)
+  # kubectl get deployment -o yaml | yamlr scan -
+
   # Automatically inject a default namespace for resources missing 'metadata.namespace'.
   enforce_namespace: true
 
@@ -197,7 +203,7 @@ Yamlr can be configured via environment variables for easy CI/CD integration.
 | `Yamlr_PRO`         | [Pro] Force enable Enterprise mode features | `false` |
 | `Yamlr_LOG_LEVEL` | Engine verbosity (`DEBUG`, `INFO`, `ERROR`) | `INFO` |
 | `Yamlr_OFFLINE`   | [Pro] Enable network kill switch (offline mode) | `false` |
-| `Yamlr_CATALOG_PATH` | Path to custom schema catalog storage | `~/.Yamlr/catalogs` |
+| `Yamlr_CATALOG_PATH` | Path to custom schema catalog storage | `XDG_CONFIG_HOME/yamlr/catalogs` (POSIX) or `%APPDATA%/Yamlr/catalogs` (Windows) |
 | `Yamlr_CATALOG_URL` | Upstream URL for catalog updates | GitHub |
 | `Yamlr_PROVIDER` | Cluster provider hint (`eks`, `gke`, `minikube`) | `auto` |
 | `Yamlr_KUBECTL_PATH` | Path to `kubectl` binary for oracle validation | `kubectl` |
@@ -205,7 +211,8 @@ Yamlr can be configured via environment variables for easy CI/CD integration.
 | `Yamlr_QUIET` | Minimal output for CI/CD | `false` |
 | `Yamlr_PLAIN` | ASCII-only output mode | `false` |
 | `Yamlr_DOCS_PATH` | Path to User Guide markdown for `manual` command | `docs/` |
-| `NO_COLOR` | Disable ANSI colors in output | N/A |
+| `NO_COLOR` | Disable ANSI colors in output (Standard) | N/A |
+| `FORCE_COLOR` | Force ANSI colors even on non-TTY (Standard) | N/A |
 | `YAMLR_CLASSIC` | Force kubectl-style help (classic mode) | `false` |
 | `ARGOCD_APP_NAME` | GitOps Integration: Detects Argo CD environment | N/A |
 | `FLUX_KUSTOMIZATION_NAME` | GitOps Integration: Detects Flux environment | N/A |

@@ -1,6 +1,6 @@
-# Contributing to Yamlr (AI Agent Protocol)
+# Contributing to Yamlr
 
-Yamlr is developed via AI-led "vibe coding" for a product visionary. This document outlines the protocols for AI agents and the audit checklist for the visionary.
+This document outlines the guidelines and engineering workflows for contributing to the Yamlr project.
 
 ## Development Setup
 

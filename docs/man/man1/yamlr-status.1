@@ -1,37 +1,50 @@
-.TH "YAMLR-STATUS" "1" "March 2026" "Yamlr Manual" "User Commands"
+.TH "YAMLR-STATUS" "1" "May 2026" "Yamlr Manual" "User Commands"
+.SH "NAME"
+yamlr-status \- Display engine health, schema cache status, and workspace licensing.
+.SH "DESCRIPTION"
 \fBHealth Dashboard\fR
 .PP
-Displays an SRE-focused dashboard of the current workspace and system health.
+Displays an operational status dashboard of the current Yamlr engine, native core linkage, active Kubernetes schema catalogue, and licensing tier.
 .PP
-.SH "USAGE"
+.SH "SYNOPSIS"
 .nf
 .RS
-yamlr status [FLAGS]
+yamlr status [OPTIONS]
 .RE
 .fi
-.SH "FLAGS"
+.SH "PRIMARY OPTIONS"
 .IP "\(bu" 2
-  \fB--kube-version\fR: Force a specific Kubernetes version (e.g., \fB1.31\fR).
+\fB--output\fR \fIFORMAT\fR: Output format (\fBtext\fR, \fBjson\fR). Default: \fBtext\fR.
+.SH "CI/CD & PIPELINE INTEGRATION"
 .IP "\(bu" 2
-  \fB--output=json\fR: Output dashboard as structured JSON.
+\fB-f\fR, \fB--output-file\fR \fIFILE\fR: Path to write structured status report.
+.IP "\(bu" 2
+\fB--exit-zero\fR: Always exit with code 0.
 .SH "OUTPUT"
 .IP "\(bu" 2
-  **Configuration**: Path to \fB.yamlr.yaml\fR, active rules count.
+  \fBEngine Version\fR: Active Yamlr version.
 .IP "\(bu" 2
-  **Catalog**: Active Kubernetes schema version and path.
+  \fBBuild ID\fR: Native core PyO3 build identifier.
 .IP "\(bu" 2
-  **Backups**: Disk usage and file count in \fB.yamlr/backups\fR.
+  \fBMachine ID\fR: Deterministic node/machine fingerprint.
 .IP "\(bu" 2
-  **Scientific HAS**: Health-as-a-Service scores (Lexical, Schema, Semantic).
+  \fBRegistry\fR: Available offline Kubernetes schema versions (1.21-1.36).
 .IP "\(bu" 2
-  **System Vitality Index**: Enterprise-grade trust aggregation (Shield Engine).
+  \fBAcceleration\fR: Native AVX2/NEON SIMD acceleration status.
 .IP "\(bu" 2
-  **Onboarding Checklist**: Dynamic status of project setup and completion.
-.IP "\(bu" 2
-  **Authentication**: Current User/Pro identity and license status.
+  \fBLicense\fR: Community Edition or Enterprise Pro status.
 .SH "EXAMPLES"
 .nf
 .RS
+# Human-readable dashboard
 yamlr status
+
+# Machine-readable JSON output
+yamlr status --output json
 .RE
 .fi
+.SH "REPORTING BUGS"
+Report bugs to <https://github.com/yamlr/yamlr/issues>
+.PP
+.SH "COPYRIGHT"
+Copyright \(co 2026 Timonel Labs. Proprietary & Commercial Software (All Rights Reserved).

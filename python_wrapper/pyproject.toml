@@ -1,0 +1,42 @@
+[build-system]
+requires = ["maturin==1.15.0"]
+build-backend = "maturin"
+
+[project]
+name = "yamlr"
+version = "0.1.0"
+description = "yamlr — Kubernetes manifest safety & healing engine (Python SDK & Automation Plane)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Proprietary" }
+authors = [{ name = "Timonel Labs", email = "contact@yamlr.dev" }]
+keywords = ["kubernetes", "yaml", "devops", "sre", "yamlr", "manifest-healing"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: Other/Proprietary License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "ruamel.yaml==0.19.1",
+    "rich==14.3.3",
+    "jsonschema==4.26.0",
+    "PyYAML==6.0.3",
+    "pydantic==2.12.5",
+    "portalocker==2.8.2",
+    "PyJWT==2.10.1",
+    "cryptography==44.0.1",
+    "joblib==1.3.2",
+    "keyring==25.6.0",
+    "mcp>=0.9.1",
+]
+
+[project.scripts]
+yamlr = "yamlr.__main__:cli"
+
+[tool.maturin]
+module-name = "yamlr_native"
+manifest-path = "../native_core/Cargo.toml"
+features = ["python", "pyo3/extension-module"]
+python-source = "../src"
+python-packages = ["yamlr", "yamlr_native"]
+exclude = ["yamlr/_archive/**"]

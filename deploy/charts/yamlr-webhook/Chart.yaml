@@ -1,0 +1,9 @@
+apiVersion: v2
+name: yamlr-webhook
+description: Lightweight Kubernetes Admission Webhook for real-time manifest validation and auto-healing
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+maintainers:
+  - name: Yamlr Core Team
+    email: contact@yamlr.dev

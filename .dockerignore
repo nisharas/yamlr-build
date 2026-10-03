@@ -5,6 +5,17 @@
 .idea
 *.md
 
+# Signing material and local credentials
+keys/
+**/*.pem
+**/*.key
+**/id_rsa
+**/id_dsa
+**/id_ecdsa
+**/id_ed25519
+# This public verification key is a required compile-time input, not a secret.
+!native_core/src/security/public_key.pem
+
 # Build Artifacts
 build/
 dist/

@@ -1,36 +1,33 @@
 # yamlr check
-**Fast Syntax & Schema Validator**
 
-High-speed alias for `yamlr scan` designed for CI/CD pipelines. Disables network/OPA for maximum speed. **Note: `--strict` and `--summary-only` are enabled by default.**
+Run a read-only schema and integrity check against a manifest or directory. The command does not heal or rewrite files.
 
 ## Usage
-```bash
-yamlr check [PATH]...
+
+```text
+yamlr check [PATH] [OPTIONS]
 ```
 
-## Description
-*   **Checks**: YAML Syntax, K8s Schema (Local).
-*   **Performance**: < 200ms startup.
+With no path, the command checks the current directory. Directories are traversed recursively for `.yaml` and `.yml` files. The path and options may appear in any order. Only one target path and one instance of each value option are accepted; unsupported options return a usage error.
 
-## Examples
+## Options
+
+- `-k`, `--k8s-version`, `--kube-version <VERSION>`: Kubernetes schema version (default `1.30`).
+- `--fail-on <error|warning|note|any|info|none>`: Minimum finding severity that makes the command fail (default `error`).
+- `-q`, `--quiet`: Suppress normal output while preserving the exit status.
+
+Examples:
+
 ```bash
-yamlr check .
+yamlr check ./manifests
+yamlr check --k8s-version 1.30 ./manifests --fail-on warning
+yamlr check ./deployment.yaml --quiet
 ```
 
-### 🛡 Universal Expert Flags
-Available across primary commands:
+## Exit status
 
-*   **`--kube-version <V>`**: Force specific K8s version.
-*   **`--fast`**: Always enabled for check.
-*   **`--max-depth <N>`**: Limit recursion depth.
-*   **`--concurrency <N>`**: Parallel worker processes.
-*   **`--strict`**: Enabled by default.
-*   **`--compact`**: Minify output.
-*   **`--output {text,json,sarif}`**: Output format.
-*   **`--fail-on <CHOICE>`**: Exit 1 if found.
-*   **`--summary-only`**: Enabled by default.
-*   **`--plain`**: ASCII-only output.
-*   **`--verbose`**: Full audit logs.
-*   **`--timing`**: [PERFORMANCE] Output surgical execution timing breakdown.
-*   **`--timing-file <FILE>`**: [PERFORMANCE] Save performance profiling data to a JSON file.
-*   `-q`, `--quiet`: Minimal output mode.
+- `0`: No findings met the selected severity threshold.
+- `1`: One or more findings met the threshold.
+- `2`: The target path does not exist or the requested threshold is invalid.
+- `3`: An unsupported or malformed option was supplied.
+- `4`: A manifest could not be read or directory traversal failed.

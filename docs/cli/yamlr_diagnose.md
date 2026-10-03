@@ -31,7 +31,7 @@ yamlr diagnose broken.yaml
 *   **`--bundle`**: [PRO] Export an anonymized, founder-ready support zip containing metadata and engine states.
 *   `-h, --help`: Show this help message.
 
-### 🛡 Universal Expert Flags
+### Universal Expert Flags
 These flags are available across almost all primary Yamlr commands:
 
 *   **`--output FORMAT`**: Report format (text, json).

@@ -1,0 +1,20 @@
+load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files(["defs.bzl", "repositories.bzl"])
+
+bzl_library(
+    name = "defs",
+    srcs = ["defs.bzl"],
+)
+
+alias(
+    name = "yamlr_tool",
+    actual = select({
+        "@platforms//os:linux": "@yamlr_linux_amd64//:yamlr",
+        "@platforms//os:osx": "@yamlr_darwin_arm64//:yamlr",
+        "@platforms//os:windows": "@yamlr_windows_amd64//:yamlr.exe",
+        "//conditions:default": "@yamlr_linux_amd64//:yamlr",
+    }),
+)

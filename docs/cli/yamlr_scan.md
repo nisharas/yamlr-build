@@ -1,83 +1,124 @@
 # yamlr scan
-**Local Analysis & Read-Only Audit**
+**Read-Only Manifest & Relational Integrity Audit**
 
-The `yamlr scan` command is the core auditing engine. It performs deep analysis **100% locally**:
-1.  **Syntax & Structure**: Checks for valid YAML and basic Kubernetes fields.
-2.  **Schema Validation**: Validates against K8s API schemas (strict typing).
-3.  **Policy Enforcement (OPA)**: Runs custom Rego policies.
-4.  **Scientific Benchmarking**: Measures healing accuracy (HAS).
+The `yamlr scan` command audits Kubernetes manifests against official Kubernetes OpenAPI v3 schemas, relational topology rules, and security best practices.
 
-## Usage
+It operates **100% locally and read-only**—it never modifies files on disk.
+
+---
+
+## Synopsis
 
 ```bash
-# Basic Audit (1,000+ files/sec)
+yamlr scan [path] [flags]
+```
+
+---
+
+## Examples
+
+```bash
+# Audit the current directory
 yamlr scan .
 
-# Audit a specific target K8s version
-yamlr scan . --kube-version 1.31
+# Audit a specific manifest file
+yamlr scan deploy.yaml
 
-# CI/CD Gate: Fail if any errors found
+# Read manifest from stdin via Unix pipeline
+cat deployment.yaml | yamlr scan -
+kubectl get deployment -o yaml | yamlr scan -
+
+# Audit rendered Helm chart templates in-memory
+yamlr scan ./my-chart --helm
+
+# Audit rendered Kustomize overlays in-memory
+yamlr scan ./overlays/prod --kustomize
+
+# CI/CD Gate: Fail build if any errors are detected
 yamlr scan . --fail-on error
 
-# GitOps Guard: Ignore existing violations from baseline
-yamlr scan . --baseline .yamlr-baseline.json
+# Generate SARIF 2.1.0 report for GitHub Security code scanning
+yamlr scan . --output sarif -f results.sarif
+
+# Emit machine-readable JSON report
+yamlr scan . --output json -f scan-report.json
+
+# Target a specific Kubernetes schema version
+yamlr scan . --k8s-version 1.31
+
+# Ingest custom CRDs for schema validation
+yamlr scan . --crd ./crds/cert-manager.yaml
+
+# Continuous live monitoring during local development
+yamlr scan . --watch
 ```
 
-## Advanced Features
+---
 
-### 1. Identity Mode (`--identity-mode`)
-Yamlr uses AI-like heuristics ("Brain") to identify resources even if `apiVersion` or `kind` is missing.
-*   `--identity-mode=infer` (Default): Attempts to identify broken resources.
-*   `--identity-mode=strict`: Skips any file that doesn't strictly declare `apiVersion` and `kind`.
+## Options & Flags
 
-### 2. OPA Policy Engine (`--opa-bundle`)
-Yamlr embeds a full Open Policy Agent engine.
-```bash
-# Use local Gatekeeper ConstraintTemplates
-yamlr scan . --opa-bundle ./gatekeeper/templates/
-```
+### Primary Options
 
-### 3. Output Formats (`--output`)
-*   `--output=text` (Default): Human-readable table.
-*   `--output=json`: Full structured report.
-*   `--output=sarif`: GitHub Security format.
+*   **`path`** *(positional, optional)*:
+    Path to manifest file, directory, or `-` for stdin. Defaults to `.`.
+*   **`--output {text,sarif,json}`**:
+    Output format. Defaults to `text` (rich colorized terminal report).
+    * `text`: Colorized ASCII tables, integrity scores, and actionable remediation commands.
+    * `sarif`: OASIS SARIF 2.1.0 JSON format for GitHub Security Code Scanning tab.
+    * `json`: Structured JSON containing file-by-file AST violations and forensic metadata.
+    When writing JSON or SARIF to stdout, stdout contains only the report. Progress messages, diagnostics, and optional metrics are written to stderr. With `--output-file`, the report is written to that file and status messages go to stderr.
+*   **`-q, --quiet`**:
+    Quiet execution. Suppresses decorative banners and tables; emits only violations and exit codes.
+*   **`-w, --watch`**:
+    Continuously watch the target path for file modifications and re-execute the audit automatically.
 
-### 4. Enterprise Compliance & Integrity
-*   **`--receipt`**: Generate a cryptographic DNA receipt for this scan.
-*   **`--baseline <FILE>`**: Path to violation baseline (SHA-256 fingerprints to ignore).
-*   **`--kyverno-report <PATH>`**: [PRO] Ingest Kyverno reports for investigation.
-*   **`--from-report <PATH>`**: [PRO] Unified Ingest: OPA or Kyverno JSON remediation.
-*   **`--complement-mode <T:P>`**: [PRO] Reconciliation Mode: Ingest findings from tools (checkov, kubeconform).
-*   **`--opa-bundle <PATH|URL>`**: [PRO] Path to OPA bundle or Gatekeeper templates.
+### Targeting & Environment
 
-### 5. Performance & Scaling
-*   **`--fast`** [PRO]: Enable lightning-fast scanning via native Rust extension (10x faster).
-*   **`--concurrency <N>`**: Force parallel worker count (Defaults to CPU count).
-*   **`--stream-to <FILE>`**: Batch-mode: Stream results to NDJSON (prevents RAM saturation).
+*   **`--k8s-version, --kube-version <VERSION>`**:
+    Target Kubernetes OpenAPI schema version (e.g. `1.28`, `1.30`, `1.31`).
+    Supports Kubernetes v1.21 through v1.37+ forward compatibility.
+*   **`--crd <PATH>`**:
+    Path to custom CRD definitions (file or directory) to ingest into the active schema validator.
+    Supported supplied schemas retain object/array structure, primitive types,
+    required properties, and string property enums. Constraints that the distilled
+    validator cannot enforce are rejected during ingestion, including range/length
+    limits, patterns/formats, references/combinators, nullable values, restrictive
+    additional properties, and Kubernetes CEL/list extensions. The diagnostic names
+    the unsupported keyword and schema path; the scan is incomplete and nonzero,
+    including with `--exit-zero`. This does not establish full OpenAPI validation
+    for the bundled Kubernetes schemas.
+*   **`--helm`**:
+    Render and audit Helm chart templates in-memory without requiring a running cluster.
+*   **`--kustomize`**:
+    Render and audit Kustomize overlays in-memory without disk side-effects.
 
-### 6. Advanced Observability & Simulation
-*   **`--emulate <TOOL>`**: Simulate sidecar containers (e.g., `istiod`, `linkerd`) during local analysis to reduce false negatives.
-*   **`--shadow`**: [EXPERIMENTAL] Capture dynamic server-side mutations using a Kubernetes dry-run shadowing technique.
-*   **`--patch`**: Instead of full output, generate a `yamlr-patches.yaml` containing just the remediation fragments.
-*   **`--clinical`**: [SURGICAL] Redirect all visual/UI terminal logs to `stderr` while keeping `stdout` reserved for pure YAML. Ideal for ArgoCD/GitOps pipelines.
+### Directory traversal
 
-### 🛡 Universal Expert Flags
-These flags are available across almost all primary commands:
+When `path` is a directory, scan walks its subdirectories and processes regular files whose extensions are `.yaml` or `.yml`. It does not apply implicit directory exclusions or ignore-file rules, so generated or vendored YAML beneath the target is included unless you choose a narrower target directory. Recursive traversal does not follow symbolic links; a symbolic-link entry inside the tree is skipped. Passing a file path directly scans that file.
 
-*   **`--kube-version <V>`**: Force a specific Kubernetes version (e.g., `1.31`).
-*   **`--risk-threshold <high|medium|low>`**: Exit with code 1 if any finding meets or exceeds this risk level.
-*   **`--fail-on <CHOICE>`**: CI/CD Gate: Exit 1 if specified severity found (any/warning/error).
-*   **`--max-depth <N>`**: Limit recursive scanning depth (Default: 10).
-*   **`--ext <list>`**: Comma-separated list of file extensions (Default: `.yaml,.yml`).
-*   **`--strict`**: Treat all schema warnings as hard errors.
-*   **`--compact`**: Use minimal whitespace (2-space indent) in output.
-*   **`--health-threshold <0-100>`**: Minimum score to pass (Default: 70).
-*   **`--namespace <name>`**: Default namespace for generated resources.
-*   **`--check-deprecations`**: Audit for and record deprecated K8s APIs.
-*   **`--summary-only`**: Show aggregate stats only (recommended for 100+ files).
-*   **`--plain`**: ASCII-only output mode (Recommended for Log redirection).
-*   **`--verbose`**: Show full audit logs and engine stages.
-*   **`-q`, `--quiet`**: Minimal output mode (exit codes only).
-*   **`--diff` / `--dry-run`**: Show proposed fixes as a preview.
-*   **`--timing`**: [PERFORMANCE] Output surgical execution timing breakdown.
-*   **`--timing-file <FILE>`**: [PERFORMANCE] Save performance profiling data to a JSON file.
+Traversal and file-read failures are reported and make the scan return a nonzero status; they are not treated as clean results. Helm template traversal additionally accepts `.tpl` files.
+
+When a scan cannot finish, JSON output reports `status: "error"`, `complete: false`, and an `errors` array containing the target and diagnostic (including the failed file when available). SARIF output sets `invocations[].executionSuccessful` to `false` and records an error notification. A requested output file is replaced with the failure report, so an older successful report cannot be mistaken for this run. `--exit-zero` suppresses findings-based failure only; it never suppresses traversal or read failures.
+
+### CI/CD & Pipeline Integration
+
+*   **`--fail-on {error,warning,note}`**:
+    Exit with code `1` if violations of the specified severity or higher are found. Ideal for CI gating.
+*   **`-f, --output-file <PATH>`**:
+    File path to write the report output (`.sarif` or `.json`).
+*   **`--exit-zero`**:
+    Force exit code `0` regardless of discovered violations. Useful for non-blocking informational CI steps.
+*   **`--push-telemetry`**:
+    Explicitly send an Enterprise-only scan-completion event to the Yamlr gateway. The event contains only the CLI version, event type, and timestamp; scan paths, manifests, and findings are not sent. Requests time out after five seconds and never change the scan result. Set `YAMLR_TELEMETRY_GATEWAY_URL` to an HTTPS gateway base URL to override the default. `--no-telemetry`, `YAMLR_TELEMETRY=off`, and `DO_NOT_TRACK=1` suppress the request.
+*   **`--otel` / `--export-metrics`**:
+    Emit Prometheus/OpenMetrics scan metrics to stderr so JSON and SARIF report output remains machine-readable.
+
+---
+
+## Exit Codes
+
+*   **`0`** (`EXIT_SUCCESS`): All manifests are clean and valid (or `--exit-zero` is active).
+*   **`1`** (`EXIT_VIOLATIONS`): Schema or relational integrity violations found (triggered by `--fail-on`).
+*   **`2`** (`EXIT_SYNTAX_ERROR`): Malformed input, including CRD/schema ingestion failure.
+*   **`3`** (`EXIT_CONFIG_ERROR`): Invalid CLI arguments.
+*   **`4`** (`EXIT_SYSTEM_ERROR`): File I/O failure or permission error.

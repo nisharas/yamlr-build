@@ -1,50 +1,39 @@
 # yamlr audit
-**Deep Compliance Audit (Alias for [scan](yamlr_scan.md))**
 
-Compliance-focused alias for `yamlr scan`.
+Run the native compliance and forensic audit on a manifest or a directory of manifests. The audit checks the configured security and deprecation rules; it is a separate command from [`yamlr scan`](yamlr_scan.md).
 
 ## Usage
-```bash
-yamlr audit [PATH]... [FLAGS]
+
+```text
+yamlr audit [PATH] [--output text|json|sarif]
 ```
 
-## 🔬 Scientific Mode (Benchmarking)
-Benchmarking the healing engine against a known-good corpus.
+With no path, the command audits the current directory. A directory is traversed recursively and files ending in `.yaml` or `.yml` are included. A file path is audited directly. The path and output option may appear in either order. Only one target path and one output option are accepted; unsupported options and extra paths return a usage error.
+
+## Output
+
+`--output` and `-o` accept these formats:
+
+- `text` (default): Human-readable summary and findings.
+- `json`: Yamlr audit report with file and finding counts, elapsed time, and findings.
+- `sarif`: SARIF 2.1.0 results suitable for code-scanning tools.
+
+Examples:
 
 ```bash
-# Run a full benchmark
-yamlr audit ./tests/corpus --bench
-
-# View HAS (Healing Accuracy Score)
-yamlr audit ./tests/corpus --bench --stats
+yamlr audit ./manifests
+yamlr audit ./manifests --output json
+yamlr audit ./manifests -o sarif > audit.sarif
+yamlr audit --output=json ./manifests
+yamlr audit ./deployment.yaml --output json
 ```
 
-### Metrics Produced:
-*   **HAS (Healing Accuracy Score)**: Percentage of manifests successfully healed.
-*   **Detect Rate**: Percentage of issues identified.
-*   **Reconstruction Depth**: Light, Medium, or Heavy repairs.
+## Exit status
 
-### 🛡 Universal Expert Flags
-Available across primary commands:
+- `0`: The audit completed with no findings.
+- `1`: The audit found one or more violations, or the target path does not exist.
+- `4`: The audit could not complete because a manifest could not be read or directory traversal failed.
+- `2`: The requested output format is unsupported.
+- `3`: An unsupported option, malformed output option, or extra target path was supplied.
 
-*   **`--output FORMAT`**: Report format (text, json, sarif).
-*   **`--bench`**: Run in 'Scientific Mode' against a labeled corpus.
-*   **`--stats`**: Show summary stats only for the benchmark.
-*   **`--verify <RECEIPT>`**: Verify a .yamlr-receipt.json against its target manifest.
-*   **`--risk-threshold <high|medium|low>`**: Exit with code 1 if any finding meets or exceeds risk level.
-*   **`--fail-on <CHOICE>`**: CI/CD Gate: Exit 1 if specified severity found.
-*   **`--baseline <FILE>`**: Path to violation baseline (SHA-256 fingerprints to ignore).
-*   **`--fast`** [PRO]: Enable lightning-fast scanning via native Rust extension.
-*   **`--kube-version <V>`**: Force specific K8s version (e.g., 1.31).
-*   **`--max-depth <N>`**: Limit recursion depth (Default: 10).
-*   **`--strict`**: Treat warnings as hard errors.
-*   **`--compact`**: Minify output (2-space indent).
-*   **`--health-threshold <0-100>`**: Min score to pass (Default: 70).
-*   **`--check-deprecations`**: Audit for and record deprecated APIs.
-*   **`--summary-only`**: Aggregate stats only.
-*   **`--plain`**: ASCII-only output mode.
-*   **`--verbose`**: Full audit logs and engine stages.
-*   **`--timing`**: [PERFORMANCE] Output surgical execution timing breakdown.
-*   **`--timing-file <FILE>`**: [PERFORMANCE] Save performance profiling data to a JSON file.
-*   **`-q`, `--quiet`**: Minimal output mode (exit codes only).
-*   **`--diff`** / **`--dry-run`**: Show proposed fixes as a preview.
+Diagnostics for incomplete audits are written to stderr. A nonzero result means the report must not be treated as a clean audit.

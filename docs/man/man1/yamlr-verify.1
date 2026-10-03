@@ -1,0 +1,79 @@
+.TH "YAMLR-VERIFY" "1" "May 2026" "Yamlr Manual" "User Commands"
+.SH "NAME"
+yamlr-verify \- Propose repairs and remediate Kubernetes manifests.
+.SH "DESCRIPTION"
+Verify cryptographic non-repudiation and DNA integrity receipts \fB[Pro]\fR.
+.PP
+.SH "SYNOPSIS"
+.nf
+.RS
+yamlr verify <manifest_path> --receipt <receipt_path> [flags]
+.RE
+.fi
+.SH "DESCRIPTION"
+The \fBverify\fR command provides the ultimate trust anchor for GitOps and regulated environments. It mathematically proves that a manifest has been healed by Yamlr and has not been tampered with since the healing event.
+.PP
+By comparing the \fBSemantic DNA\fR of the current manifest against a signed receipt, you can achieve \fBcryptographic non-repudiation\fR—ensuring that what you are about to deploy is exactly what was audited and approved.
+.PP
+.SS "Why use Verification?"
+.IP "\(bu" 2
+\fBSOC2/PCI-DSS Audits\fR: Provide machine-verifiable evidence that security fixes were applied as stated.
+.IP "\(bu" 2
+\fBSupply Chain Security\fR: Prevent "Man-in-the-Middle" tampering between the CI pipeline and the cluster.
+.IP "\(bu" 2
+\fBZero-Failure Trust\fR: Ensure that no unauthorized edits occurred during the GitOps promotion process.
+.SH "ARGUMENTS"
+.IP "\(bu" 2
+\fBmanifest_path\fR: The path to the Kubernetes manifest file to verify (required).
+.SH "FLAGS"
+.IP "\(bu" 2
+\fB--receipt <path>\fR: Path to the JSON receipt file generated during healing (required).
+.IP "\(bu" 2
+\fB--key <string>\fR: Optional public key or signature anchor to verify the receipt's authenticity.
+.IP "\(bu" 2
+\fB--warn\fR: Warn mode. Exit with code 0 even if verification fails (prints warning).
+.IP "\(bu" 2
+\fB-h, --help\fR: Show help for the \fBverify\fR command.
+.SH "EXIT CODES"
+The \fBverify\fR command uses specific exit codes for automated pipeline gating:
+.PP
+.IP "\(bu" 2
+\fB0\fR: \fBSUCCESS\fR. Manifest matches the receipt perfectly.
+.IP "\(bu" 2
+\fB2\fR: \fBHASH MISMATCH\fR. The manifest has been tampered with or edited since healing.
+.IP "\(bu" 2
+\fB3\fR: \fBSIGNATURE INVALID\fR. The receipt itself is forged or the signature is invalid.
+.IP "\(bu" 2
+\fB4\fR: \fBFILE MISSING\fR. Could not find the manifest or receipt file.
+.SH "EXAMPLES"
+.SS "Verify a Healed Deployment"
+.nf
+.RS
+yamlr verify deployment.yaml --receipt receipts/deployment.yaml.json
+.RE
+.fi
+.SS "CI/CD Pipeline Gate"
+.nf
+.RS
+# This will block the pipeline if any tampering is detected
+yamlr verify manifests/app-v1.yaml --receipt audit/receipt.json
+.RE
+.fi
+.SS "Soft Warning Mode"
+.nf
+.RS
+yamlr verify manifests/app-v1.yaml --receipt audit/receipt.json --warn
+.RE
+.fi
+.SH "SEE ALSO"
+.IP "\(bu" 2
+[yamlr execute](yamlr_execute.md) - Generate receipts during headless execution.
+.IP "\(bu" 2
+[yamlr dna](yamlr_dna.md) - Calculate raw semantic hashes without receipt logic.
+.IP "\(bu" 2
+[yamlr evidence](yamlr_evidence.md) - Aggregate multiple receipts into an auditor-ready report.
+.SH "REPORTING BUGS"
+Report bugs to <https://github.com/yamlr/yamlr/issues>
+.PP
+.SH "COPYRIGHT"
+Copyright \(co 2026 Timonel Labs. Proprietary & Commercial Software (All Rights Reserved).

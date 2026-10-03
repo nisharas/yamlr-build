@@ -1,0 +1,2 @@
+# Preserve the exact reviewed upstream bytes used by the checksum guard.
+schemas/sarif-schema-2.1.0.json -text

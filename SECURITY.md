@@ -1,7 +1,7 @@
 # Security Policy
 
 ## Supported Versions
-We support the latest version of Yamlr (v1.6+).
+We support version 0.1.0 (Active Development).
 
 ## Reporting a Vulnerability
 We take security seriously. If you find a vulnerability, please report it to us privately to ensure the safety of our users.

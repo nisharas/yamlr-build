@@ -1,0 +1,22 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: {{ include "yamlr-webhook.fullname" . }}-validating
+webhooks:
+  - name: validate.yamlr.dev
+    rules:
+      - apiGroups: ["apps", ""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["deployments", "statefulsets", "services", "pods"]
+        scope: "Namespaced"
+    clientConfig:
+      service:
+        namespace: {{ .Release.Namespace }}
+        name: {{ include "yamlr-webhook.fullname" . }}
+        path: "/validate"
+        port: {{ .Values.service.port }}
+    admissionReviewVersions: ["v1"]
+    sideEffects: None
+    timeoutSeconds: {{ .Values.webhook.timeoutSeconds }}
+    failurePolicy: {{ .Values.webhook.failurePolicy }}

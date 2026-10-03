@@ -1,13 +1,5 @@
 #!/usr/bin/env python3
-"""
-Yamlr CI: Version Synchronization Guard
---------------------------------------
-Verifies that all packaging and distribution artifacts are in sync
-with the canonical version defined in pyproject.toml.
-
-Why: To prevent version drift and ensure $20M+ M&A readiness via
-     automated integrity checks.
-"""
+"""Verifies that all packaging and distribution artifacts match the canonical version in pyproject.toml."""
 
 from __future__ import annotations
 

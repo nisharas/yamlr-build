@@ -9,11 +9,14 @@ The `yamlr drift` command audits your live Kubernetes cluster against your local
 # Basic Drift Detection (All Namespaces)
 yamlr drift .
 
+# Reconcile Local Manifests with Cluster (S2 Apply Mode)
+yamlr drift . --apply
+
+# Fleet View: Scan across all available Kubeconfig contexts
+yamlr drift . --all-contexts
+
 # Filter by Specific Namespace
 yamlr drift . --namespace production
-
-# Target a specific Kubeconfig context
-yamlr drift . --context eks-cluster-1
 ```
 
 ## How it works
@@ -22,13 +25,16 @@ Yamlr analyzes the "Live Truth" from your cluster and compares it with the "Prop
 
 ## Enterprise Features
 
-### 1. Context Isolation (`--context`)
-Explicitly target a cluster defined in your `~/.kube/config`. This is essential for preventing "Drift Leakage" when managing multiple environments.
+### 1. Loop-Closing Sync (`--apply`)
+Transforms Yamlr into a reconciliation engine. When `--apply` is passed, Yamlr will update your local manifests to match the live cluster state (after cleaning transient metadata), ensuring your GitOps source of truth is perfectly aligned with reality.
 
-### 2. Namespace Scoping (`--namespace`)
+### 2. Fleet View (`--all-contexts`)
+Orchestrate drift analysis across your entire fleet. Yamlr will cycle through every context in your kubeconfig and aggregate a global drift report, identifying inconsistencies across dev, staging, and production clusters.
+
+### 3. Namespace Scoping (`--namespace`)
 Limit the audit to a specific namespace to reduce noise and analysis latency in multi-tenant clusters.
 
-### 3. Reporting Tiers
+### 4. Reporting Tiers
 *   **Missing**: Local manifests that are not found in the cluster.
 *   **Shadow**: Live resources that have no local manifest counterpart.
 *   **Mutated**: Structural differences between local and live state.
@@ -36,7 +42,7 @@ Limit the audit to a specific namespace to reduce noise and analysis latency in 
 ---
 
 > [!IMPORTANT]
-> `yamlr drift` is a **Reporting-Only** operation in the current version. It does not automatically "heal" the cluster back to the local state. To apply fixes, use the `scan` and `heal` workflow.
+> **Safety First:** The `--apply` mode will modify your local files. It is recommended to run a dry-run (default) first and ensure your local workspace is under version control (Git) before applying cluster-wide synchronization.
 
 > [!NOTE]
 > This feature requires a [PRO] license. Run `yamlr auth login` to activate your enterprise tier.

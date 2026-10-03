@@ -1,0 +1,39 @@
+name: Yamlr GitOps Formatter & Manifest Auto-Fix
+
+'on':
+  push:
+    branches: [ main, master ]
+    paths:
+      - '**.yaml'
+      - '**.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gitops-fmt-and-fix:
+    runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ github.head_ref || github.ref }}
+          fetch-depth: 0
+
+      - name: Run Yamlr Canonical Formatter
+        uses: ./
+        with:
+          command: 'fmt'
+          write: 'true'
+          autocommit: 'false'
+
+      - name: Run Yamlr Manifest Auto-Fixer
+        uses: ./
+        with:
+          command: 'fix'
+          autocommit: 'true'
+          commit-message: 'chore(k8s): yamlr auto-format and repair manifests'

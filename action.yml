@@ -1,16 +1,229 @@
-name: 'yamlr'
-description: 'yamlr — Kubernetes manifest safety & healing engine'
-author: 'Yamlr Team'
+name: 'Yamlr Manifest Audit & GitOps Formatter'
+description: 'Fast, comment-preserving Kubernetes manifest auditing, canonical formatting, and auto-repair.'
+author: 'Yamlr / Timonel Labs'
 branding:
   icon: 'shield'
-  color: 'purple'
+  color: 'blue'
+
 inputs:
-  args:
-    description: 'Arguments to pass to yamlr (e.g. "scan . --opa-bundle ...")'
+  path:
+    description: 'Path to Kubernetes manifests'
     required: false
-    default: 'scan .'
+    default: '.'
+  command:
+    description: 'Execution mode: scan, check, fmt, fix, or heal'
+    required: false
+    default: 'scan'
+  k8s-version:
+    description: 'Target Kubernetes version (e.g., 1.30)'
+    required: false
+  crd:
+    description: 'Path to custom CRD for schema auditing'
+    required: false
+  write:
+    description: 'Write formatting or repairs in-place'
+    required: false
+    default: 'false'
+  check:
+    description: 'Run the read-only strict manifest validator; cannot be combined with write, apply, or autocommit'
+    required: false
+    default: 'false'
+  apply:
+    description: 'Automatically apply suggested fixes (backward compatibility alias)'
+    required: false
+    default: 'false'
+  autocommit:
+    description: 'Automatically commit and push formatting or repairs to the branch'
+    required: false
+    default: 'false'
+  commit-message:
+    description: 'Commit message when autocommit is enabled'
+    required: false
+    default: 'chore(k8s): yamlr canonical format and manifest repair'
+  push-telemetry:
+    description: 'Push anonymous ROI data to global dashboard'
+    required: false
+    default: 'false'
+  token:
+    description: 'GitHub token for pushing autocommit changes'
+    required: false
+    default: ${{ github.token }}
+  version:
+    description: 'Exact Yamlr release tag to install when no binary is already available (for example, v1.2.3)'
+    required: true
+  allow-local-fallback:
+    description: 'Allow an explicitly trusted binary or Python package from the checked-out Yamlr source if release verification fails'
+    required: false
+    default: 'false'
+
 runs:
-  using: 'docker'
-  image: 'Dockerfile'
-  args:
-    - ${{ inputs.args }}
+  using: 'composite'
+  steps:
+    - name: Set up Yamlr Native Binary
+      shell: bash
+      env:
+        YAMLR_VERSION: ${{ inputs.version }}
+        YAMLR_VERIFY_ATTESTATION: 'true'
+        YAMLR_ALLOW_LOCAL_FALLBACK: ${{ inputs.allow-local-fallback }}
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        BIN_DIR="$HOME/.local/bin"
+        mkdir -p "$BIN_DIR"
+
+        # Install the requested version so a runner's preinstalled binary cannot change the action's behavior.
+        if ! YAMLR_INSTALL_DIR="$BIN_DIR" bash "$GITHUB_ACTION_PATH/scripts/install.sh"; then
+          if [ "$YAMLR_ALLOW_LOCAL_FALLBACK" != "true" ]; then
+            echo "::error::Pinned Yamlr release verification failed; local fallback is disabled." >&2
+            exit 1
+          fi
+          # Preserve the existing local binary and Python package fallbacks when explicitly trusted.
+          if [ -f "$GITHUB_ACTION_PATH/native_core/target/release/yamlr" ]; then
+            cp "$GITHUB_ACTION_PATH/native_core/target/release/yamlr" "$BIN_DIR/yamlr"
+            chmod +x "$BIN_DIR/yamlr"
+          else
+            pip install "$GITHUB_ACTION_PATH"
+          fi
+        fi
+
+        if [ ! -x "$BIN_DIR/yamlr" ] && ! command -v yamlr >/dev/null 2>&1; then
+          echo "::error::Yamlr installation failed; no executable was installed." >&2
+          exit 1
+        fi
+
+        if [ -f "$BIN_DIR/yamlr" ]; then
+          chmod +x "$BIN_DIR/yamlr"
+        fi
+
+        echo "$BIN_DIR" >> "$GITHUB_PATH"
+
+    - name: Validate Workspace Before Autocommit
+      if: inputs.autocommit == 'true'
+      shell: bash
+      run: |
+        if [[ -n "$(git status --porcelain=v1 --untracked-files=all)" ]]; then
+          echo "::error::Autocommit requires a clean workspace before Yamlr runs. Commit, stash, or restore existing changes first."
+          exit 1
+        fi
+
+    - name: Execute Yamlr Engine
+      shell: bash
+      env:
+        YAMLR_COMMAND: ${{ inputs.command }}
+        YAMLR_PATH: ${{ inputs.path }}
+        YAMLR_APPLY: ${{ inputs.apply }}
+        YAMLR_WRITE: ${{ inputs.write }}
+        YAMLR_AUTOCOMMIT: ${{ inputs.autocommit }}
+        YAMLR_CHECK: ${{ inputs.check }}
+        YAMLR_K8S_VERSION: ${{ inputs.k8s-version }}
+        YAMLR_CRD: ${{ inputs.crd }}
+        YAMLR_PUSH_TELEMETRY: ${{ inputs.push-telemetry }}
+      run: |
+        CMD_TYPE="$YAMLR_COMMAND"
+        COMMAND=(yamlr)
+
+        case "$CMD_TYPE" in
+          scan|check|fmt|fix|heal) ;;
+          *)
+            echo "::error::Unsupported Yamlr action command '$CMD_TYPE'. Use scan, check, fmt, fix, or heal." >&2
+            exit 2
+            ;;
+        esac
+
+        if [ "$YAMLR_CHECK" == "true" ]; then
+          if [ "$YAMLR_WRITE" == "true" ] || [ "$YAMLR_APPLY" == "true" ] || [ "$YAMLR_AUTOCOMMIT" == "true" ]; then
+            echo "::error::Check mode is read-only and cannot be combined with write, apply, or autocommit." >&2
+            exit 2
+          fi
+          if [ "$CMD_TYPE" != "scan" ] && [ "$CMD_TYPE" != "check" ]; then
+            echo "::error::Check mode can only be used with the scan or check command." >&2
+            exit 2
+          fi
+          CMD_TYPE="check"
+        fi
+
+        if [ "$CMD_TYPE" == "check" ] && { [ "$YAMLR_WRITE" == "true" ] || [ "$YAMLR_APPLY" == "true" ] || [ "$YAMLR_AUTOCOMMIT" == "true" ]; }; then
+          echo "::error::The check command is read-only and cannot be combined with write, apply, or autocommit." >&2
+          exit 2
+        fi
+        if [ "$CMD_TYPE" == "fmt" ] && [ "$YAMLR_APPLY" == "true" ]; then
+          echo "::error::The fmt command uses the write input instead of apply." >&2
+          exit 2
+        fi
+
+        # Apply or autocommit requests on scan must run the healer.
+        if { [ "$YAMLR_APPLY" == "true" ] || [ "$YAMLR_WRITE" == "true" ] || [ "$YAMLR_AUTOCOMMIT" == "true" ]; } && [ "$CMD_TYPE" == "scan" ]; then
+          CMD_TYPE="heal"
+        fi
+
+        case "$CMD_TYPE" in
+          check)
+            if [ -n "$YAMLR_CRD" ] || [ "$YAMLR_PUSH_TELEMETRY" == "true" ]; then
+              echo "::error::The check command does not support CRD or telemetry action inputs." >&2
+              exit 2
+            fi
+            COMMAND+=(check "$YAMLR_PATH")
+            ;;
+          fmt)
+            COMMAND+=(fmt)
+            if [ "$YAMLR_WRITE" == "true" ] || [ "$YAMLR_AUTOCOMMIT" == "true" ]; then
+              COMMAND+=(-w)
+            fi
+            COMMAND+=("$YAMLR_PATH")
+            ;;
+          fix)
+            COMMAND+=(fix "$YAMLR_PATH")
+            ;;
+          heal)
+            COMMAND+=(heal "$YAMLR_PATH")
+            if [ "$YAMLR_APPLY" == "true" ] || [ "$YAMLR_WRITE" == "true" ] || [ "$YAMLR_AUTOCOMMIT" == "true" ]; then
+              COMMAND+=(--apply)
+            fi
+            ;;
+          scan)
+            COMMAND+=(scan "$YAMLR_PATH")
+            ;;
+        esac
+
+        if [ -n "$YAMLR_K8S_VERSION" ]; then
+          if [ "$CMD_TYPE" == "fmt" ]; then
+            echo "::error::The fmt command does not support a Kubernetes version input." >&2
+            exit 2
+          fi
+          COMMAND+=(--k8s-version "$YAMLR_K8S_VERSION")
+        fi
+        if [ -n "$YAMLR_CRD" ]; then
+          if [ "$CMD_TYPE" != "scan" ]; then
+            echo "::error::The CRD input is supported only by the scan command." >&2
+            exit 2
+          fi
+          COMMAND+=(--crd "$YAMLR_CRD")
+        fi
+        if [ "$YAMLR_PUSH_TELEMETRY" == "true" ]; then
+          if [ "$CMD_TYPE" != "scan" ]; then
+            echo "::error::The telemetry input is supported only by the scan command." >&2
+            exit 2
+          fi
+          COMMAND+=(--push-telemetry)
+        fi
+
+        printf 'Executing:'
+        printf ' %q' "${COMMAND[@]}"
+        printf '\n'
+        "${COMMAND[@]}"
+
+    - name: Commit and Push Manifest Changes
+      if: inputs.autocommit == 'true'
+      shell: bash
+      env:
+        YAMLR_TARGET_PATH: ${{ inputs.path }}
+        YAMLR_COMMIT_MESSAGE: ${{ inputs.commit-message }}
+      run: |
+        bash "$GITHUB_ACTION_PATH/actions/stage_manifest_changes.sh" "$YAMLR_TARGET_PATH"
+        if ! git diff --cached --quiet; then
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git commit -m "$YAMLR_COMMIT_MESSAGE"
+          git push
+        else
+          echo "No changed YAML manifests to commit under '$YAMLR_TARGET_PATH'."
+        fi

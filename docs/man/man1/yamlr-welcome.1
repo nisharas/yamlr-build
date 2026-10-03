@@ -1,9 +1,12 @@
-.TH "YAMLR-WELCOME" "1" "March 2026" "Yamlr Manual" "User Commands"
+.TH "YAMLR-WELCOME" "1" "May 2026" "Yamlr Manual" "User Commands"
+.SH "NAME"
+yamlr-welcome \- Propose repairs and remediate Kubernetes manifests.
+.SH "DESCRIPTION"
 \fBGuided Tour\fR
 .PP
-Runs the interactive first-run onboarding wizard. Provides a TUI-based introduction to "The Norway Problem," Yamlr's philosophy, and a quick-start guide.
+Runs the interactive first-run onboarding wizard. Provides a terminal introduction to YAML parsing edge cases, Yamlr architecture, and a quick-start guide.
 .PP
-.SH "USAGE"
+.SH "SYNOPSIS"
 .nf
 .RS
 yamlr welcome
@@ -13,16 +16,28 @@ yamlr welcome
 Automatically triggered on first run if no config is found. Can be re-run manually to view the intro story.
 .PP
 .IP "\(bu" 2
-  **Story Mode**: Explains "The Norway Problem" and Yamlr's design philosophy.
+  \fBOverview Mode\fR: Explains YAML parser edge cases and Yamlr's design philosophy.
 .IP "\(bu" 2
-  **Capability Spotlight**: Showcases high-value features (Ghost Services, Resource injection).
+  \fBCapability Spotlight\fR: Showcases high-value features (Ghost Services, Resource injection).
 .IP "\(bu" 2
-  **Health Dashboard**: Integrated "Dopamine Drip" dashboard showing real-time repository health.
+  \fBHealth Summary\fR: Integrated health report showing real-time repository manifest quality.
 .IP "\(bu" 2
-  **Discovery Dashboard**: Dynamic hub for finding hidden documentation and rule directories.
+  \fBDiscovery Dashboard\fR: Dynamic hub for finding hidden documentation and rule directories.
 .SH "EXAMPLES"
 .nf
 .RS
 yamlr welcome
 .RE
 .fi
+.SS "Global Performance Flags"
+Available across all commands:
+.PP
+.IP "\(bu" 2
+  \fB\fB--timing\fR\fR: [PERFORMANCE] Output surgical execution timing breakdown.
+.IP "\(bu" 2
+  \fB\fB--timing-file <FILE>\fR\fR: [PERFORMANCE] Save performance profiling data to a JSON file.
+.SH "REPORTING BUGS"
+Report bugs to <https://github.com/yamlr/yamlr/issues>
+.PP
+.SH "COPYRIGHT"
+Copyright \(co 2026 Timonel Labs. Proprietary & Commercial Software (All Rights Reserved).

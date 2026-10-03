@@ -1,30 +1,34 @@
 # yamlr doctor
 
-**Brutally fast health check: Runtime, Catalog, Cluster & Pro status**
+**Environment Health & Diagnostics**
 
-The `doctor` command runs a suite of diagnostic tests to ensure your Yamlr Healing Engine and its environment are healthy and functioning correctly.
+The `doctor` command runs a suite of diagnostic checks to ensure the Yamlr Engine, native PyO3 core, cluster toolchain (`kubectl`), and local Kubernetes schema caches are healthy and functioning correctly.
 
 ## Usage
 ```bash
-yamlr doctor [FLAGS]
+yamlr doctor [OPTIONS]
 ```
 
-## Description
-Verifies:
-*   Python Runtime Version Checks
-*   Pro Engine Entitlements
-*   K8s Catalog Matrices and Integrity
+## Argument Groups
 
-## Key Flags
-*   **`--k8s-matrix`**, **`--k8s`**: Validate K8s matrix support externally and deterministically against the bundled catalog. Prints timestamps and SHA-256 integrity hashes for the default bundle.
-*   **`--k8s-matrix-strict`**: Validates the K8s matrix and exits non-zero (`exit 1`) if any claimed catalog bundle is missing or stale. Ideal for CI/CD gating.
-*   **`--output FORMAT`**: Report format (text, json).
+### Diagnostic Options
+*   `--fix`: Automatically repair local environment drift (e.g., initialize local schema cache).
 
-### 🛡 Universal Expert Flags
-Available across primary commands:
+### Targeting & Environment
+*   `--k8s-version <VERSION>`: Target Kubernetes schema version to diagnose (e.g., `1.30`, `1.31`).
+*   `--crd <PATH>`: Path to CustomResourceDefinition manifests to validate against the engine parser.
 
-*   **`--timing`**: [PERFORMANCE] Output surgical execution timing breakdown.
-*   **`--timing-file <FILE>`**: [PERFORMANCE] Save performance profiling data to a JSON file.
-*   **`--verbose`**: Full audit logs and engine stages.
-*   **`--kube-version <V>`**: Target specific K8s version environment payload.
-*   `-q`, `--quiet`: Minimal output mode.
+## Verification Checklist
+*   **Native Core**: Linkage status and AVX2/NEON SIMD vector optimization.
+*   **Cluster CLI**: Verification of `kubectl` binary presence in system `PATH`.
+*   **Schema Cache**: Integrity and presence of offline schema definitions in `~/.yamlr/schemas`.
+*   **Environment & Runtime**: Host operating system, architecture, and Python runtime version.
+
+## Examples
+```bash
+# Run diagnostics
+yamlr doctor
+
+# Automatically provision missing local schema cache
+yamlr doctor --fix
+```

@@ -1,9 +1,12 @@
-.TH "YAMLR-EXPLAIN" "1" "March 2026" "Yamlr Manual" "User Commands"
+.TH "YAMLR-EXPLAIN" "1" "May 2026" "Yamlr Manual" "User Commands"
+.SH "NAME"
+yamlr-explain \- Propose repairs and remediate Kubernetes manifests.
+.SH "DESCRIPTION"
 \fBRule & Remediation Documentation\fR
 .PP
 Provides detailed explanations for specific Rule IDs or configuration topics.
 .PP
-.SH "USAGE"
+.SH "SYNOPSIS"
 .nf
 .RS
 yamlr explain [RULE_ID]
@@ -20,3 +23,15 @@ yamlr explain config/security
 yamlr explain config/discovery   # New: Guide to finding features
 .RE
 .fi
+.SS " Global Performance Flags"
+Available across all commands:
+.PP
+.IP "\(bu" 2
+  \fB\fB--timing\fR\fR: [PERFORMANCE] Output surgical execution timing breakdown.
+.IP "\(bu" 2
+  \fB\fB--timing-file <FILE>\fR\fR: [PERFORMANCE] Save performance profiling data to a JSON file.
+.SH "REPORTING BUGS"
+Report bugs to <https://github.com/yamlr/yamlr/issues>
+.PP
+.SH "COPYRIGHT"
+Copyright \(co 2026 Timonel Labs. Proprietary & Commercial Software (All Rights Reserved).

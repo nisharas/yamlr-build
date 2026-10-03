@@ -1,0 +1,12 @@
+load("@rules_yamlr//yamlr:defs.bzl", "yamlr_test", "yamlr_fix")
+
+yamlr_test(
+    name = "validate_production_manifests",
+    srcs = glob(["k8s/**/*.yaml"]),
+    k8s_version = "1.32",
+)
+
+yamlr_fix(
+    name = "format_production_manifests",
+    srcs = glob(["k8s/**/*.yaml"]),
+)

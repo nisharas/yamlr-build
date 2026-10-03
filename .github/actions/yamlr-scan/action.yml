@@ -1,0 +1,46 @@
+name: 'Yamlr Scan'
+description: 'Audits Kubernetes manifests for schema and policy violations using the Yamlr Safety Engine.'
+inputs:
+  path:
+    description: 'Path to manifests'
+    required: false
+    default: '.'
+  fail-on:
+    description: 'Failure threshold (ERROR, WARNING, INFO)'
+    required: false
+    default: 'ERROR'
+  k8s-version:
+    description: 'Target Kubernetes version (e.g. 1.30)'
+    required: false
+  version:
+    description: 'Exact Yamlr release tag to install (for example, v1.2.3)'
+    required: true
+runs:
+  using: 'composite'
+  steps:
+    - name: Download Yamlr
+      shell: bash
+      env:
+        YAMLR_INSTALL_DIR: ${{ runner.temp }}/yamlr-bin
+        YAMLR_VERSION: ${{ inputs.version }}
+        YAMLR_VERIFY_ATTESTATION: 'true'
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        mkdir -p "$YAMLR_INSTALL_DIR"
+        bash "$GITHUB_ACTION_PATH/../../../scripts/install.sh"
+        printf '%s\n' "$YAMLR_INSTALL_DIR" >> "$GITHUB_PATH"
+    - name: Run Audit
+      shell: bash
+      env:
+        YAMLR_SCAN_PATH: ${{ inputs.path }}
+        YAMLR_FAIL_ON: ${{ inputs.fail-on }}
+        YAMLR_K8S_VERSION: ${{ inputs.k8s-version }}
+      run: |
+        command=(./yamlr scan "$YAMLR_SCAN_PATH" --fail-on "$YAMLR_FAIL_ON")
+        if [[ -n "$YAMLR_K8S_VERSION" ]]; then
+          command+=(--k8s-version "$YAMLR_K8S_VERSION")
+        fi
+        "${command[@]}"
+branding:
+  icon: 'shield'
+  color: 'blue'

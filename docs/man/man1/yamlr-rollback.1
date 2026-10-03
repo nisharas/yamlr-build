@@ -1,0 +1,39 @@
+.TH "YAMLR-ROLLBACK" "1" "May 2026" "Yamlr Manual" "User Commands"
+.SH "NAME"
+yamlr-rollback \- Atomic reversal of the last remediation session.
+.SH "SYNOPSIS"
+.nf
+.RS
+yamlr rollback [PATH] [FLAGS]
+.RE
+.fi
+.SH "DESCRIPTION"
+\fByamlr-rollback\fR restores manifests to their exact pre-mutation state from the most recent remediation session.
+.PP
+Every time \fByamlr heal\fR, \fByamlr upgrade\fR, \fByamlr fmt\fR, or \fByamlr secure\fR alters a manifest, an atomic SHA-256 verified backup snapshot is stored in \fB.yamlr/backups/\fR. Invoking \fBrollback\fR restores all affected files in the target directory immediately.
+.PP
+.SH "ARGUMENTS"
+.TP
+\fBPATH\fR
+Target manifest file or directory containing the workspace (defaults to current directory \fB.\fR).
+.SH "FLAGS"
+.TP
+\fB-h\fR, \fB--help\fR
+Show precision command help and options.
+.SH "EXAMPLES"
+.TP
+Revert workspace to state before last heal session:
+.B yamlr rollback
+.TP
+Revert specific target folder:
+.B yamlr rollback ./deploy
+.SH "SEE ALSO"
+.BR yamlr (1),
+.BR yamlr-restore (1),
+.BR yamlr-heal (1)
+.SH "REPORTING BUGS"
+Report bugs to <https://github.com/yamlr/yamlr/issues>
+.PP
+.SH "COPYRIGHT"
+Copyright \(co 2026 Timonel Labs. Proprietary & Commercial Software (All Rights Reserved).
+

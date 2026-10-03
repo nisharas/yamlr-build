@@ -1,0 +1,71 @@
+.TH "YAMLR-FLEET" "1" "May 2026" "Yamlr Manual" "User Commands"
+.SH "NAME"
+yamlr-fleet \- Propose repairs and remediate Kubernetes manifests.
+.SH "DESCRIPTION"
+\fBOrchestrate and analyze multiple Kubernetes clusters simultaneously.\fR
+.PP
+The \fBfleet\fR command is a \fBYamlr Pro\fR feature designed for platform engineers and SREs managing large-scale, multi-cluster environments. It allows you to perform unified audits across your entire infrastructure without switching contexts manually.
+.PP
+.SH "SYNOPSIS"
+.nf
+.RS
+yamlr fleet <action> [options]
+.RE
+.fi
+.SH "ACTIONS"
+| Action | Description |
+.PP
+|:--|:--|
+.PP
+| \fBscan\fR | Run a unified audit across all registered clusters (Default) |
+.PP
+| \fBadd\fR | Register a new cluster into the fleet management index |
+.PP
+| \fBlist\fR | Display all registered clusters and their current health status |
+.PP
+.SH "OPTIONS"
+| Flag | Description |
+.PP
+|:--|:--|
+.PP
+| \fB--name NAME\fR | Human-readable name for the cluster (used with \fBadd\fR) |
+.PP
+| \fB--context CTX\fR | Kubeconfig context to use for this cluster |
+.PP
+| \fB--output CHOICE\fR | Output format: \fBtext\fR (default), \fBjson\fR, \fBsarif\fR |
+.PP
+.SH "STRATEGIC VALUE"
+1. \fBUnified Observability\fR: See the total risk posture of your organization across dev, staging, and production clusters in a single report.
+.PP
+2. \fBDrift Detection at Scale\fR: Identify inconsistent configurations across regions or environments.
+.PP
+3. \fBCompliance Auditing\fR: Provide a unified report for infrastructure compliance and security audits.
+.PP
+.SH "EXAMPLES"
+.SS "Audit the entire fleet"
+.nf
+.RS
+yamlr fleet scan
+.RE
+.fi
+.SS "Add a new production cluster"
+.nf
+.RS
+yamlr fleet add --name prod-us-east --context gke_prod_us_east_1
+.RE
+.fi
+.SS "List all fleet members"
+.nf
+.RS
+yamlr fleet list
+.RE
+.fi
+---
+.PP
+* Yamlr Pro required for fleet orchestration and multi-cluster analysis.*
+.PP
+.SH "REPORTING BUGS"
+Report bugs to <https://github.com/yamlr/yamlr/issues>
+.PP
+.SH "COPYRIGHT"
+Copyright \(co 2026 Timonel Labs. Proprietary & Commercial Software (All Rights Reserved).

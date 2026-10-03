@@ -1,6 +1,0 @@
-kind: Service
-metadata:
-  name: branding-test
-spec:
-  ports:
-    - port: 80

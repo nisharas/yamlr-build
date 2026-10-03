@@ -11,10 +11,10 @@ Yamlr is a professional-grade Kubernetes manifest safety engine designed to stop
 
 ##  Getting Started
 
-1. 🚀 Zero-Config Activation: The Yamlr engine is pre-bundled and starts automatically. No manual installation is required.
-2. Open any `.yaml` manifest.
-3. Look for the forensic diagnostics.
-4. Click the lightbulb 💡 for Quick-Fix actions.
+1. Zero-Config Activation: The Yamlr engine is pre-bundled and starts automatically. No manual installation is required.
+2. Open any `.yaml` or `.yml` Kubernetes manifest.
+3. Diagnostic errors and warnings appear immediately as inline squigglies.
+4. Click Quick-Fix (or press `Ctrl+.`) to apply surgical, comment-preserving repairs.
 
 ## ⚙️ Configuration
 

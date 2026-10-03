@@ -1,32 +1,35 @@
-.TH "YAMLR-VERSION" "1" "March 2026" "Yamlr Manual" "User Commands"
-Display the version information for the Yamlr CLI and Core Engine.
+.TH "YAMLR-VERSION" "1" "May 2026" "Yamlr Manual" "User Commands"
+.SH "NAME"
+yamlr-version \- Display CLI release version, native core build, and runtime metadata.
+.SH "DESCRIPTION"
+Display the version information for the Yamlr CLI, native PyO3 Rust core, and Python runtime.
 .PP
-.SH "USAGE"
+.SH "SYNOPSIS"
 .nf
 .RS
-yamlr version
-# OR
-yamlr --version
+yamlr version [OPTIONS]
 .RE
 .fi
-.SH "DESCRIPTION"
-The \fBversion\fR command provides detailed information about the current installation, including:
-.PP
+.SH "PRIMARY OPTIONS"
 .IP "\(bu" 2
-**CLI Version**: The version of the command-line interface.
+\fB--output\fR \fIFORMAT\fR: Output format (\fBtext\fR, \fBjson\fR). Default: \fBtext\fR.
+.SH "CI/CD & PIPELINE INTEGRATION"
 .IP "\(bu" 2
-**Engine Version**: The version of the underlying healing engine.
+\fB-f\fR, \fB--output-file\fR \fIFILE\fR: Path to write structured version metadata.
 .IP "\(bu" 2
-**Build Hash**: The Git commit hash or build identifier.
-.IP "\(bu" 2
-**Native Target**: The platform architectures (e.g., windows-amd64).
+\fB--exit-zero\fR: Always exit with code 0.
 .SH "EXAMPLES"
 .nf
 .RS
-$ yamlr version
-Yamlr v1.1.0-hardened
-Core Engine: v1.0.4
-Build: 20260213.1
-Target: windows-amd64 (Native)
+# Human-readable output
+yamlr version
+
+# Structured JSON metadata
+yamlr version --output json
 .RE
 .fi
+.SH "REPORTING BUGS"
+Report bugs to <https://github.com/yamlr/yamlr/issues>
+.PP
+.SH "COPYRIGHT"
+Copyright \(co 2026 Timonel Labs. Proprietary & Commercial Software (All Rights Reserved).

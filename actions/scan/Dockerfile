@@ -1,45 +1,23 @@
-# Stage 1: Build the native binary with Nuitka
-FROM python:3.12-slim as builder
-
-# Install build dependencies
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    clang \
-    libpython3-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-WORKDIR /build
-
-# Copy source code and requirements
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt nuitka ordered-set
-
-COPY . .
-
-# Run the Nuitka build orchestrator
-# This creates dist/yamlr (Community Edition by default)
-RUN python scripts/build_nuitka.py
-
-# Stage 2: Create the minimal runtime image
-FROM debian:bookworm-slim
-
-# Install minimal runtime dependencies (if any, usually none for standalone)
-RUN apt-get update && apt-get install -y \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
-
+# Stage 1: Build the Rust Native Core
+FROM rust:1.98.1-slim-bookworm@sha256:ff521445a372125ed4f76e1453a1f8098f2d05332d1601d30db1c1f62757e730 AS builder
 WORKDIR /app
+COPY native_core ./native_core
+RUN cargo build --locked --manifest-path native_core/Cargo.toml --release --bin yamlr
 
-# Copy only the compiled binary from the builder
-COPY --from=builder /build/dist/yamlr /usr/local/bin/yamlr
+# Stage 2: Minimal Runtime
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    git \
+    && rm -rf /var/lib/apt/lists/*
 
-# Metadata
-LABEL maintainer="Yamlr Team"
-LABEL version="1.0"
-LABEL description="Autonomous K8s Manifest Sentinel (Compiled Native Version)"
-
-# Copy and use entrypoint script
+COPY --from=builder /app/native_core/target/release/yamlr /usr/local/bin/yamlr
 COPY actions/scan/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
+WORKDIR /github/workspace
 ENTRYPOINT ["/entrypoint.sh"]
+
+LABEL maintainer="Yamlr Team"
+LABEL version="1.0"
+LABEL description="Autonomous K8s Manifest Sentinel (Compiled Native Version)"

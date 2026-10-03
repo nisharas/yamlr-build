@@ -1,9 +1,12 @@
-.TH "YAMLR-MANUAL" "1" "March 2026" "Yamlr Manual" "User Commands"
+.TH "YAMLR-MANUAL" "1" "May 2026" "Yamlr Manual" "User Commands"
+.SH "NAME"
+yamlr-manual \- Propose repairs and remediate Kubernetes manifests.
+.SH "DESCRIPTION"
 \fBThe Terminal User Guide & Reference\fR
 .PP
 The \fBmanual\fR command renders high-fidelity documentation directly in your terminal. This allows for a 100% offline-first experience where you never have to leave the shell to master the engine.
 .PP
-.SH "USAGE"
+.SH "SYNOPSIS"
 .nf
 .RS
 yamlr manual [TOPIC]
@@ -11,17 +14,21 @@ yamlr manual [TOPIC]
 .fi
 .SH "DESCRIPTION"
 .IP "\(bu" 2
-  **The Big Book**: Running \fByamlr manual\fR with no arguments opens the full **Yamlr User Guide**.
+  \fBThe Big Book\fR: Running \fByamlr manual\fR with no arguments opens the full \fBYamlr User Guide\fR.
 .IP "\(bu" 2
-  **Targeted Reference**: Pass a command name (e.g., \fBscan\fR, \fBheal\fR, \fBrules\fR) to view the specific manual for that subcommand.
+  \fBTiered Reference\fR: Pass a command name (e.g., \fBscan\fR, \fBheal\fR, \fBrules\fR) to view the specific manual for that subcommand.
 .IP "\(bu" 2
-  **Specialized Topics**:
+  \fBDiscovery Integration\fR: Complements the \fByamlr features\fR command by providing deep technical context for every core and enterprise capability.
 .IP "\(bu" 2
-  \fBconfig\fR: Opens the full **Yamlr Configuration Guide** (\fBCONFIGURATION.md\fR).
+  \fBSpecialized Topics\fR:
 .IP "\(bu" 2
-  **Rich Rendering**: Uses the engine's internal markdown processor for a premium, formatted reading experience.
+  \fBconfig\fR: Opens the full \fBYamlr Configuration Guide\fR (\fBCONFIGURATION.md\fR).
 .IP "\(bu" 2
-  **Offline-First**: Bundled directly into the binary; no internet connection required.
+  \fBRich Rendering\fR: Uses the engine's internal markdown processor for a premium, formatted reading experience.
+.IP "\(bu" 2
+  \fBOffline-First\fR: Bundled directly into the binary; no internet connection required.
+.IP "\(bu" 2
+  \fBPerformance Profiling\fR: Supports the global \fB\fB--timing\fR\fR flag to measure documentation rendering and bootstrap overhead.
 .SH "EXAMPLES"
 \fBOpen the main User Guide:\fR
 .PP
@@ -48,3 +55,8 @@ yamlr manual config
 .PP
 [back to User Guide](file:///d:/yamlr/docs/USER_GUIDE.md)
 .PP
+.SH "REPORTING BUGS"
+Report bugs to <https://github.com/yamlr/yamlr/issues>
+.PP
+.SH "COPYRIGHT"
+Copyright \(co 2026 Timonel Labs. Proprietary & Commercial Software (All Rights Reserved).

@@ -1,0 +1,64 @@
+# Yamlr: The Kubernetes Configuration Safety Engine
+# -----------------------------------------------
+# Release installer for Windows; verifies the pinned release archive.
+# Version: @VERSION@
+#
+# Requires GitHub CLI (`gh`) for signed release provenance verification.
+
+$ErrorActionPreference = "Stop"
+
+$Repo = "yamlr/yamlr"
+$InstallDir = Join-Path $HOME ".yamlr\bin"
+$BinaryName = "yamlr.exe"
+$Version = "@VERSION@"
+if ($Version -notmatch '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$') {
+    throw "Invalid packaged release version '$Version'."
+}
+
+Write-Host " Yamlr: The Kubernetes Configuration Safety Engine" -ForegroundColor Cyan
+Write-Host "Starting installation..."
+
+if (-not (Test-Path $InstallDir)) {
+    New-Item -ItemType Directory -Path $InstallDir | Out-Null
+}
+
+if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
+    throw "GitHub CLI ('gh') is required to verify the Yamlr release attestation."
+}
+$Tag = if ($Version.StartsWith("v")) { $Version } else { "v$Version" }
+$AssetName = "yamlr-windows-x86_64.zip"
+$BaseUrl = "https://github.com/$Repo/releases/download/$Tag"
+$TempDir = Join-Path $env:TEMP ([System.Guid]::NewGuid().ToString("N"))
+New-Item -ItemType Directory -Path $TempDir | Out-Null
+$TempArchive = Join-Path $TempDir $AssetName
+$TempChecksum = Join-Path $TempDir "checksums.txt"
+Invoke-WebRequest -Uri "$BaseUrl/$AssetName" -OutFile $TempArchive -UseBasicParsing
+Invoke-WebRequest -Uri "$BaseUrl/checksums.txt" -OutFile $TempChecksum -UseBasicParsing
+$ChecksumLine = Get-Content $TempChecksum | Where-Object { $_ -match "\s+$([regex]::Escape($AssetName))$" } | Select-Object -First 1
+if ($ChecksumLine -notmatch '^([a-fA-F0-9]{64})\s+') { throw "No valid SHA-256 checksum found for $AssetName." }
+$ExpectedHash = $Matches[1].ToLowerInvariant()
+$ActualHash = (Get-FileHash -Path $TempArchive -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($ExpectedHash -ne $ActualHash) { throw "SHA-256 verification failed for $AssetName." }
+& gh attestation verify $TempArchive --repo $Repo --signer-workflow "$Repo/.github/workflows/release-binaries.yml" --source-ref "refs/tags/$Tag"
+if ($LASTEXITCODE -ne 0) { throw "Release provenance verification failed." }
+Expand-Archive -Path $TempArchive -DestinationPath $TempDir -Force
+$DestPath = Join-Path $InstallDir $BinaryName
+Move-Item -Path (Join-Path $TempDir $BinaryName) -Destination $DestPath -Force
+Remove-Item -Path $TempDir -Recurse -Force
+
+Write-Host "✅ Yamlr installed successfully to $DestPath" -ForegroundColor Green
+
+# Update PATH for current session
+if ($env:Path -notlike "*$InstallDir*") {
+    $env:Path += ";$InstallDir"
+    
+    # Persistent update
+    Write-Host "Updating PATH environment variable..." -ForegroundColor Gray
+    $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
+    if ($UserPath -notlike "*$InstallDir*") {
+        [Environment]::SetEnvironmentVariable("Path", "$UserPath;$InstallDir", "User")
+        Write-Host "PATH updated permanently." -ForegroundColor Gray
+    }
+}
+
+Write-Host "`nTry it out: yamlr welcome" -ForegroundColor Green

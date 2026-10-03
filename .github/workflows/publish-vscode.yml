@@ -1,0 +1,60 @@
+name: Publish VS Code Extension
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish-extension:
+    name: Package and Publish Extension
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: vscode/package-lock.json
+
+      - name: Install dependencies
+        working-directory: vscode
+        run: npm ci
+
+      - name: Compile TypeScript
+        working-directory: vscode
+        run: npm run compile
+
+      - name: Package VSIX
+        working-directory: vscode
+        run: npx @vscode/vsce package --no-dependencies -o yamlr.vsix
+
+      - name: Publish to VS Code Marketplace
+        if: ${{ secrets.VSCE_PAT != '' }}
+        working-directory: vscode
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: npx @vscode/vsce publish --packagePath yamlr.vsix
+
+      - name: Publish to Open VSX Registry
+        if: ${{ secrets.OVSX_PAT != '' }}
+        working-directory: vscode
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+        run: npx ovsx publish yamlr.vsix
+
+      - name: Attach VSIX to GitHub Release
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: vscode/yamlr.vsix

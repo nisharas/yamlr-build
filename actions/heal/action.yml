@@ -1,152 +1,87 @@
-name: Yamlr Surgeon
-description: Autonomous Manifest Repair (Professional Version)
+name: Yamlr Manifest Remediator (Heal)
+description: Autonomous, comment-preserving Kubernetes manifest auto-repair with git commit and push capability.
 author: Yamlr
 inputs:
   path:
-    description: Path to heal (file or directory)
+    description: Path to manifests (file or directory)
     required: false
     default: .
-  push:
-    description: Automatically push repairs to the branch
+  apply:
+    description: Apply fixes directly to manifests; defaults to preview only
     required: false
-    default: 'true'
+    default: 'false'
+  diff:
+    description: Show side-by-side diff of proposed changes
+    required: false
+    default: 'false'
+  dry-run:
+    description: Show forensic impact without applying changes
+    required: false
+    default: 'false'
+  k8s-version:
+    description: Target Kubernetes schema version (e.g. 1.30, 1.31)
+    required: false
+  kube-version:
+    description: Backward-compatible alias for k8s-version
+    required: false
+  crd:
+    description: Path to CRD manifests to ingest
+    required: false
+  helm:
+    description: Audit and heal Helm values in-memory
+    required: false
+    default: 'false'
+  kustomize:
+    description: Audit and heal Kustomize overlays in-memory
+    required: false
+    default: 'false'
+  ingest-opa:
+    description: Path to OPA Gatekeeper JSON report to ingest and auto-repair
+    required: false
+  ingest-kyverno:
+    description: Path to Kyverno PolicyReport JSON to ingest and auto-repair
+    required: false
+  output-file:
+    description: Path to write report
+    required: false
+  exit-zero:
+    description: Always exit with code 0 (for non-blocking CI warnings)
+    required: false
+    default: 'false'
+  push:
+    description: Commit and push applied repairs; requires apply=true
+    required: false
+    default: 'false'
+  push-telemetry:
+    description: Push anonymous execution telemetry to telemetry gateway
+    required: false
+    default: 'false'
   token:
     description: GitHub token for pushing repairs
     required: false
     default: ${{ github.token }}
-  kube-version:
-    description: Target Kubernetes version
-    required: false
-  harden:
-    description: Apply security hardening
-    required: false
-    default: 'false'
-  enforce-limits:
-    description: Auto-inject missing CPU/Memory limits
-    required: false
-    default: 'false'
-  enforce-probes:
-    description: Auto-inject missing probes
-    required: false
-    default: 'false'
-  fix-refs:
-    description: Cross-Resource Auto-Fix
-    required: false
-    default: 'false'
-  fix-tags:
-    description: Auto-remediate :latest tags
-    required: false
-    default: 'false'
   extra-args:
-    description: Universal passthrough for any current or future Yamlr CLI flags (e.g.,
-      "--unsafe --adapters-dir ./x")
+    description: Universal passthrough for additional CLI flags
     required: false
     default: ''
-  k8s-version:
-    description: Target K8s version (e.g., 1.28, v1.31)
-    required: false
-  max-depth:
-    description: 'Limit directory recursion depth (default: 10)'
-    required: false
-  ext:
-    description: 'Extensions to process (default: .yaml,.yml)'
-    required: false
-  concurrency:
-    description: Parallel worker count (defaults to CPU core count)
-    required: false
-  identity-mode:
-    description: 'Identity detection style: ''infer'' (default) or ''strict'''
-    required: false
-  strict:
-    description: Treat all schema warnings as errors
-    required: false
-    default: 'false'
-  compact:
-    description: Minify output (2-space indent, no extra whitespace)
-    required: false
-    default: 'false'
-  cpu-limit:
-    description: Standard CPU request/limit for auto-injection (e.g. 500m)
-    required: false
-  mem-limit:
-    description: Standard Memory request/limit for auto-injection (e.g. 512Mi)
-    required: false
-  namespace:
-    description: Default namespace for generated resources
-    required: false
-  health-threshold:
-    description: Custom health score penalty threshold (0-100)
-    required: false
-  enforce-namespace:
-    description: Inject default namespace for resources missing one.
-    required: false
-    default: 'false'
-  fail-on:
-    description: 'CI/CD GATE: Exit with code 1 if specified severity is found'
-    required: false
-  check-deprecations:
-    description: Explicitly audit for and record deprecated Kubernetes APIs
-    required: false
-    default: 'false'
-  opa-bundle:
-    description: Path or URL to OPA bundle (Supports Gatekeeper Templates)
-    required: false
-  kyverno-report:
-    description: '[PRO] Path to Kyverno PolicyReport JSON for Auto-Fix ingestion'
-    required: false
-  output:
-    description: Output format (text, json, or sarif)
-    required: false
-  stub-refs:
-    description: 'Generate missing resources. Default: Safe kinds only. Use --stub-refs=Kind
-      for filter.'
-    required: false
-  unsafe:
-    description: Allow healing of sensitive resources. Use --unsafe or --unsafe=Secret.
-    required: false
-  evidence-dir:
-    description: '[PRO] Generate DNA-signed cryptographic receipts for compliance
-      audits in the specified directory.'
-    required: false
-  adapters-dir:
-    description: '[PRO] Directory containing custom Python/Shell remediation adapters
-      for compliance violations.'
-    required: false
-  comment:
-    description: Automatically post anatomical findings and repairs as a PR comment
-    required: false
-    default: 'true'
 runs:
   using: docker
   image: Dockerfile
   env:
     INPUT_PATH: ${{ inputs.path }}
+    INPUT_APPLY: ${{ inputs.apply }}
+    INPUT_DIFF: ${{ inputs.diff }}
+    INPUT_DRY_RUN: ${{ inputs.dry-run }}
+    INPUT_K8S_VERSION: ${{ inputs.k8s-version }}
+    INPUT_KUBE_VERSION: ${{ inputs.kube-version }}
+    INPUT_CRD: ${{ inputs.crd }}
+    INPUT_HELM: ${{ inputs.helm }}
+    INPUT_KUSTOMIZE: ${{ inputs.kustomize }}
+    INPUT_INGEST_OPA: ${{ inputs.ingest-opa }}
+    INPUT_INGEST_KYVERNO: ${{ inputs.ingest-kyverno }}
+    INPUT_OUTPUT_FILE: ${{ inputs.output-file }}
+    INPUT_EXIT_ZERO: ${{ inputs.exit-zero }}
     INPUT_PUSH: ${{ inputs.push }}
+    INPUT_PUSH_TELEMETRY: ${{ inputs.push-telemetry }}
     GITHUB_TOKEN: ${{ inputs.token }}
-    INPUT_KUBE_VERSION: ${{ inputs.k8s-version }}
-    INPUT_HARDEN: ${{ inputs.harden }}
-    INPUT_ENFORCE_LIMITS: ${{ inputs.enforce-limits }}
-    INPUT_ENFORCE_PROBES: ${{ inputs.enforce-probes }}
-    INPUT_FIX_REFS: ${{ inputs.fix-refs }}
-    INPUT_FIX_TAGS: ${{ inputs.fix-tags }}
     INPUT_EXTRA_ARGS: ${{ inputs.extra-args }}
-    INPUT_MAX_DEPTH: ${{ inputs.max-depth }}
-    INPUT_EXT: ${{ inputs.ext }}
-    INPUT_CONCURRENCY: ${{ inputs.concurrency }}
-    INPUT_IDENTITY_MODE: ${{ inputs.identity-mode }}
-    INPUT_STRICT: ${{ inputs.strict }}
-    INPUT_COMPACT: ${{ inputs.compact }}
-    INPUT_CPU_LIMIT: ${{ inputs.cpu-limit }}
-    INPUT_MEM_LIMIT: ${{ inputs.mem-limit }}
-    INPUT_NAMESPACE: ${{ inputs.namespace }}
-    INPUT_HEALTH_THRESHOLD: ${{ inputs.health-threshold }}
-    INPUT_ENFORCE_NAMESPACE: ${{ inputs.enforce-namespace }}
-    INPUT_FAIL_ON: ${{ inputs.fail-on }}
-    INPUT_CHECK_DEPRECATIONS: ${{ inputs.check-deprecations }}
-    INPUT_OPA_BUNDLE: ${{ inputs.opa-bundle }}
-    INPUT_KYVERNO_REPORT: ${{ inputs.kyverno-report }}
-    INPUT_OUTPUT: ${{ inputs.output }}
-    INPUT_STUB_REFS: ${{ inputs.stub-refs }}
-    INPUT_UNSAFE: ${{ inputs.unsafe }}
-    INPUT_EVIDENCE_DIR: ${{ inputs.evidence-dir }}
-    INPUT_ADAPTERS_DIR: ${{ inputs.adapters-dir }}

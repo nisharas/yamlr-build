@@ -1,135 +1,126 @@
-.TH "YAMLR-SCAN" "1" "March 2026" "Yamlr Manual" "User Commands"
+.TH "YAMLR-SCAN" "1" "May 2026" "Yamlr Manual" "User Commands"
+.SH "NAME"
+yamlr-scan \- Propose repairs and remediate Kubernetes manifests.
+.SH "DESCRIPTION"
 \fBLocal Analysis & Read-Only Audit\fR
 .PP
-The \fByamlr scan\fR command is the core auditing engine. It performs three layers of analysis \fB100% locally\fR:
+The \fByamlr scan\fR command is the core auditing engine. It performs deep analysis \fB100% locally\fR:
 .PP
 1.  \fBSyntax & Structure\fR: Checks for valid YAML and basic Kubernetes fields.
 .PP
 2.  \fBSchema Validation\fR: Validates against K8s API schemas (strict typing).
 .PP
-37.  \fBPolicy Enforcement (OPA)\fR: Runs custom Rego policies.
+3.  \fBPolicy Enforcement (OPA)\fR: Runs custom Rego policies.
 .PP
-8.  \fBScientific Benchmarking\fR: via the \fBaudit\fR alias, measure healing accuracy (HAS).
+4.  \fBScientific Benchmarking\fR: Measures healing accuracy (HAS).
 .PP
-.SH "USAGE"
+.SH "SYNOPSIS"
 .nf
 .RS
-# Basic Audit
+# Scan current directory
 yamlr scan .
 
-# Audit a specific target K8s version
-yamlr scan . --kube-version 1.31
+# Scan from stdin (Standard Pipe Integration)
+kubectl get deployment -o yaml | yamlr scan -
 
 # CI/CD Gate: Fail if any errors found
 yamlr scan . --fail-on error
-
-# Ultra-Scale: Stream results to NDJSON for 10k+ files
-yamlr scan . --stream-to audit_log.ndjson
 .RE
 .fi
 .SH "ADVANCED FEATURES"
 .SS "1. Identity Mode (`--identity-mode`)"
-Yamlr uses AI-like heuristics ("Brain") to identify resources even if \fBapiVersion\fR or \fBkind\fR is missing. You can control this behavior:
+Yamlr uses deterministic structural heuristics to identify resources even if \fBapiVersion\fR or \fBkind\fR is missing.
 .PP
 .IP "\(bu" 2
-  \fB--identity-mode=infer\fR (Default): Attempts to identify broken resources (e.g., "This looks like a Service").
+  \fB--identity-mode=infer\fR (Default): Attempts to identify broken resources.
 .IP "\(bu" 2
-  \fB--identity-mode=strict\fR: Skips any file that doesn't strictly declare \fBapiVersion\fR and \fBkind\fR. Useful for reducing noise in large repos.
+  \fB--identity-mode=strict\fR: Skips any file that doesn't strictly declare \fBapiVersion\fR and \fBkind\fR.
 .SS "2. OPA Policy Engine (`--opa-bundle`)"
-Yamlr embeds a full Open Policy Agent engine. You can feed it existing policies:
+Yamlr embeds a full Open Policy Agent engine.
 .PP
 .nf
 .RS
-# Use a remote bundle
-yamlr scan . --opa-bundle https://policies.mycorp.com/bundle.tar.gz
-
 # Use local Gatekeeper ConstraintTemplates
 yamlr scan . --opa-bundle ./gatekeeper/templates/
 .RE
 .fi
-\fINote: Yamlr automatically detects if the input is a raw Rego file, a tarball bundle, or a Kubernetes ConstraintTemplate.\fR
-.PP
 .SS "3. Output Formats (`--output`)"
-Integrate with other tools using structured output.
-.PP
 .IP "\(bu" 2
   \fB--output=text\fR (Default): Human-readable table.
 .IP "\(bu" 2
   \fB--output=json\fR: Full structured report.
 .IP "\(bu" 2
-  \fB--output=sarif\fR: **GitHub Security** format. Upload directly to GitHub Code Scanning.
-.nf
-.RS
-# CI/CD Example
-yamlr scan . --output sarif > yamlr.sarif
-.RE
-.fi
-.SS "4. Epic 21 Compliance (Enterprise)"
+  \fB--output=sarif\fR: GitHub Security format.
+.SS "4. Enterprise Compliance & Integrity"
 .IP "\(bu" 2
-  \fB--evidence-dir <DIR>\fR: Directory to store generated cryptographic DNA evidence receipts natively.
+  \fB\fB--receipt\fR\fR: Generate a cryptographic DNA receipt for this scan.
 .IP "\(bu" 2
-  \fB--adapters-dir <DIR>\fR: Directory to dynamically load and execute custom Python/Bash remediation scripts natively against the AST.
+  \fB\fB--baseline <FILE>\fR\fR: Path to violation baseline (SHA-256 fingerprints to ignore).
 .IP "\(bu" 2
-  \fB--kyverno-report <PATH>\fR: Path to ingest a Kyverno \fBPolicyReport\fR JSON file and map its findings to Yamlr auto-fixes.
-.SS "5. CI/CD & Ultra-Scale Flags"
+  \fB\fB--kyverno-report <PATH>\fR\fR: [PRO] Ingest Kyverno reports for investigation.
 .IP "\(bu" 2
-  \fB--fail-on CHOICE\fR: Exit 1 if issues found. Choices: \fBany\fR, \fBwarning\fR, \fBerror\fR.
+  \fB\fB--from-report <PATH>\fR\fR: [PRO] Unified Ingest: OPA or Kyverno JSON remediation.
 .IP "\(bu" 2
-  \fB--stream-to FILE\fR: Stream incremental results to NDJSON (Ultra-Scale).
-.SS "🛡 Universal Expert Flags"
-These flags are available across almost all primary Yamlr commands:
+  \fB\fB--complement-mode <T:P>\fR\fR: [PRO] Reconciliation Mode: Ingest findings from tools (checkov, kubeconform).
+.IP "\(bu" 2
+  \fB\fB--opa-bundle <PATH|URL>\fR\fR: [PRO] Path to OPA bundle or Gatekeeper templates.
+.SS "5. Performance & Scaling"
+.IP "\(bu" 2
+  \fB\fB--fast\fR\fR [PRO]: Enable lightning-fast scanning via native Rust extension (10x faster).
+.IP "\(bu" 2
+  \fB\fB--concurrency <N>\fR\fR: Force parallel worker count (Defaults to CPU count).
+.IP "\(bu" 2
+  \fB\fB--stream-to <FILE>\fR\fR: Batch-mode: Stream results to NDJSON (prevents RAM saturation).
+.SS "6. Advanced Observability & Simulation"
+.IP "\(bu" 2
+  \fB\fB--emulate <TOOL>\fR\fR: Simulate sidecar containers (e.g., \fBistiod\fR, \fBlinkerd\fR) during local analysis to reduce false negatives.
+.IP "\(bu" 2
+  \fB\fB--shadow\fR\fR: [EXPERIMENTAL] Capture dynamic server-side mutations using a Kubernetes dry-run shadowing technique.
+.IP "\(bu" 2
+  \fB\fB--patch\fR\fR: Instead of full output, generate a \fByamlr-patches.yaml\fR containing just the remediation fragments.
+.IP "\(bu" 2
+  \fB\fB--clinical\fR\fR: [SURGICAL] Redirect all visual/UI terminal logs to \fBstderr\fR while keeping \fBstdout\fR reserved for pure YAML. Ideal for ArgoCD/GitOps pipelines.
+.SS " Universal Expert Flags"
+These flags are available across almost all primary commands:
 .PP
 .IP "\(bu" 2
-  **\fB--diff\fR**: Show visual diff of changes (Preview mode).
+  \fB\fB--kube-version <V>\fR\fR: Force a specific Kubernetes version (e.g., \fB1.31\fR).
 .IP "\(bu" 2
-  **\fB--dry-run\fR**: Alias for \fB--diff\fR.
+  \fB\fB--risk-threshold <high|medium|low>\fR\fR: Exit with code 1 if any finding meets or exceeds this risk level.
 .IP "\(bu" 2
-  **\fB--fast\fR**: Skip heavy semantic analysis for maximum speed.
+  \fB\fB--fail-on <CHOICE>\fR\fR: CI/CD Gate: Exit 1 if specified severity found (any/warning/error).
 .IP "\(bu" 2
-  **\fB--kube-version <V>\fR**: Force a specific Kubernetes version (e.g., \fB1.31\fR).
+  \fB\fB--max-depth <N>\fR\fR: Limit recursive scanning depth (Default: 10).
 .IP "\(bu" 2
-  **\fB--catalog <PATH>\fR**: (Optional) Path to custom catalog. Yamlr now includes an **Embedded Magic Fallback** if this is omitted.
+  \fB\fB--ext <list>\fR\fR: Comma-separated list of file extensions (Default: \fB.yaml,.yml\fR).
 .IP "\(bu" 2
-  **\fB--max-depth <N>\fR**: Limit recursive scanning depth (Default: 10).
+  \fB\fB--strict\fR\fR: Treat all schema warnings as hard errors.
 .IP "\(bu" 2
-  **\fB--ext <list>\fR**: Comma-separated list of file extensions (Default: \fB.yaml,.yml\fR).
+  \fB\fB--compact\fR\fR: Use minimal whitespace (2-space indent) in output.
 .IP "\(bu" 2
-  **\fB--concurrency <N>\fR**: Number of parallel worker processes.
+  \fB\fB--health-threshold <0-100>\fR\fR: Minimum score to pass (Default: 70).
 .IP "\(bu" 2
-  **\fB--strict\fR**: Treat all schema warnings as hard errors.
+  \fB\fB--namespace <name>\fR\fR: Default namespace for generated resources.
 .IP "\(bu" 2
-  **\fB--compact\fR**: Use minimal whitespace (2-space indent) in output.
+  \fB\fB--check-deprecations\fR\fR: Audit for and record deprecated K8s APIs.
 .IP "\(bu" 2
-  **\fB--health-threshold <0-100>\fR**: Minimum score to pass (Default: 70).
+  \fB\fB--summary-only\fR\fR: Show aggregate stats only (recommended for 100+ files).
 .IP "\(bu" 2
-  **\fB--namespace <name>\fR**: Default namespace for generated resources.
+  \fB\fB--plain\fR\fR: ASCII-only output mode (Standard Compliance).
 .IP "\(bu" 2
-  **\fB--check-deprecations\fR**: Audit for and record deprecated K8s APIs.
+  \fB\fB--verbose\fR\fR: Show full audit logs and engine stages.
 .IP "\(bu" 2
-  **\fB--cpu-limit <limit>\fR**: Default CPU for auto-injection (e.g., \fB500m\fR).
+  \fB\fB-q\fR, \fB--quiet\fR\fR: Minimal output mode (exit codes only).
 .IP "\(bu" 2
-  **\fB--mem-limit <limit>\fR**: Default Memory for auto-injection (e.g., \fB512Mi\fR).
+  \fB\fB--yes\fR, \fB--no-input\fR, \fB--non-interactive\fR, \fB-y\fR\fR: Auto-approve all prompts (non-interactive mode).
 .IP "\(bu" 2
-  **\fB--enforce-limits\fR**: Auto-inject missing CPU/Memory limits.
+  \fB\fB--diff\fR / \fB--dry-run\fR\fR: Show proposed fixes as a preview.
 .IP "\(bu" 2
-  **\fB--enforce-probes\fR**: Auto-inject missing Liveness/Readiness probes.
+  \fB\fB--timing\fR\fR: [PERFORMANCE] Output surgical execution timing breakdown.
 .IP "\(bu" 2
-  **\fB--enforce-namespace\fR**: Auto-inject default namespace if missing.
-.IP "\(bu" 2
-  **\fB--fix-tags\fR**: Auto-remediate \fB:latest\fR or missing image tags.
-.IP "\(bu" 2
-  **\fB--harden\fR**: Apply security hardening (Non-root, Read-only FS).
-.IP "\(bu" 2
-  **\fB--stream-to <FILE>\fR**: Batch-mode: Stream results to NDJSON (prevents RAM saturation).
-.IP "\(bu" 2
-  **\fB--fail-on <CHOICE>\fR**: Exit 1 if specified severity found (error/warning/any).
-.IP "\(bu" 2
-  **\fB--summary-only\fR**: Show aggregate stats only (recommended for 100+ files).
-.IP "\(bu" 2
-  **\fB--plain\fR**: ASCII-only output mode (Recommended for Log redirection).
-.IP "\(bu" 2
-  **\fB--verbose\fR**: Show full audit logs and engine stages.
-.IP "\(bu" 2
-  **\fB-q\fR, \fB--quiet\fR**: Minimal output mode (CI/CD optimized; errors and exit codes only).
-.IP "\(bu" 2
-  **\fB--identity-mode {infer,strict}\fR**: Control how Yamlr identifies resources (Default: infer).
+  \fB\fB--timing-file <FILE>\fR\fR: [PERFORMANCE] Save performance profiling data to a JSON file.
+.SH "REPORTING BUGS"
+Report bugs to <https://github.com/yamlr/yamlr/issues>
+.PP
+.SH "COPYRIGHT"
+Copyright \(co 2026 Timonel Labs. Proprietary & Commercial Software (All Rights Reserved).

@@ -1,9 +1,12 @@
-.TH "YAMLR-EVIDENCE" "1" "March 2026" "Yamlr Manual" "User Commands"
+.TH "YAMLR-EVIDENCE" "1" "May 2026" "Yamlr Manual" "User Commands"
+.SH "NAME"
+yamlr-evidence \- Propose repairs and remediate Kubernetes manifests.
+.SH "DESCRIPTION"
 The \fByamlr evidence\fR command aggregates cryptographic DNA receipts (generated during a CI/CD \fB--evidence-dir\fR pipeline) into a single, auditor-ready Compliance Report.
 .PP
 This is an Enterprise feature designed for strict regulatory environments (SOC2, HIPAA, CIS) where infrastructure changes must be mathematically proven tamper-proof.
 .PP
-.SH "USAGE"
+.SH "SYNOPSIS"
 .nf
 .RS
 yamlr evidence <dir> [options]
@@ -20,11 +23,17 @@ When Yamlr runs with \fB--evidence-dir <dir>\fR, it outputs JSON cryptographic r
   \fB--format FORMAT\fR: The output format for the report. Options are \fBpdf\fR (default) or \fBhtml\fR.
 .IP "\(bu" 2
   \fB--output FILE\fR: The specific path/filename to save the generated report. If omitted, Yamlr generates a timestamped file (e.g., \fByamlr-audit-report-<timestamp>.pdf\fR).
-.SS "Global Flags"
-\fI(Standard Yamlr global debugging flags apply. See Universal Expert Flags for more.)\fR
+.SS " Universal Expert Flags"
+Available across primary commands:
 .PP
 .IP "\(bu" 2
-  \fB--verbose\fR: Enable verbose debugging output.
+  \fB\fB--timing\fR\fR: [PERFORMANCE] Output surgical execution timing breakdown.
+.IP "\(bu" 2
+  \fB\fB--timing-file <FILE>\fR\fR: [PERFORMANCE] Save performance profiling data to a JSON file.
+.IP "\(bu" 2
+  \fB\fB--verbose\fR\fR: Full audit logs and engine stages.
+.IP "\(bu" 2
+  \fB-q\fR, \fB--quiet\fR: Minimal output mode (exit codes only).
 .SH "EXAMPLES"
 \fBGenerate a PDF report from a CI artifacts directory:\fR
 .PP
@@ -33,13 +42,18 @@ When Yamlr runs with \fB--evidence-dir <dir>\fR, it outputs JSON cryptographic r
 yamlr evidence ./audit-receipts/ --output final-compliance-report.pdf
 .RE
 .fi
-\fBGenerate an HTML dashboard report:\fR
+\fBGenerate a JSON dashboard report:\fR
 .PP
 .nf
 .RS
-yamlr evidence ./audit-receipts/ --format html --output index.html
+yamlr evidence ./audit-receipts/ --format json --output index.json
 .RE
 .fi
 .SH "SECURITY & PROVING"
 If \fByamlr evidence\fR detects that an \fBevidence-*.json\fR receipt has been tampered with (e.g., a bad HMAC signature or a mismatched \fBhealed_content\fR hash), it will securely quarantine the receipt and forcefully mark the PDF report as \fBTAMPERED\fR to protect the integrity of the audit.
 .PP
+.SH "REPORTING BUGS"
+Report bugs to <https://github.com/yamlr/yamlr/issues>
+.PP
+.SH "COPYRIGHT"
+Copyright \(co 2026 Timonel Labs. Proprietary & Commercial Software (All Rights Reserved).

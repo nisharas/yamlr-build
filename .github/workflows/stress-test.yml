@@ -1,4 +1,4 @@
-name: 🛠️ Hyperscale Stress Test (150k+)
+name: 🛠 Hyperscale Stress Test (150k+)
 
 on:
   workflow_dispatch:
@@ -9,47 +9,57 @@ on:
         default: '150000'
         type: 'string'
 
+permissions:
+  contents: read
+
 jobs:
   stress-test:
-    name: 🚀 Execute 100x Scale Stress Test
+    name:  Execute 100x Scale Stress Test
     runs-on: ubuntu-latest
     
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: 🐍 Set up Python 3.12
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: '3.12'
 
-      - name: 📦 Install dependencies
+      - name:  Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install psutil rich
+          python -m pip install pip==26.2.1
+          python -m pip install psutil==7.2.2 rich==14.3.3
           # No need to install yamlr as we run from source (src/)
 
-      - name: 🔥 Run Stress Test Orchestrator
+      - name:  Run Stress Test Orchestrator
         env:
           PYTHONPATH: src
           PYTHONUTF8: 1
           YAMLR_QUIET: true
+          MANIFEST_COUNT: ${{ github.event.inputs.manifest_count }}
         run: |
-          python scripts/stress_test_orchestrator.py --count ${{ github.event.inputs.manifest_count }} --output stress_results.json
+          if [[ ! "$MANIFEST_COUNT" =~ ^[0-9]+$ ]] || (( MANIFEST_COUNT < 1 || MANIFEST_COUNT > 150000 )); then
+            echo "::error::manifest_count must be an integer from 1 to 150000."
+            exit 2
+          fi
+          python scripts/stress_test_orchestrator.py --count "$MANIFEST_COUNT" --output stress_results.json
 
       - name: 📊 Upload Stress Test Results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: stress-test-report-${{ github.run_id }}
           path: stress_results.json
 
       - name: 📝 Final Validation Summary
         if: always()
+        env:
+          MANIFEST_COUNT: ${{ github.event.inputs.manifest_count }}
         run: |
-          echo "### 🚀 Hyperscale Stress Test Summary" >> $GITHUB_STEP_SUMMARY
+          echo "###  Hyperscale Stress Test Summary" >> $GITHUB_STEP_SUMMARY
           echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
           echo "| :--- | :--- |" >> $GITHUB_STEP_SUMMARY
-          echo "| Total Manifests | ${{ github.event.inputs.manifest_count }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Total Manifests | $MANIFEST_COUNT |" >> $GITHUB_STEP_SUMMARY
           echo "| Peak RAM (GB) | $(cat stress_results.json | jq -r '.results.peak_memory_gb' | xargs printf '%.3f') |" >> $GITHUB_STEP_SUMMARY
           echo "| Throughput (f/s) | $(cat stress_results.json | jq -r '.results.files_per_sec' | xargs printf '%.2f') |" >> $GITHUB_STEP_SUMMARY
           echo "| Status | $(cat stress_results.json | jq -r '.results.success') |" >> $GITHUB_STEP_SUMMARY

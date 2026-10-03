@@ -1,42 +1,32 @@
 # Stage 1: Builder
-# Uses full Python image to compile the binary
-FROM python:3.11-slim as builder
+FROM python:3.11-slim AS builder
 
 WORKDIR /app
 
-# Install build tools
-RUN pip install --no-cache-dir pyinstaller
+# Install maturin and Rust
+RUN apt-get update && apt-get install -y curl build-essential \
+    && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+ENV PATH="/root/.cargo/bin:${PATH}"
 
 # Copy project files
-COPY pyproject.toml .
-COPY src/ src/
-COPY catalog/ catalog/
+COPY . .
 
-# Install dependencies
-RUN pip install .
-
-# Build binary
-# Build binary
-# Must match hack/build_binaries.py logic
-RUN pyinstaller --noconfirm --onefile --clean \
-    --name yamlr \
-    --collect-all rich \
-    --add-data "src/yamlr/core/data:yamlr/core/data" \
-    --add-data "catalog:Yamlr/catalog" \
-    src/yamlr/__main__.py
+# Build wheels using maturin
+RUN pip install --no-cache-dir maturin && \
+    maturin build --release --strip
 
 # Stage 2: Runner
-# Using python-slim instead of distroless to allow shell execution (GitHub Actions)
 FROM python:3.11-slim
 
 WORKDIR /app
 
-# Copy binary from builder
-COPY --from=builder /app/dist/yamlr /usr/local/bin/yamlr
+# Copy the built wheel from builder and install it
+COPY --from=builder /app/target/wheels/*.whl .
+RUN pip install *.whl && rm *.whl && \
+    yamlr status
 
-# Verify
+# Entrypoint
 COPY tools/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# Verify
 ENTRYPOINT ["/entrypoint.sh"]

@@ -19,7 +19,7 @@ yamlr explain config/security
 yamlr explain config/discovery   # New: Guide to finding features
 ```
 
-### 🛡 Global Performance Flags
+### Global Performance Flags
 Available across all commands:
 
 *   **`--timing`**: [PERFORMANCE] Output surgical execution timing breakdown.

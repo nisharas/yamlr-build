@@ -1,0 +1,14 @@
+name = "yamlr-licensing-gateway"
+main = "src/index.ts"
+compatibility_date = "2026-04-01"
+
+# Production Route
+# Replace <subdomain> with your actual workers.dev subdomain after deploy
+[[routes]]
+pattern = "gateway.yamlr.dev/*"
+zone_name = "yamlr.dev"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "yamlr-licensing"
+database_id = "eea02aac-0663-4796-ab58-613ed79c48ee"

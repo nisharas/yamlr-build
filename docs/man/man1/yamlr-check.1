@@ -1,94 +1,61 @@
-.TH "YAMLR-CHECK" "1" "March 2026" "Yamlr Manual" "User Commands"
+.TH "YAMLR-CHECK" "1" "May 2026" "Yamlr Manual" "User Commands"
+.SH "NAME"
+yamlr-check \- Propose repairs and remediate Kubernetes manifests.
+.SH "DESCRIPTION"
 \fBFast Syntax & Schema Validator\fR
 .PP
-The \fBcheck\fR command is a high-speed alias for \fByamlr scan\fR designed for CI/CD pipelines. It disables network calls, OPA policy evaluation, and deep semantic analysis to focus purely on syntax and local schema validity. \fBNote: \fB--strict\fR and \fB--summary-only\fR are enabled by default for this command.\fR
+High-speed alias for \fByamlr scan\fR designed for CI/CD pipelines. Disables network/OPA for maximum speed. \fBNote: \fB--strict\fR and \fB--summary-only\fR are enabled by default.\fR
 .PP
-.SH "USAGE"
+.SH "SYNOPSIS"
 .nf
 .RS
 yamlr check [PATH]...
 .RE
 .fi
 .SH "DESCRIPTION"
-Runs a lightweight validation pass.
-.PP
 .IP "\(bu" 2
-**Checks**: YAML Syntax, Kubernetes Schema (Local), Basic Structure.
+  \fBChecks\fR: YAML Syntax, K8s Schema (Local).
 .IP "\(bu" 2
-**Skips**: Network calls, Remote OPA bundles, Cross-resource graph building (partial), Deep semantic analysis.
-.IP "\(bu" 2
-**Performance**: < 200ms startup.
+  \fBPerformance\fR: < 200ms startup.
 .SH "EXAMPLES"
-\fBCI/CD Pre-Commit Hook:\fR
-.PP
 .nf
 .RS
-# Fail fast on syntax errors
 yamlr check .
 .RE
 .fi
-\fBSingle File Check:\fR
-.PP
-.nf
-.RS
-yamlr check deployment.yaml
-.RE
-.fi
-.SH "FLAGS"
-.IP "\(bu" 2
-  \fB-h, --help\fR: Show this help message.
-.IP "\(bu" 2
-  \fB--output {text,json,sarif}\fR: Output format (default: text).
-.SS "🛡 Universal Expert Flags"
-These flags are available across almost all primary Yamlr commands:
+.SS " Universal Expert Flags"
+Available across primary commands:
 .PP
 .IP "\(bu" 2
-  **\fB--diff\fR**: Show visual diff of changes (Preview mode).
+  \fB\fB--kube-version <V>\fR\fR: Force specific K8s version.
 .IP "\(bu" 2
-  **\fB--fast\fR**: Skip heavy semantic analysis for maximum speed.
+  \fB\fB--fast\fR\fR: Always enabled for check.
 .IP "\(bu" 2
-  **\fB--kube-version <V>\fR**: Force a specific Kubernetes version (e.g., \fB1.31\fR).
+  \fB\fB--max-depth <N>\fR\fR: Limit recursion depth.
 .IP "\(bu" 2
-  **\fB--max-depth <N>\fR**: Limit recursive scanning depth (Default: 10).
+  \fB\fB--concurrency <N>\fR\fR: Parallel worker processes.
 .IP "\(bu" 2
-  **\fB--ext <list>\fR**: Comma-separated list of file extensions (Default: \fB.yaml,.yml\fR).
+  \fB\fB--strict\fR\fR: Enabled by default.
 .IP "\(bu" 2
-  **\fB--concurrency <N>\fR**: Number of parallel worker processes.
+  \fB\fB--compact\fR\fR: Minify output.
 .IP "\(bu" 2
-  **\fB--strict\fR**: Treat all schema warnings as hard errors.
+  \fB\fB--output {text,json,sarif}\fR\fR: Output format.
 .IP "\(bu" 2
-  **\fB--compact\fR**: Use minimal whitespace (2-space indent) in output.
+  \fB\fB--fail-on <CHOICE>\fR\fR: Exit 1 if found.
 .IP "\(bu" 2
-  **\fB--health-threshold <0-100>\fR**: Minimum score to pass (Default: 70).
+  \fB\fB--summary-only\fR\fR: Enabled by default.
 .IP "\(bu" 2
-  **\fB--namespace <name>\fR**: Default namespace for generated resources.
+  \fB\fB--plain\fR\fR: ASCII-only output.
 .IP "\(bu" 2
-  **\fB--check-deprecations\fR**: Audit for and record deprecated K8s APIs.
+  \fB\fB--verbose\fR\fR: Full audit logs.
 .IP "\(bu" 2
-  **\fB--cpu-limit <limit>\fR**: Default CPU for auto-injection (e.g., \fB500m\fR).
+  \fB\fB--timing\fR\fR: [PERFORMANCE] Output surgical execution timing breakdown.
 .IP "\(bu" 2
-  **\fB--mem-limit <limit>\fR**: Default Memory for auto-injection (e.g., \fB512Mi\fR).
+  \fB\fB--timing-file <FILE>\fR\fR: [PERFORMANCE] Save performance profiling data to a JSON file.
 .IP "\(bu" 2
-  **\fB--enforce-limits\fR**: Auto-inject missing CPU/Memory limits.
-.IP "\(bu" 2
-  **\fB--enforce-probes\fR**: Auto-inject missing Liveness/Readiness probes.
-.IP "\(bu" 2
-  **\fB--enforce-namespace\fR**: Auto-inject default namespace if missing.
-.IP "\(bu" 2
-  **\fB--fix-tags\fR**: Auto-remediate \fB:latest\fR or missing image tags.
-.IP "\(bu" 2
-  **\fB--harden\fR**: Apply security hardening (Non-root, Read-only FS).
-.IP "\(bu" 2
-  **\fB--stream-to <FILE>\fR**: Batch-mode: Stream results to NDJSON (prevents RAM saturation).
-.IP "\(bu" 2
-  **\fB--fail-on <CHOICE>\fR**: Exit 1 if specified severity found (error/warning/any).
-.IP "\(bu" 2
-  **\fB--summary-only\fR**: Show aggregate stats only (recommended for 100+ files).
-.IP "\(bu" 2
-  **\fB--plain\fR**: ASCII-only output mode (Recommended for Log redirection).
-.IP "\(bu" 2
-  **\fB--verbose\fR**: Show full audit logs and engine stages.
-.IP "\(bu" 2
-  **\fB-q\fR, \fB--quiet\fR**: Minimal output mode (CI/CD optimized; errors and exit codes only).
-.IP "\(bu" 2
-  **\fB--identity-mode {infer,strict}\fR**: Control how Yamlr identifies resources (Default: infer).
+  \fB-q\fR, \fB--quiet\fR: Minimal output mode.
+.SH "REPORTING BUGS"
+Report bugs to <https://github.com/yamlr/yamlr/issues>
+.PP
+.SH "COPYRIGHT"
+Copyright \(co 2026 Timonel Labs. Proprietary & Commercial Software (All Rights Reserved).

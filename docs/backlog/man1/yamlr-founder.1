@@ -1,0 +1,47 @@
+.TH "YAMLR-FOUNDER" "1" "May 2026" "Yamlr Manual" "User Commands"
+.SH "NAME"
+yamlr-founder \- Propose repairs and remediate Kubernetes manifests.
+.SH "DESCRIPTION"
+\fBStrategic Command Center\fR
+.PP
+The \fBfounder\fR command is a privileged operational dashboard designed for the Yamlr project founder to monitor ecosystem health and strategic metrics.
+.PP
+.SH "SYNOPSIS"
+.nf
+.RS
+yamlr founder [ACTION]
+.RE
+.fi
+.SH "DESCRIPTION"
+Aggregates global telemetry (anonymized) to provide a macro-view of product performance, rule efficacy, and user friction points.
+.PP
+.SH "ACTIONS"
+.IP "\(bu" 2
+  \fB\fBdashboard\fR\fR: (Default) Show high-level strategic KPI dashboard.
+.IP "\(bu" 2
+  \fB\fBerrors\fR\fR: View the latest anonymized fatal exception reports from the community.
+.SH "OUTPUT"
+Displays real-time metrics including:
+.PP
+.IP "\(bu" 2
+  Global ROI (Wealth Reclaimed)
+.IP "\(bu" 2
+  Rule Heatmap (Most frequently triggered rules)
+.IP "\(bu" 2
+  Top 10 failing K8s clusters (by version)
+.IP "\(bu" 2
+  Infrastructure health of the license server
+.SH "EXAMPLES"
+.nf
+.RS
+yamlr founder dashboard
+.RE
+.fi
+.SH "PRIVACY & SECURITY"
+This command only displays data that has been explicitly anonymized and uploaded via the telemetry layer. No raw YAML data or PII is ever visible in the founder dashboard.
+.PP
+.SH "REPORTING BUGS"
+Report bugs to <https://github.com/yamlr/yamlr/issues>
+.PP
+.SH "COPYRIGHT"
+Copyright \(co 2026 Timonel Labs. Proprietary & Commercial Software (All Rights Reserved).

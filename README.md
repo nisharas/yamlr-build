@@ -1,233 +1,127 @@
-# 🛡 yamlr — Kubernetes manifest safety & healing engine
-![Version](https://img.shields.io/badge/version-0.1.0-blue?style=flat-square)
-![Platform](https://img.shields.io/badge/platform-Kubernetes-lightgrey?style=flat-square)
-![CI/CD Ready](https://img.shields.io/badge/CI%2FCD-ready-success?style=flat-square)
+# Yamlr
+**The Autonomous Resolution Plane for Kubernetes Manifests**
 
-**Kubernetes validates syntax. Yamlr validates system integrity.**
+[![CI Matrix](https://github.com/yamlr/yamlr/actions/workflows/release-binaries.yml/badge.svg)](https://github.com/yamlr/yamlr/actions)
+[![License](https://img.shields.io/badge/license-Proprietary-blue.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-linux%20%7C%20macos%20%7C%20windows-lightgrey)](https://github.com/yamlr/yamlr/releases)
 
-`kubectl apply` can succeed — and your cluster can still break.
-
-Yamlr analyzes how your Kubernetes resources interact *before* deployment, catching logical misconfigurations that YAML validation and schema checks miss.
+Yamlr is a high-performance, hermetic Kubernetes manifest healing engine built in Rust. Where standard linters only report errors, Yamlr automatically repairs schema deviations, deprecated API versions, and cross-resource misalignments while strictly preserving comments, layout formatting, and semantic intent.
 
 ---
 
-## 🚨 What Yamlr Catches
+## Key Features
 
-Yamlr builds a dependency graph across your manifests to detect silent semantic failures:
-
-- **Ghost Services** — Services pointing to non-existent Pods  
-- **Port Mismatches** — Container ports misaligned with Service targets  
-- **Broken References** — Missing ConfigMaps, Secrets, PVCs  
-- **Selector Drift** — Deployment labels no longer match Services  
-- **Deprecated APIs** — Removed or unsafe Kubernetes versions  
-
-> 🧩 **Yamlr thinks in relationships — not individual files.**
----
-
-## ⚡ Try It in 60 Seconds
-
-```bash
-# Install (macOS / Linux)
-curl -fsSL https://yamlr.dev/install.sh | bash
-
-# Scan your manifests
-yamlr scan .
-````
-
-You’ll instantly see:
-
-* Risk level
-* Impact scope
-* Clear explanation
-* Suggested safe remediation
+- **⚡ Native Rust Execution**: Written in Rust, with borrowed document-slice streaming for multi-document input. Parsing and AST construction still allocate owned shard data. Measure representative workloads on the target platform; this project makes no fixed latency guarantee here.
+- **🔒 Comment & Layout Preservation**: Layout-aware healing is covered by parser and healer tests. Preservation depends on the input and repair; review the proposed diff before applying changes.
+- **🛡️ Offline Scanning**: Embeds Kubernetes schemas for supported versions (`v1.21` through `v1.37`) so core scans can run offline. Optional integrations and unsupported schema versions may require network access.
+- **🔗 Cross-Resource Referential Healing**: Automatically aligns Service selectors to Deployment labels, validates ConfigMap/Secret references, and normalizes RBAC bindings.
+- **🔄 Multi-Document Topological Ordering**: Emits multi-document YAML streams in deterministic dependency order (Namespaces & CRDs before workloads).
+- **📊 Native SARIF & JSON Reporting**: Direct integration with GitHub Code Scanning, GitLab Security Dashboard, and CI pipelines.
 
 ---
 
-## 🔍 Discover What's Protected
+## Installation
 
-Yamlr isn't a black box. You can explore the full breadth of our safety engine natively:
-
-```bash
-# View all 26+ typed safety relationships
-yamlr rules
-
-# Deep dive into a specific protection
-yamlr explain k8s/service-selector-mismatch
-```
-
-From **Ghost Services** to **Network Isolation Risks**, Yamlr gives you total visibility into your infrastructure's health.
-
----
-
-## 🧠 Why Not Just kubectl?
-
-`kubectl` checks structure.
-
-Yamlr checks whether your system will behave correctly once deployed.
-
-Example:
-
-```yaml
-# Service selects app=api
-selector:
-  app: api
-```
-
-```yaml
-# Deployment labels app=backend
-labels:
-  app: backend
-```
-
-* Kubernetes accepts both.
-* Traffic never routes.
-> **Yamlr catches this mismatch instantly — before downtime hits.**
-
----
-
-## 🔮 Safe Kubernetes Upgrades
-
-Upgrade deprecated APIs safely:
-
-```bash
-yamlr upgrade ./manifests --to 1.31
-```
-
-Yamlr identifies:
-
-* Removed APIs
-* Field behavior changes
-* Version incompatibilities
-
-Before your cluster upgrade fails.
-
----
-
-## 🩹 Deterministic Auto-Healing
-
-Yamlr doesn’t just report risk — it can fix it safely.
-
-```bash
-# Interactive repair
-yamlr heal manifests/
-
-# Preview changes safely
-yamlr heal manifests/ --dry-run
-```
-
-Yamlr explains:
-
-* What will change
-* Why it’s safe
-* What dependencies are affected
-
-> **Free users can experience limited automated repairs.**
-> **Pro unlocks unlimited batch remediation and CI automation.**
-
----
-
-## 🔁 CI/CD Integration
-
-Add Yamlr as a pre-flight safety check in CI:
-
-```bash
-# Fast syntax validation
-yamlr check .
-
-# Deep semantic scan (SARIF output supported)
-yamlr scan . --output sarif
-```
-
-Yamlr can:
-
-* Comment risk summaries on pull requests
-* Gate merges by risk threshold
-* Stream results for large mono-repos
-
-> Guard and Surgeon are also available as **GitHub Actions** for easy CI integration.
-
----
-
-## 🧩 Guard (Free) vs 🩺 Surgeon (Pro)
-
-### 🧩 Yamlr Guard — Free (GitHub Action + CLI)
-
-* Unlimited scanning
-* Risk diagnostics
-* Version awareness
-* Health scoring
-
-### 🩺 Yamlr Surgeon — Pro (GitHub Action + CLI)
-
-* Automated cross-resource remediation
-* Batch fixing across repositories
-* CI auto-PR fixes
-* Compliance export artifacts
-
-Detection is free.
-Safe automation scales with your team.
-
----
-
-## 🧰 Core Commands
-
-```bash
-yamlr scan .          # Full safety analysis
-yamlr heal .          # Apply safe remediation
-yamlr status          # Repository safety score
-yamlr rules           # View active safety rules
-yamlr stats           # Surgical ROI & savings dashboard
-catalog update  # Update Kubernetes schema catalog
-```
-
----
-
-## 🌐 Ecosystem Integrations
-
-* GitHub Actions
-* GitLab CI
-* VS Code Extension (real-time semantic diagnostics)
-
----
-
-## 📦 Installation
-
-Download the latest native executable for:
-
-* macOS
-* Linux
-* Windows
-
-Package managers (coming soon):
-
+### Homebrew (macOS & Linux)
 ```bash
 brew install yamlr/tap/yamlr
-choco install yamlr
 ```
 
----
-
-## 🏢 Yamlr Pro (Enterprise)
-
-Yamlr Pro unlocks scalable remediation and automation for teams operating production Kubernetes environments.
-
-Upgrade anytime:
+### Pre-Compiled Standalone Binaries
+Download pre-built static binaries for Linux (x86_64, aarch64), macOS (Apple Silicon, Intel), and Windows (x64) from the [GitHub Releases](https://github.com/yamlr/yamlr/releases) page.
 
 ```bash
-yamlr auth login
+# Verify installation
+yamlr version
 ```
----
 
-## 🤝 Contributing
-See [CONTRIBUTING.md](docs/CONTRIBUTING.md) to get started building new Analyzers and Healers.
-
-## 📄 License
-Yamlr is a commercial product.
-- **Core Engine & Extensions:** are Proprietary. All rights reserved.
+### VS Code Extension
+Install the official Yamlr extension directly from the VS Code Marketplace or load [`yamlr.vsix`](https://github.com/yamlr/yamlr/releases) for real-time keystroke diagnostics, schema hover tooltips, and one-click quick-fixes.
 
 ---
+
+## Quick Start
+
+```bash
+# 1. Audit manifests for schema and integrity violations
+yamlr scan ./k8s
+
+# 2. Preview proposed auto-remediations in unified color diff
+yamlr heal ./k8s --diff
+
+# 3. Safely apply fixes in-place with comment preservation
+yamlr heal ./k8s --apply
+
+# 4. Format manifests according to official Kubernetes schema hierarchy (k8sfmt)
+yamlr fmt -w ./k8s
+
+# 5. Execute fleet batch remediation with automated branch and PR creation
+yamlr fleet ./services --apply --create-pr --k8s-version 1.30
+
+# 6. Run standalone stdio Language Server Protocol daemon
+yamlr lsp
+
+# 7. Start in-cluster mutating and validating admission webhook server
+yamlr webhook --port 8443
+```
+
 ---
-**🛠 yamlr — Kubernetes manifest safety & healing engine**
 
-Learn more: https://yamlr.dev
+## Pre-Commit Hook Integration
 
+Add Yamlr to your repository's `.pre-commit-config.yaml`:
+
+```yaml
+repos:
+  - repo: https://github.com/yamlr/yamlr
+    rev: v0.1.0
+    hooks:
+      # Safe, comment-preserving auto-repair before commit
+      - id: yamlr-heal
+        args: ["--apply"]
+      # Strict schema gate
+      - id: yamlr-scan
+        args: ["--fail-on", "error"]
+```
+
+---
+
+## GitHub Actions CI Integration
+
+Upload native SARIF reports directly to GitHub Code Scanning:
+
+```yaml
+name: Kubernetes Manifest Audit
+on: [push, pull_request]
+
+jobs:
+  yamlr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Yamlr Scan
+        uses: yamlr/yamlr/actions/scan@v1
+        with:
+          path: ./manifests
+          output-file: results.sarif
+          version: v0.1.0
+      - name: Upload SARIF to GitHub Code Scanning
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif
+```
+
+---
+
+## Documentation
+
+- [Positioning & Architecture Strategy](docs/Yamlr_Positioning_Strategy.md)
+- [CLI Reference Guide](docs/CLI_REFERENCE.md)
+- [Configuration Documentation](docs/CONFIGURATION.md)
+- [Architecture Model](docs/ARCHITECTURE_MODEL.md)
+
+---
+
+## License
+
+Yamlr is proprietary software owned by Timonel Labs. Use is governed by the [Yamlr Proprietary & Commercial Software License](LICENSE). Third-party components remain subject to their respective license terms.

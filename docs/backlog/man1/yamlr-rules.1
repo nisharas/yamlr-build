@@ -1,0 +1,47 @@
+.TH "YAMLR-RULES" "1" "May 2026" "Yamlr Manual" "User Commands"
+.SH "NAME"
+yamlr-rules \- Propose repairs and remediate Kubernetes manifests.
+.SH "DESCRIPTION"
+\fBRule Catalog Dashboard\fR
+.PP
+Displays a comprehensive table of all active semantic rules, checkers, and healers available in the current version.
+.PP
+.SH "SYNOPSIS"
+.nf
+.RS
+yamlr rules [FLAGS]
+.RE
+.fi
+.SH "FLAGS"
+.IP "\(bu" 2
+  \fB-v, --verbose\fR: Show full rationale for every rule in an extra column.
+.IP "\(bu" 2
+  \fB--output=json\fR: Export rule database as structured JSON.
+.SH "COLUMNS"
+.IP "\(bu" 2
+  \fBID\fR: The unique Rule ID (e.g., \fBrules/no-latest-tag\fR).
+.IP "\(bu" 2
+  \fBName\fR: Human-readable name.
+.IP "\(bu" 2
+  \fBSeverity\fR: ERROR, WARNING, or INFO.
+.IP "\(bu" 2
+  \fBDescription\fR: Brief summary of what the rule detects.
+.SS " Global Performance Flags"
+Available across all commands:
+.PP
+.IP "\(bu" 2
+  \fB\fB--timing\fR\fR: [PERFORMANCE] Output surgical execution timing breakdown.
+.IP "\(bu" 2
+  \fB\fB--timing-file <FILE>\fR\fR: [PERFORMANCE] Save performance profiling data to a JSON file.
+.SH "EXAMPLES"
+.nf
+.RS
+yamlr rules
+# Lists all 50+ active rules
+.RE
+.fi
+.SH "REPORTING BUGS"
+Report bugs to <https://github.com/yamlr/yamlr/issues>
+.PP
+.SH "COPYRIGHT"
+Copyright \(co 2026 Timonel Labs. Proprietary & Commercial Software (All Rights Reserved).

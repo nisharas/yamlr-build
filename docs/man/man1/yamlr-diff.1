@@ -1,0 +1,60 @@
+.TH "YAMLR-DIFF" "1" "September 2026" "Yamlr Manual" "User Commands"
+.SH "NAME"
+yamlr-diff \- Preview proposed Kubernetes manifest remediations without modifying files.
+.SH "SYNOPSIS"
+.nf
+.RS
+yamlr diff [PATH] [FLAGS]
+.RE
+.fi
+.SH "DESCRIPTION"
+The \fBdiff\fR command audits Kubernetes manifests against the schema registry and relational graph, then renders an inline visual diff (unified or side-by-side) showing exact predicted mutations.
+.PP
+.IP "\(bu" 2
+  \fBNon-Destructive\fR: Never writes changes to disk.
+.IP "\(bu" 2
+  \fBAST Diffing\fR: Compares structural AST nodes rather than naive string line diffs.
+.IP "\(bu" 2
+  \fBSub-50ms Latency\fR: Powered by the native Rust reconstruction engine.
+.IP "\(bu" 2
+  \fBComment Safe\fR: Verifies that human comments and annotations are retained post-heal.
+.SH "ARGUMENT GROUPS"
+.SS "Primary Diff Options"
+.TP
+\fBpath\fR
+Path to manifests directory or YAML file (default: current directory).
+.TP
+\fB-u, --unified\fR
+Display unified diff instead of side-by-side.
+.SS "Targeting & Environment"
+.TP
+\fB--k8s-version <VERSION>\fR
+Target Kubernetes schema version (e.g., 1.30, 1.31).
+.TP
+\fB--crd <PATH>\fR
+Path to custom CRD definitions to ingest.
+.TP
+\fB--helm\fR
+Preview diff for rendered Helm chart templates in-memory.
+.TP
+\fB--kustomize\fR
+Preview diff for rendered Kustomize overlay resources in-memory.
+.SS "CI/CD & Pipeline Integration"
+.TP
+\fB-f, --output-file <FILE>\fR
+Path to write report (SARIF/JSON).
+.TP
+\fB--exit-zero\fR
+Always exit with code 0 (for non-blocking CI preview steps).
+.SH "EXAMPLES"
+.TP
+\fByamlr diff .\fR
+Preview side-by-side diff for all manifests in the current directory.
+.TP
+\fByamlr diff deploy.yaml -u\fR
+Preview unified diff for a single deployment manifest.
+.TP
+\fByamlr diff --helm ./charts/app\fR
+Preview diff on in-memory rendered Helm chart templates.
+.SH "SEE ALSO"
+\fByamlr\fR(1), \fByamlr-scan\fR(1), \fByamlr-heal\fR(1), \fByamlr-doctor\fR(1)

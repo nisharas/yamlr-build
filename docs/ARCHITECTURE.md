@@ -1,4 +1,4 @@
-# 🗺️ Yamlr System Architecture (The Founder's Map)
+# 🗺 Yamlr System Architecture (The Founder's Map)
 **"How it Works" for Non-Technical Stakeholders**
 
 > **The Golden Rule of Debugging:** You don't need to fix the code. You just need to know **WHICH** file is broken so you can tell an engineer (or AI) where to look.

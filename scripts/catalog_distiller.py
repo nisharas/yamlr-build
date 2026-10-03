@@ -1,219 +1,148 @@
-"""
-Yamlr CATALOG PIPELINE
-----------------------
-Automates the retrieval and distillation of Kubernetes OpenAPI schemas.
-This ensures Yamlr stays compatible with the latest K8s releases without
-manual updates.
-
-Usage:
-  python scripts/catalog_pipeline.py --version 1.31
+#!/usr/bin/env python3
+"""Automates the conversion of raw Kubernetes OpenAPI (swagger.json) into
+compact schema catalog definitions for fast loading.
 """
 
 import argparse
 import json
 import logging
-import sys
 import urllib.request
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
-logger = logging.getLogger("catalog-pipeline")
-
-# Core resources that Yamlr focuses on for validation and healing
-CORE_RESOURCES = [
-    "Namespace",
-    "ServiceAccount",
-    "Pod",
-    "PodTemplateSpec",
-    "PodSpec",
-    "PodSecurityContext",
-    "ContainerSecurityContext",
-    "Probe",
-    "Deployment",
-    "StatefulSet",
-    "DaemonSet",
-    "JobSpec",
-    "Job",
-    "JobTemplateSpec",
-    "CronJob",
-    "Service",
-    "Ingress",
-    "ConfigMap",
-    "Secret",
-    "ReplicaSet",
-    "PersistentVolume",
-    "PersistentVolumeClaim",
-]
-
-# Mapping of distilled names to their full OpenAPI definition paths (heuristics)
-NAME_MAP_REVERSE = {
-    "Pod": "io.k8s.api.core.v1.Pod",
-    "PodSpec": "io.k8s.api.core.v1.PodSpec",
-    "Deployment": "io.k8s.api.apps.v1.Deployment",
-    "Service": "io.k8s.api.core.v1.Service",
-    "ConfigMap": "io.k8s.api.core.v1.ConfigMap",
-    "Secret": "io.k8s.api.core.v1.Secret",
-    "Namespace": "io.k8s.api.core.v1.Namespace",
-    "ServiceAccount": "io.k8s.api.core.v1.ServiceAccount",
-    "PodTemplateSpec": "io.k8s.api.core.v1.PodTemplateSpec",
-    "PodSecurityContext": "io.k8s.api.core.v1.PodSecurityContext",
-    "ContainerSecurityContext": "io.k8s.api.core.v1.ContainerSecurityContext",
-    "Probe": "io.k8s.api.core.v1.Probe",
-    "StatefulSet": "io.k8s.api.apps.v1.StatefulSet",
-    "DaemonSet": "io.k8s.api.apps.v1.DaemonSet",
-    "Job": "io.k8s.api.batch.v1.Job",
-    "JobSpec": "io.k8s.api.batch.v1.JobSpec",
-    "JobTemplateSpec": "io.k8s.api.batch.v1.JobTemplateSpec",
-    "CronJob": "io.k8s.api.batch.v1.CronJob",
-    "Ingress": "io.k8s.api.networking.k8s.io.v1.Ingress",
-    "ReplicaSet": "io.k8s.api.apps.v1.ReplicaSet",
-    "PersistentVolume": "io.k8s.api.core.v1.PersistentVolume",
-    "PersistentVolumeClaim": "io.k8s.api.core.v1.PersistentVolumeClaim",
-}
-
-# Sub-components that we want to flatten into parent fields rather than keeping as refs
-FLATTEN_COMPONENTS = [
-    "io.k8s.api.core.v1.Container",
-    "io.k8s.api.core.v1.Volume",
-    "io.k8s.api.core.v1.ContainerPort",
-    "io.k8s.api.core.v1.EnvVar",
-    "io.k8s.api.core.v1.ResourceRequirements",
-    "io.k8s.api.core.v1.HTTPGetAction",
-    "io.k8s.api.core.v1.TCPSocketAction",
-    "io.k8s.api.core.v1.ExecAction",
-    "io.k8s.api.core.v1.ResourceList",
-    "io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta",
-]
+logger = logging.getLogger("distiller")
 
 
 class CatalogDistiller:
-    def __init__(self, openapi_data: Dict[str, Any]):
-        self.definitions = openapi_data.get("definitions", {})
-        # Inverse NAME_MAP for easy lookup
-        self.full_to_short = {v: k for k, v in NAME_MAP_REVERSE.items()}
-        self.distilled = {}
+    """Distills raw OpenAPI schemas into efficient DNA maps."""
 
-    def distill(self, resource_names: List[str]):
-        """Main entry point to distill specific resources."""
-        for name in resource_names:
-            full_name = NAME_MAP_REVERSE.get(name)
-            if full_name and full_name in self.definitions:
-                self.distilled[name] = self._process_definition(full_name, depth=0)
-            else:
-                logger.debug(f"Resource {name} not found in OpenAPI definitions (full name: {full_name})")
+    def __init__(self, version: str):
+        self.version = version.lstrip("v")
+        self.raw_schema: Dict[str, Any] = {}
+        self.distilled: Dict[str, Any] = {}
+        self._ref_cache: Dict[str, str] = {}
+
+    def fetch_raw_schema(self) -> bool:
+        """Downloads the official swagger.json for the target version."""
+        url = (
+            f"https://raw.githubusercontent.com/kubernetes/kubernetes/"
+            f"release-{self.version}/api/openapi-spec/swagger.json"
+        )
+        logger.info(f"Fetching raw OpenAPI schema for v{self.version}...")
+        try:
+            with urllib.request.urlopen(url, timeout=60) as response:
+                if response.status != 200:
+                    logger.error(f"Failed to fetch schema: HTTP {response.status}")
+                    return False
+                self.raw_schema = json.loads(response.read())
+                return True
+        except Exception as e:
+            logger.error(f"Network error: {e}")
+            return False
+
+    def distill(self) -> Dict[str, Any]:
+        """Orchestrates the distillation process."""
+        if not self.raw_schema:
+            return {}
+
+        definitions = self.raw_schema.get("definitions", {})
+
+        # 1. Map all K8s internal keys to simpler names (e.g. io.k8s.api.core.v1.Pod -> Pod)
+        self._build_ref_map(definitions)
+
+        # 2. Process each major Kind
+        # We focus on the core resources first
+        for key, schema in definitions.items():
+            if not self._is_k8s_resource(key):
+                continue
+
+            kind = key.split(".")[-1]
+            if kind in self.distilled:
+                # Resolve conflicts? Usually just use the first stable one or merge.
+                continue
+
+            self.distilled[kind] = self._process_node(schema)
 
         return self.distilled
 
-    def _process_definition(self, def_full_name: str, depth: int) -> Dict[str, Any]:
-        """Process a definition into distilled format."""
-        if depth > 5:  # Safety break for deep recursions
-            return {"type": "object"}
+    def _build_ref_map(self, definitions: Dict[str, Any]):
+        """Maps long OpenAPI keys to simple Kind names."""
+        for key in definitions:
+            parts = key.split(".")
+            kind = parts[-1]
+            # [Hardening] Capture core types from apimachinery (IntOrString, Quantity, etc) and API resources
+            if ("pkg" in key or "util" in key) and not any(x in key for x in ["intstr", "apis", "api"]):
+                continue
+            self._ref_cache[f"#/definitions/{key}"] = kind
 
-        definition = self.definitions.get(def_full_name, {})
-        result = {"fields": {}}
+    def _is_k8s_resource(self, key: str) -> bool:
+        """Heuristic to identify a K8s object vs an internal utility struct."""
+        # Capture Standard APIs, Extensions (CRDs), and Core Machinery types
+        return (key.startswith("io.k8s.api.") or "apiextensions" in key or "apimachinery" in key) and not any(
+            x in key for x in ["proto"]
+        )
 
-        properties = definition.get("properties", {})
-        for prop_name, prop_data in properties.items():
-            result["fields"][prop_name] = self._process_property(prop_data, depth + 1)
+    def _process_node(self, node: Dict[str, Any], depth: int = 0) -> Dict[str, Any]:
+        """Recursively distills a schema node."""
+        if depth > 12:  # Safety limit for circular refs
+            return {"type": "object", "incomplete": True}
 
-        return result
+        # Case 1: Reference
+        if "$ref" in node:
+            ref = node["$ref"]
+            return {"ref": self._ref_cache.get(ref, ref.split("/")[-1])}
 
-    def _process_property(self, prop_data: Dict[str, Any], depth: int) -> Dict[str, Any]:
-        """Convert an OpenAPI property to Yamlr format."""
+        # Case 2: Array
+        if node.get("type") == "array":
+            items = node.get("items", {})
+            return {
+                "type": "array",
+                "item_type": items.get("type", "object"),
+                "fields": self._process_node(items, depth + 1).get("fields"),
+            }
 
-        # Handle References
-        if "$ref" in prop_data:
-            ref_path = prop_data["$ref"]
-            ref_full_name = ref_path.split("/")[-1]
+        # Case 3: Object with properties
+        if node.get("type") == "object" or "properties" in node:
+            distilled_node = {"type": "object", "fields": {}}
+            props = node.get("properties", {})
+            for name, detail in props.items():
+                # Strip metadata we don't need for basic structure matching
+                distilled_node["fields"][name] = self._process_node(detail, depth + 1)
+            return distilled_node
 
-            # If it's a top-level distilled resource, use its ref name
-            if ref_full_name in self.full_to_short:
-                return {"ref": self.full_to_short[ref_full_name]}
+        # Case 4: Multi-type (oneOf/anyOf) for types like IntOrString
+        for key in ["oneOf", "anyOf"]:
+            if key in node:
+                return {"type": "multi", "options": [self._process_node(opt, depth + 1) for opt in node[key]]}
 
-            # If it's a component we want to FLATTEN, recursively process it
-            if ref_full_name in FLATTEN_COMPONENTS or depth < 3:
-                expanded = self._process_definition(ref_full_name, depth)
-                return {"type": "object", "fields": expanded.get("fields", {})}
+        # Case 5: Primitive
+        return {"type": node.get("type", "string")}
 
-            return {"type": "object"}
+    def save(self, output_path: Path):
+        """Persists the distilled catalog to disk."""
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        # [ROUND-10] Strategic Stamping: Include distiller version for forensic auditability
+        self.distilled["metadata"] = self.distilled.get("metadata", {})
+        self.distilled["metadata"]["distiller_version"] = "1.6.0"
+        self.distilled["metadata"]["distilled_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.get_gmtime())
 
-        # Handle Arrays
-        if prop_data.get("type") == "array":
-            items = prop_data.get("items", {})
-            res = {"type": "array"}
-
-            # Recurse into item type
-            item_distilled = self._process_property(items, depth)
-
-            if "ref" in item_distilled:
-                res["item_type"] = "object"
-                # If we have the definition for the ref, try to include fields for validation
-                ref_path = items.get("$ref")
-                if ref_path:
-                    ref_name = ref_path.split("/")[-1]
-                    expanded = self._process_definition(ref_name, depth)
-                    res["fields"] = expanded.get("fields", {})
-            elif "fields" in item_distilled:
-                res["item_type"] = "object"
-                res["fields"] = item_distilled["fields"]
-            elif "type" in item_distilled:
-                res["item_type"] = item_distilled["type"]
-            else:
-                res["item_type"] = "object"
-
-            return res
-
-        # Handle Simple Types
-        openapi_type = prop_data.get("type")
-        if openapi_type == "string":
-            return {"type": "string"}
-        if openapi_type == "integer":
-            return {"type": "integer"}
-        if openapi_type == "boolean":
-            return {"type": "boolean"}
-        if openapi_type == "number":
-            return {"type": "number"}
-
-        # Special K8s int-or-string
-        if "x-kubernetes-int-or-string" in prop_data:
-            return {"type": "int_or_string"}
-
-        return {"type": "object"}
-
-
-def get_openapi_url(version: str) -> str:
-    # v1.31 -> v1.31.0
-    tag = f"v{version.lstrip('v')}"
-    if tag.count(".") == 1:
-        tag += ".0"
-    return f"https://raw.githubusercontent.com/kubernetes/kubernetes/{tag}/api/openapi-spec/swagger.json"
+        with output_path.open("w", encoding="utf-8") as f:
+            json.dump(self.distilled, f, indent=2, sort_keys=True)
+        logger.info(f"Successfully saved distilled catalog to {output_path}")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Distill K8s OpenAPI to Yamlr Catalog")
-    parser.add_argument("--version", required=True, help="K8s version (e.g., 1.31)")
-    parser.add_argument("--output", help="Output path")
+    parser = argparse.ArgumentParser(description="Yamlr Catalog Distiller")
+    parser.add_argument("--version", default="1.31", help="K8s version (e.g. 1.31)")
+    parser.add_argument("--output", help="Output path (default: k8s_v{ver}_distilled.json)")
     args = parser.parse_args()
 
-    url = get_openapi_url(args.version)
-    logger.info(f"Downloading OpenAPI spec for {args.version} from {url}...")
-
-    try:
-        with urllib.request.urlopen(url) as response:
-            data = json.loads(response.read().decode())
-    except Exception as e:
-        logger.error(f"Failed to download or parse OpenAPI spec: {e}")
-        sys.exit(1)
-
-    distiller = CatalogDistiller(data)
-    distilled_data = distiller.distill(CORE_RESOURCES)
-
-    output_path = args.output or f"k8s_v{args.version.lstrip('v')}_distilled.json"
-    with open(output_path, "w") as f:
-        json.dump(distilled_data, f, indent=2)
-
-    logger.info(f"Successfully distilled catalog to {output_path}")
+    distiller = CatalogDistiller(args.version)
+    if distiller.fetch_raw_schema():
+        distiller.distill()
+        output = Path(args.output) if args.output else Path(f"k8s_v{args.version}_distilled.json")
+        distiller.save(output)
 
 
 if __name__ == "__main__":

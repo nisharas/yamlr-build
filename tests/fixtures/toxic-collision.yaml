@@ -1,0 +1,38 @@
+# TOXIC COLLISION: Two resources with same identity
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: collision-target
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: collision
+  template:
+    metadata:
+      labels:
+        app: collision
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:latest
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: collision-target
+  namespace: default
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: collision-2
+  template:
+    metadata:
+      labels:
+        app: collision-2
+    spec:
+      containers:
+      - name: apache
+        image: httpd:latest

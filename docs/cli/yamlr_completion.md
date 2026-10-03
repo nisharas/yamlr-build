@@ -34,7 +34,7 @@ source <(yamlr completion zsh)
 yamlr completion powershell | Out-String | Invoke-Expression
 ```
 
-### 🛡 Global Performance Flags
+### Global Performance Flags
 Available across all commands:
 
 *   **`--timing`**: [PERFORMANCE] Output surgical execution timing breakdown.

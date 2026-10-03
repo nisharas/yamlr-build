@@ -1,0 +1,21 @@
+{
+  "name": "sovereign-gateway",
+  "version": "0.1.0",
+  "license": "LicenseRef-Proprietary",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev",
+    "start": "wrangler dev",
+    "start:self-hosted": "node --experimental-strip-types src/node_server.ts",
+    "cf-typegen": "wrangler types",
+    "test": "node --experimental-strip-types --test src/oidc.test.ts src/team_seats.test.ts src/team_seats.integration.test.ts src/stripe_lifecycle.test.ts src/pulse.test.ts src/sqlite_storage.test.ts src/node_server.test.ts src/offline_billing.test.ts"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260929.1",
+    "@types/node": "24.19.0",
+    "typescript": "^5.4.3",
+    "wrangler": "^4.83.0"
+  }
+}

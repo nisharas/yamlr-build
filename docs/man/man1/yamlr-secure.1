@@ -1,11 +1,14 @@
-.TH "YAMLR-SECURE" "1" "March 2026" "Yamlr Manual" "User Commands"
+.TH "YAMLR-SECURE" "1" "May 2026" "Yamlr Manual" "User Commands"
+.SH "NAME"
+yamlr-secure \- Propose repairs and remediate Kubernetes manifests.
+.SH "DESCRIPTION"
 \fBAnalyze & suggest security hardening (Pro)\fR
 .PP
 The \fByamlr secure\fR command is a specialized wrapper around the healing engine designed to \fBanalyze and suggest security hardening\fR for your Kubernetes manifests.
 .PP
 It enforces a "Secure by Default" posture aligned with the Kubernetes \fBPod Security Standards (Restricted)\fR profile.
 .PP
-.SH "USAGE"
+.SH "SYNOPSIS"
 .nf
 .RS
 # Audit and propose security fixes
@@ -58,63 +61,74 @@ securityContext:
 .fi
 .SH "LIMITATIONS"
 .IP "\(bu" 2
-  \fByamlr secure\fR is a **Best-Effort** tool. It cannot know if your specific application *requires* root access to function.
+  \fByamlr secure\fR is a \fBBest-Effort\fR tool. It cannot know if your specific application *requires* root access to function.
 .IP "\(bu" 2
-  **Testing Required:** Always test your application in a staging environment after applying security hardening.
-.SS "🛡 Universal Expert Flags"
+  \fBTesting Required:\fR Always test your application in a staging environment after applying security hardening.
+.SS " Universal Expert Flags"
 These flags are available across almost all primary Yamlr commands:
 .PP
 .IP "\(bu" 2
-  **\fB--output FORMAT\fR**: Report format (text, json).
+  \fB\fB--output FORMAT\fR\fR: Report format (text, json).
 .IP "\(bu" 2
-  **\fB--dry-run\fR**: Show proposed changes without writing (Preview mode).
+  \fB\fB--dry-run\fR\fR: Show proposed changes without writing (Preview mode).
 .IP "\(bu" 2
-  **\fB--diff\fR**: Show visual diff of changes (Preview mode).
+  \fB\fB--diff\fR\fR: Show visual diff of changes (Preview mode).
 .IP "\(bu" 2
-  **\fB--fast\fR**: Skip heavy semantic analysis for maximum speed.
+  \fB\fB--fast\fR\fR: Skip heavy semantic analysis for maximum speed.
 .IP "\(bu" 2
-  **\fB--kube-version <V>\fR**: Force a specific Kubernetes version (e.g., \fB1.31\fR).
+  \fB\fB--kube-version <V>\fR\fR: Force a specific Kubernetes version (e.g., \fB1.31\fR).
 .IP "\(bu" 2
-  **\fB--max-depth <N>\fR**: Limit recursive scanning depth (Default: 10).
+  \fB\fB--max-depth <N>\fR\fR: Limit recursive scanning depth (Default: 10).
 .IP "\(bu" 2
-  **\fB--ext <list>\fR**: Comma-separated list of file extensions (Default: \fB.yaml,.yml\fR).
+  \fB\fB--ext <list>\fR\fR: Comma-separated list of file extensions (Default: \fB.yaml,.yml\fR).
 .IP "\(bu" 2
-  **\fB--concurrency <N>\fR**: Number of parallel worker processes.
+  \fB\fB--concurrency <N>\fR\fR: Number of parallel worker processes.
 .IP "\(bu" 2
-  **\fB--strict\fR**: Treat all schema warnings as hard errors.
+  \fB\fB--strict\fR\fR: Treat all schema warnings as hard errors.
 .IP "\(bu" 2
-  **\fB--compact\fR**: Use minimal whitespace (2-space indent) in output.
+  \fB\fB--compact\fR\fR: Use minimal whitespace (2-space indent) in output.
 .IP "\(bu" 2
-  **\fB--health-threshold <0-100>\fR**: Minimum score to pass (Default: 70).
+  \fB\fB--health-threshold <0-100>\fR\fR: Minimum score to pass (Default: 70).
 .IP "\(bu" 2
-  **\fB--namespace <name>\fR**: Default namespace for generated resources.
+  \fB\fB--namespace <name>\fR\fR: Default namespace for generated resources.
 .IP "\(bu" 2
-  **\fB--check-deprecations\fR**: Audit for and record deprecated K8s APIs.
+  \fB\fB--check-deprecations\fR\fR: Audit for and record deprecated K8s APIs.
 .IP "\(bu" 2
-  **\fB--cpu-limit <limit>\fR**: Default CPU for auto-injection (e.g., \fB500m\fR).
+  \fB\fB--cpu-limit <limit>\fR\fR: Default CPU for auto-injection (e.g., \fB500m\fR).
 .IP "\(bu" 2
-  **\fB--mem-limit <limit>\fR**: Default Memory for auto-injection (e.g., \fB512Mi\fR).
+  \fB\fB--mem-limit <limit>\fR\fR: Default Memory for auto-injection (e.g., \fB512Mi\fR).
 .IP "\(bu" 2
-  **\fB--enforce-limits\fR**: Auto-inject missing CPU/Memory limits.
+  \fB\fB--enforce-limits\fR\fR: Auto-inject missing CPU/Memory limits.
 .IP "\(bu" 2
-  **\fB--enforce-probes\fR**: Auto-inject missing Liveness/Readiness probes.
+  \fB\fB--enforce-probes\fR\fR: Auto-inject missing Liveness/Readiness probes.
 .IP "\(bu" 2
-  **\fB--enforce-namespace\fR**: Auto-inject default namespace if missing.
+  \fB\fB--enforce-namespace\fR\fR: Auto-inject default namespace if missing.
 .IP "\(bu" 2
-  **\fB--fix-tags\fR**: Auto-remediate \fB:latest\fR or missing image tags.
+  \fB\fB--fix-tags\fR\fR: Auto-remediate \fB:latest\fR or missing image tags.
 .IP "\(bu" 2
-  **\fB--harden\fR**: Apply security hardening (Non-root, Read-only FS).
+  \fB\fB--harden\fR\fR: Apply security hardening (Non-root, Read-only FS).
 .IP "\(bu" 2
-  **\fB--stream-to <FILE>\fR**: Batch-mode: Stream results to NDJSON (prevents RAM saturation).
+  \fB\fB--native\fR\fR [Pro]: Enable high-fidelity native export with comment grafting and schema-aware sorting.
 .IP "\(bu" 2
-  **\fB--fail-on <CHOICE>\fR**: Exit 1 if specified severity found (error/warning/any).
+  \fB\fB--stream-to <FILE>\fR\fR: Batch-mode: Stream results to NDJSON (prevents RAM saturation).
 .IP "\(bu" 2
-  **\fB--summary-only\fR**: Show aggregate stats only (recommended for 100+ files).
+  \fB\fB--fail-on <CHOICE>\fR\fR: Exit 1 if specified severity found (error/warning/any).
 .IP "\(bu" 2
-  **\fB--plain\fR**: ASCII-only output mode (Recommended for Log redirection).
+  \fB\fB--summary-only\fR\fR: Show aggregate stats only (recommended for 100+ files).
 .IP "\(bu" 2
-  **\fB--verbose\fR**: Show full audit logs and engine stages.
+  \fB\fB--plain\fR\fR: ASCII-only output mode (Recommended for Log redirection).
 .IP "\(bu" 2
-  **\fB-q\fR, \fB--quiet\fR**: Minimal output mode (CI/CD optimized; errors and exit codes only).
+  \fB\fB--verbose\fR\fR: Show full audit logs and engine stages.
 .IP "\(bu" 2
-  **\fB--identity-mode {infer,strict}\fR**: Control how Yamlr identifies resources (Default: infer).
+  \fB\fB--timing\fR\fR: [PERFORMANCE] Output surgical execution timing breakdown.
+.IP "\(bu" 2
+  \fB\fB--timing-file <FILE>\fR\fR: [PERFORMANCE] Save performance profiling data to a JSON file.
+.IP "\(bu" 2
+  \fB-q\fR, \fB--quiet\fR: Minimal output mode (CI/CD optimized; errors and exit codes only).
+.IP "\(bu" 2
+  \fB\fB--identity-mode {infer,strict}\fR\fR: Control how Yamlr identifies resources (Default: infer).
+.SH "REPORTING BUGS"
+Report bugs to <https://github.com/yamlr/yamlr/issues>
+.PP
+.SH "COPYRIGHT"
+Copyright \(co 2026 Timonel Labs. Proprietary & Commercial Software (All Rights Reserved).

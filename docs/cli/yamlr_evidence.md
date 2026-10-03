@@ -21,7 +21,7 @@ When Yamlr runs with `--evidence-dir <dir>`, it outputs JSON cryptographic recei
 *   `--format FORMAT`: The output format for the report. Options are `pdf` (default) or `html`.
 *   `--output FILE`: The specific path/filename to save the generated report. If omitted, Yamlr generates a timestamped file (e.g., `yamlr-audit-report-<timestamp>.pdf`).
 
-### 🛡 Universal Expert Flags
+### Universal Expert Flags
 Available across primary commands:
 
 *   **`--timing`**: [PERFORMANCE] Output surgical execution timing breakdown.

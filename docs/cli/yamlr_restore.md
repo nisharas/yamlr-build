@@ -37,7 +37,7 @@ yamlr restore ./manifests/deployment.yaml
 
 > **Warning**: If you used `--unsafe=Secret` during healing, your backups may contain sensitive data. Ensure `.yamlr/` is in your `.gitignore`.
 
-### 🛡 Universal Expert Flags
+### Universal Expert Flags
 Available across primary commands:
 
 *   **`--timing`**: [PERFORMANCE] Output surgical execution timing breakdown.

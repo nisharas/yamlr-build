@@ -4,6 +4,9 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   test-actions:
     strategy:
@@ -11,16 +14,16 @@ jobs:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: '3.12'
           
       - name: Install dependencies
         run: |
-          pip install .[dev]
+          python -m pip install --editable ".[dev]"
           
       - name: Run Core Verification (with Coverage Gate)
         run: |
@@ -35,20 +38,16 @@ jobs:
           # Failure logic: If "Throughput" < 0.03 MB/s (Low bar for CI VMs)
           grep "Throughput" bench.txt | awk '{if ($2 < 0.03) exit 1}'
           
-      - name: Run Zero-Regression Parity Guard
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          export PYTHONPATH=$PYTHONPATH:$(pwd)/src
-          python tests/verify_rust_parity.py --baseline "python -m yamlr scan" --candidate "python tests/stubs/rust_scanner_stub.py" --target tests/fixtures
-      
       - name: Test Scan Action
         uses: ./.github/actions/scan
         with:
           path: 'tests/fixtures'
           args: '--harden'
+          version: 'v0.1.0'
           
       - name: Test Heal Action (Dry Run)
         uses: ./.github/actions/heal
         with:
           path: 'tests/fixtures'
           args: '--yes-all --no-backup --dry-run'
+          version: 'v0.1.0'

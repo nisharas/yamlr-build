@@ -5,7 +5,7 @@ We welcome contributions to Yamlr! We are committed to building the world's most
 ## Core Pillars
 1. **Safety-First**: All default fixes must be safe and explainable. SEMANTIC integrity is paramount.
 2. **Comment Preservation**: We respect the developer's work. Never drop a comment unless explicitly required.
-3. **Modularity**: Every module must follow the **Agent Modularity Protocol** (< 500 lines).
+3. **Modularity**: Maintain clean single-responsibility modules (< 500 lines per file).
 
 ## How to Contribute
 1. **Fork** the repository.

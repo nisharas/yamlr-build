@@ -1,0 +1,42 @@
+.TH "YAMLR-LICENSES" "1" "May 2026" "Yamlr Manual" "User Commands"
+.SH "NAME"
+yamlr-licenses \- Propose repairs and remediate Kubernetes manifests.
+.SH "DESCRIPTION"
+\fBThird-Party License Attribution\fR
+.PP
+The \fBlicenses\fR command displays the official list of third-party open-source libraries used within the Yamlr binary and their respective licenses.
+.PP
+.SH "SYNOPSIS"
+.nf
+.RS
+yamlr licenses
+.RE
+.fi
+.SH "DESCRIPTION"
+To maintain full intellectual property transparency and open-source license compliance, Yamlr includes a comprehensive manifest of all dependencies and their licensing terms (MIT, Apache 2.0, BSD, etc.).
+.PP
+.SH "OUTPUT"
+The command prints a list of:
+.PP
+.IP "\(bu" 2
+  Library Name
+.IP "\(bu" 2
+  Version
+.IP "\(bu" 2
+  License Type
+.IP "\(bu" 2
+  Full License Text (via pager)
+.SH "EXAMPLES"
+.nf
+.RS
+yamlr licenses
+.RE
+.fi
+.SH "COMPLIANCE NOTE"
+Yamlr is built with a "Zero-GPL" policy in the core engine to ensure maximum commercial flexibility and compatibility with proprietary enterprise environments.
+.PP
+.SH "REPORTING BUGS"
+Report bugs to <https://github.com/yamlr/yamlr/issues>
+.PP
+.SH "COPYRIGHT"
+Copyright \(co 2026 Timonel Labs. Proprietary & Commercial Software (All Rights Reserved).

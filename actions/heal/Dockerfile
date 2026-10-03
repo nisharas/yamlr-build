@@ -1,48 +1,24 @@
-# Stage 1: Build the native binary with Nuitka (Professional Edition)
-FROM python:3.12-slim as builder
+# Stage 1: Build the Rust Native Core
+FROM rust:1.98.1-slim-bookworm@sha256:ff521445a372125ed4f76e1453a1f8098f2d05332d1601d30db1c1f62757e730 AS builder
+WORKDIR /app
+COPY native_core ./native_core
+RUN cargo build --locked --manifest-path native_core/Cargo.toml --release --bin yamlr
 
-# Install build dependencies
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    clang \
-    libpython3-dev \
-    git \
-    && rm -rf /var/lib/apt/lists/*
-
-WORKDIR /build
-
-# Copy source code and requirements
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt nuitka ordered-set
-
-COPY . .
-
-# Run the Nuitka build orchestrator for the PRO version
-# This creates dist/yamlr_pro
-RUN python scripts/build_nuitka.py --pro
-
-# Stage 2: Create the minimal runtime image
+# Stage 2: Minimal Runtime
 FROM debian:bookworm-slim
-
-# Install git for commit/push capabilities
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
-
-# Copy only the compiled Pro binary from the builder
-COPY --from=builder /build/dist/yamlr_pro /usr/local/bin/yamlr
-
-# Metadata
-LABEL maintainer="Yamlr Team"
-LABEL version="1.0"
-LABEL description="Autonomous Manifest Repair (Professional Binary Version)"
-
-# Entrypoint will handle git configuration if needed, then run yamlr heal
-# For now, we point to a custom entrypoint script
+COPY --from=builder /app/native_core/target/release/yamlr /usr/local/bin/yamlr
 COPY actions/heal/entrypoint.sh /entrypoint.sh
+COPY actions/stage_manifest_changes.sh /stage_manifest_changes.sh
 RUN chmod +x /entrypoint.sh
 
+WORKDIR /github/workspace
 ENTRYPOINT ["/entrypoint.sh"]
+
+LABEL maintainer="Yamlr Team"
+LABEL version="1.0"
+LABEL description="Autonomous Manifest Remediator (Compiled Native Version)"

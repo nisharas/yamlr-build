@@ -1,0 +1,72 @@
+.TH "YAMLR-FEATURES" "1" "May 2026" "Yamlr Manual" "User Commands"
+.SH "NAME"
+yamlr-features \- Propose repairs and remediate Kubernetes manifests.
+.SH "DESCRIPTION"
+\fBCapability Discovery & Roadmap Matrix\fR
+.PP
+The \fByamlr features\fR command provides a comprehensive inventory of all engine capabilities, their tiers (Free vs. Pro), and their current activation status.
+.PP
+.SH "SYNOPSIS"
+.nf
+.RS
+# Display the full capability matrix
+yamlr features
+.RE
+.fi
+.SH "THE TIERED ENGINE"
+Yamlr classifies features into four strategic categories:
+.PP
+.SS "1. Core (FREE)"
+Fundamental safety operations available to the community.
+.PP
+.IP "\(bu" 2
+  \fBSchema Validation\fR: OpenAPI-driven audit.
+.IP "\(bu" 2
+  \fBVisual Healing\fR: Interactive, comment-preserving repair.
+.IP "\(bu" 2
+  \fBAPI Deprecation\fR: Detecting legacy K8s versions.
+.IP "\(bu" 2
+  \fBForensic Journal\fR: Atomic WAL journaling of all mutation attempts.
+.SS "2. Observability (FREE)"
+Visual context and relational awareness.
+.PP
+.IP "\(bu" 2
+  \fBRelational Topology\fR: \fBgraph topo\fR - ASCII resource trees.
+.IP "\(bu" 2
+  \fBBlast Radius\fR: \fBgraph blast-radius\fR - Impact analysis.
+.SS "3. Surgical (FREE/PRO)"
+High-precision remediations and GitOps protections.
+.PP
+.IP "\(bu" 2
+  \fBAuto-Injection\fR: Injecting limits, probes, and namespaces (Free).
+.IP "\(bu" 2
+  \fBTag Sanitization\fR: Remediating \fB:latest\fR image tags (Free).
+.IP "\(bu" 2
+  \fBClinical Mode\fR: \fB--clinical\fR - Protecting GitOps pipes by redirecting UI to stderr (Free).
+.IP "\(bu" 2
+  \fBRust Acceleration\fR: \fB--fast\fR - Native engine for hyperscale (Pro).
+.SS "4. Enterprise (PRO)"
+Advanced security, compliance, and strategic integrations.
+.PP
+.IP "\(bu" 2
+  \fBDrift Remediation\fR: Reconciling live cluster state with local manifests.
+.IP "\(bu" 2
+  \fBAuto-Hardening\fR: Autonomous PSS-style policy injection.
+.IP "\(bu" 2
+  \fBSemantic DNA\fR: SHA-256 identity for manifest integrity.
+.IP "\(bu" 2
+  \fBEvidence Receipts\fR: DNA-signed PDF receipts for auditors.
+.IP "\(bu" 2
+  \fBAI Agent Bridge (MCP)\fR: High-fidelity healing server for LLMs.
+.IP "\(bu" 2
+  \fBEnterprise IDE (LSP)\fR: Real-time safety guard in VS Code.
+---
+.PP
+.IP "\fBTIP:\fR" 4
+Use \fByamlr features\fR to quickly check if your enterprise license is active and which "Surgical" capabilities are available in your current environment.
+.PP
+.SH "REPORTING BUGS"
+Report bugs to <https://github.com/yamlr/yamlr/issues>
+.PP
+.SH "COPYRIGHT"
+Copyright \(co 2026 Timonel Labs. Proprietary & Commercial Software (All Rights Reserved).

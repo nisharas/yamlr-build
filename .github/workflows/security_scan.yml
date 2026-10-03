@@ -8,34 +8,48 @@ on:
   schedule:
     - cron: '0 0 * * 1' # Weekly scan
 
+permissions:
+  contents: read
+
 jobs:
   security-audit:
     name: Security Audit & Secret Scan
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: '3.12'
 
+      - name: Set up Rust
+        uses: actions-rust-lang/setup-rust-toolchain@46268bd060767258de96ed93c1251119784f2ab6 # v1.16.1
+        with:
+          cache: false
+          toolchain: stable
+          override: true
+
       - name: Install Security Tools
         run: |
-          pip install pip-audit detect-secrets
+          python -m pip install pip-audit==2.10.1 detect-secrets==1.5.0
 
       - name: Dependency Audit (pip-audit)
         run: |
-          # Allow it to fail build on high-severity vulnerabilities
-          pip-audit --strict --desc on -r src/requirements.txt || true
-          # Note: Added '|| true' for initial baseline; remove to enforce in future.
+          pip-audit --strict --desc on .
+
+      - name: Require reviewed secret baseline
+        run: |
+          if [ ! -s .secrets.baseline ]; then
+            echo "::error::.secrets.baseline is missing. Create, review, and commit the initial baseline; the secret scan cannot pass without it."
+            exit 1
+          fi
+          python -c "import json; from pathlib import Path; data=json.loads(Path('.secrets.baseline').read_text(encoding='utf-8')); assert isinstance(data.get('results'), dict) and isinstance(data.get('plugins_used'), list), 'invalid detect-secrets baseline structure'"
 
       - name: Secret Scan (detect-secrets)
         run: |
-          detect-secrets scan --all-files --exclude-files '.*\.gemini/.*' --exclude-files '.*brain/.*' > .secrets.baseline
-          # Verification step: if baseline has results, fail or warn
-          if [ -s .secrets.baseline ]; then
-            echo "⚠️ Potential secrets detected in codebase!"
-            cat .secrets.baseline
-          fi
+          set -o pipefail
+          git ls-files -z --cached --others --exclude-standard \
+            | grep -zEv '(^|/)(tests|node_modules|target|vendor|brain|\.gemini)(/|$)|(^|/)vscode/(bin|audit_vsix)(/|$)' \
+            | xargs -0 -r detect-secrets-hook --baseline .secrets.baseline

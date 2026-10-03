@@ -5,17 +5,17 @@ Yamlr is not just a YAML linter; it is a **Kubernetes Configuration Safety Engin
 ## 🌌 The "High-Gravity" Problem
 Standard YAML parsers (PyYAML, ruamel) are "brittle"—a single missing quote or mixed indentation causes a fatal error. In large-scale Kubernetes environments, this leads to:
 1. **Broken CI/CD**: One malformed file stops the entire pipeline.
-2. **Schema Trauma**: Valid YAML that violates K8s structural rules (e.g., providing a string where a list is expected).
+2. **Schema Structural Errors**: Valid YAML that violates K8s structural rules (e.g., providing a string where a list is expected).
 3. **Relationship Decay**: Valid manifests that reference non-existent Secrets, PVCs, or Services.
 
 ---
 
-## 🛠️ Core Healing Pillars
+## 🛠 Core Healing Pillars
 
-### 1. Trauma Healing (Structural Surgery)
+### 1. Structural Auto-Repair
 Yamlr's **Epistemic Reconstruction** engine doesn't just fix syntax; it understands *intent*.
 *   **Type Transformation**: If K8s expects a list but receives a scalar, Yamlr automatically wraps it.
-*   **Lexical Repair**: Fixes unclosed quotes, double-dash collisions, and "impossible" indentation without losing comments or layout.
+*   **Lexical Repair**: Attempts supported syntax and layout repairs. Review the output because comment and layout preservation depends on the input and transformation.
 *   **Prophetic Migration**: Automatically upgrades legacy API versions (e.g., `extensions/v1beta1`) to their modern equivalents during the healing process.
 
 ### 2. Relationship Surgery (Semantic Healing)
@@ -34,7 +34,7 @@ Yamlr processes files in 9 distinct stages:
 
 ---
 
-## 🛡 TRUST GUARANTEE
+## Reviewing repairs
 
 ### Scientific Mode & HAS Score
 How do you trust an engine that modifies your code? You use **Scientific Mode**.
@@ -44,12 +44,12 @@ How do you trust an engine that modifies your code? You use **Scientific Mode**.
 ### Safety Signaling (Entropy Protection)
 Yamlr calculates the **Entropy** of every repair.
 *   **Low Entropy**: Clear fix, high confidence (Applied automatically).
-*   **High Entropy**: Ambiguous corruption (Engine skips the fix to prevent "Hallucinations").
+*   **High Entropy**: Ambiguous corruption (Engine skips the fix to prevent unintended semantic drift).
 *   This is why Yamlr rarely reaches a 100% score on "Torture" datasets—it prioritizes **Safety over Aggressiveness**.
 
 ---
 
-## 🚀 Key Commands
+## Key Commands
 *   `yamlr audit --bench`: Run a scientific benchmark on your entire cluster.
 *   `yamlr check [file] --verbose`: View the 9-stage forensic audit trail for a single file.
 *   `yamlr status`: View your cluster's "Gamified" health score.

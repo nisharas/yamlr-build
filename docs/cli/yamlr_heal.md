@@ -1,75 +1,106 @@
 # yamlr heal
-**Propose Repairs (Safe-by-default)**
+**Manifest Auto-Remediation**
 
-The `heal` command is the core of Yamlr. It proposes repairs for syntax errors, schema violations, and logic issues in your Kubernetes manifests.
+The `yamlr heal` command previews or applies native Rust manifest repairs. It can process a YAML file, a directory of YAML files, stdin, Helm values, or a rendered Kustomize overlay.
 
-## Usage
+---
+
+## Synopsis
+
 ```bash
-yamlr heal [PATH]... [FLAGS]
+yamlr heal [path] [flags]
 ```
 
-## Description
-Scans target files and applies fixers.
-*   **Interactive Mode**: Prompts before writing unless `-y` is used.
-*   **Atomic Writes**: Prevents data loss during writes.
-*   **Backups**: Created in `.yamlr/backups/` automatically.
-*   **Trauma Healing** [Pro]: Structural "Type Trauma" repair.
-*   **Referential Alignment**: Fixes broken ConfigMap/Secret/PVC references.
+---
 
-> [!IMPORTANT]
-> **Free Tier Healing Limits**
-> Limited to **5 files per day**. `yamlr scan` remains 100% free and unlimited!
+## Safety by Default
 
-## Key Flags
+By default, `yamlr heal` operates in **preview mode** (safe-by-default). It analyzes files and prints recommended remediations without altering disk state.
 
-### Automation
-*   `-y, --yes`: Auto-approve changes for single files.
-*   `--yes-all`: Auto-approve changes for batch mode.
-*   `--dry-run` / `--diff`: Preview changes without writing.
+*   To preview exact visual AST diffs: run `yamlr heal --diff`.
+*   To preview without applying changes: run `yamlr heal --dry-run`.
+*   To apply verified changes to disk: run `yamlr heal --apply`.
 
-### Surgical Injection
-*   **`--enforce-limits`**: Inject standard CPU/RAM requests & limits.
-*   **`--enforce-probes`**: Inject default Liveness/Readiness probes.
-*   **`--enforce-namespace`**: Auto-inject default namespace if missing.
-*   **`--fix-tags`**: Auto-remediate `:latest` or missing image tags.
+For regular YAML files, `--apply` creates a temporary sibling `.bak` safety copy, validates the written YAML, then removes the copy after successful validation. If writing or validation fails, Yamlr attempts to restore the original and reports any rollback failure.
 
-### Enterprise Remediations (PRO)
-*   **`--fix-refs`**: Cross-Resource Auto-Fix (Selectors, Ports, Stubs).
-*   **`--complement-mode <T:P>`**: [RECON] Ingest findings from tools (checkov, kubeconform).
-*   **`--receipt`**: Generate DNA-signed compliance receipts.
-*   **`--evidence-dir <DIR>`**: Directory to save DNA receipts for audits.
-*   **`--adapters-dir <DIR>`**: Directory for custom remediation adapters.
-*   **`--rollback`**: Atomic Reversal: Undo the current session on failure.
-*   **`--clinical`**: Redirect UI logs to `stderr` for clean `stdout` in GitOps.
+---
 
-### Advanced
-*   **`--unsafe`**: Allow healing of sensitive resources like `Secret`.
-*   **`--no-backup`**: Skip creation of `.yamlr/backups/` (Dangerous).
-*   **`--pro-preview`**: Enterprise Demo Mode (Dry-run only).
+## Examples
 
-### 🛡 Universal Expert Flags
-Available across primary commands:
+```bash
+# Preview proposed repairs for the current directory
+yamlr heal .
 
-*   **`--kube-version <V>`**: Force specific K8s version (e.g., `1.31`).
-*   **`--risk-threshold <high|medium|low>`**: Exit with code 1 if any finding meets or exceeds risk level.
-*   **`--fail-on <CHOICE>`**: CI/CD Gate: Exit 1 if specified severity found (any/warning/error).
-*   **`--baseline <FILE>`**: Path to violation baseline (SHA-256 fingerprints to ignore).
-*   **`--fast`** [PRO]: Enable lightning-fast scanning via native Rust extension.
-*   **`--max-depth <N>`**: Limit recursion depth (Default: 10).
-*   **`--ext <list>`**: Extensions to scan (Default: `.yaml,.yml`).
-*   **`--concurrency <N>`**: Parallel worker processes.
-*   **`--strict`**: Treat warnings as hard errors.
-*   **`--compact`**: Minify output (2-space indent).
-*   **`--health-threshold <0-100>`**: Min score to pass (Default: 70).
-*   **`--namespace <name>`**: Default namespace for generated resources.
-*   **`--check-deprecations`**: Audit for and record deprecated APIs.
-*   **`--cpu-limit <limit>`**: Default CPU for auto-injection.
-*   **`--mem-limit <limit>`**: Default Memory for auto-injection.
-*   **`--enforce-namespace`**: Auto-inject namespace.
-*   **`--stream-to <FILE>`**: Stream results to NDJSON.
-*   **`--summary-only`**: Aggregate stats only.
-*   **`--plain`**: ASCII-only output.
-*   `--verbose`: Full audit logs.
-*   **`--timing`**: [PERFORMANCE] Output surgical execution timing breakdown.
-*   **`--timing-file <FILE>`**: [PERFORMANCE] Save performance profiling data to a JSON file.
-*   `-q`, `--quiet`: Minimal output mode.
+# Preview side-by-side visual diff of proposed changes
+yamlr heal . --diff
+
+# Apply all verified repairs directly to disk
+yamlr heal . --apply
+
+# Heal a specific deployment manifest
+yamlr heal ./k8s/deploy.yaml --apply
+
+# Audit and heal rendered Helm chart values in-memory
+yamlr heal ./charts/my-app --helm --apply
+
+# Audit and heal Kustomize overlays in-memory
+yamlr heal ./overlays/production --kustomize --diff
+
+# Ingest an OPA Gatekeeper policy report
+yamlr heal . --ingest-opa ./reports/gatekeeper-violations.json --apply
+
+# Ingest a Kyverno PolicyReport
+yamlr heal . --ingest-kyverno ./reports/kyverno-report.json --apply
+
+# Force target Kubernetes version schema rules
+yamlr heal . --k8s-version 1.31 --apply
+
+# Read YAML from stdin
+yamlr heal - < ./deployment.yaml
+```
+
+---
+
+## Options & Flags
+
+### Primary Remediation Options
+
+*   **`path`** *(positional, optional)*:
+    Path to manifest file, directory, or `-` for stdin. Defaults to `.`.
+*   **`--apply, -a`**:
+    Apply fixes directly to the input files. Regular YAML files receive a sibling `.bak` backup before writing.
+*   **`--diff`**:
+    Display an inline diff of the proposed changes.
+*   **`--dry-run, -d`**:
+    Preview repairs without writing them. This is the default unless `--apply` or `--diff` is specified.
+
+### Targeting & Environment
+
+*   **`--k8s-version, --kube-version, -k <VERSION>`**:
+    Select the Kubernetes schema version used by the healer. Defaults to `1.30`.
+*   **`--helm`**:
+    Process Helm chart values in the target directory.
+*   **`--kustomize`**:
+    Render and process a Kustomize directory. With `--apply`, writes the healed composite to `kustomize_healed.yaml` in that directory.
+
+### Policy & Tool Ingestion
+
+*   **`--ingest-opa <PATH>`**:
+    Ingest an Open Policy Agent (OPA) / Gatekeeper JSON violation report.
+*   **`--ingest-kyverno <PATH>`**:
+    Ingest a Kyverno `PolicyReport` JSON export.
+
+### CI/CD & Pipeline Integration
+
+*   **`--output, -o text`**:
+    Text is the only supported output format. Other formats are rejected.
+*   **`--exit-zero`**:
+    Return `0` for findings from the completed heal operation. Input, traversal, and write failures still return errors.
+*   **`--generate-stubs, --create-stubs`**:
+    Generate missing resource stubs; `--apply` writes them to `yamlr_generated_stubs.yaml`.
+*   **`--otel, --export-metrics`**:
+    Print OpenTelemetry metrics after processing.
+
+Unknown options and more than one target path are rejected. The command does not support `--crd`, `--output-file`, or `--push-telemetry`.
+
+---

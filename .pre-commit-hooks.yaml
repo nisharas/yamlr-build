@@ -1,28 +1,48 @@
+- id: yamlr-fmt
+  name: Yamlr Manifest Formatter (k8sfmt)
+  description: Canonical Kubernetes manifest formatter. Normalizes indentation and reorders keys according to the official Kubernetes schema hierarchy.
+  entry: yamlr fmt
+  args: ["-w"]
+  language: system
+  files: \.(yaml|yml)$
+  pass_filenames: true
+  require_serial: false
+
+- id: yamlr-fix
+  name: Yamlr Manifest Auto-Fixer
+  description: Instant zero-configuration auto-repair for deprecated APIs, floating tags, and schema deviations.
+  entry: yamlr fix
+  language: system
+  files: \.(yaml|yml)$
+  pass_filenames: true
+  require_serial: false
+
 - id: yamlr-scan
-  name: Yamlr Scan
-  description: Fast, semantic Kubernetes manifest auditor.
+  name: Yamlr Manifest Scanner
+  description: Validates and audits Kubernetes manifests against OpenAPI schemas and forensic rules.
   entry: yamlr scan
-  language: python
+  args: ["--fail-on", "error"]
+  language: system
   files: \.(yaml|yml)$
-  args: ["--output=text"]
-- id: yamlr-check
-  name: Yamlr Check
-  description: Ultra-fast syntax validation (no network).
-  entry: yamlr check
-  language: python
-  files: \.(yaml|yml)$
-  args: ["--output=text"]
+  pass_filenames: true
+  require_serial: false
+
 - id: yamlr-heal
-  name: Yamlr Heal (Dry-run)
-  description: Proactive manifest repair (S1 Preview).
+  name: Yamlr Manifest Auto-Healer
+  description: Fast, comment-preserving auto-repair for Kubernetes manifests before commit.
   entry: yamlr heal
-  language: python
+  args: ["--apply"]
+  language: system
   files: \.(yaml|yml)$
-  args: ["--quiet", "--dry-run"]
-- id: yamlr-migrate
-  name: Yamlr Migrate (Dry-run)
-  description: API deprecation migration (S1 Preview).
-  entry: yamlr migrate
-  language: python
+  pass_filenames: true
+  require_serial: false
+
+- id: yamlr-diff
+  name: Yamlr Manifest Diff Preview
+  description: Previews side-by-side or unified diff of proposed auto-remediations without modifying files.
+  entry: yamlr diff
+  args: ["--unified"]
+  language: system
   files: \.(yaml|yml)$
-  args: ["--quiet", "--dry-run"]
+  pass_filenames: true
+  require_serial: false

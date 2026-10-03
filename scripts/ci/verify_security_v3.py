@@ -57,7 +57,7 @@ if __name__ == "__main__":
     s1 = test_credential_encryption()
     s2 = test_env_scrubbing()
     if s1 and s2:
-        print("\n🎉 ALL SECURITY TESTS PASSED (A+ PARITY)")
+        print("\n ALL SECURITY TESTS PASSED (A+ PARITY)")
         exit(0)
     else:
         print("\n❌ SECURITY TESTS FAILED")

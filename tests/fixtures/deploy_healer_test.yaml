@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: healer-deploy
+spec:
+  replicas: "3" # Should be integer 3
+  selector:
+    matchLabels:
+      app: healer
+  template:
+    metadata:
+      labels:
+        app: healer
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - name: nginx
+        image: nginx:1.25.3
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+            ephemeral-storage: "1Gi"
+          limits:
+            memory: "256Mi"

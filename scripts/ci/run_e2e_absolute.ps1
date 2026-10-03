@@ -58,7 +58,7 @@ Run-Test "Semantic DNA" "dist\yamlr.exe dna yamlr-demo\sample.yaml"
 Run-Test "Pro Harden" "dist\yamlr.exe heal yamlr-demo\sample.yaml --harden --dry-run"
 Run-Test "Fix-Refs" "dist\yamlr.exe heal yamlr-demo --fix-refs --dry-run"
 Run-Test "Stub-Refs" "dist\yamlr.exe heal yamlr-demo --stub-refs --dry-run"
-Run-Test "Sovereign" "dist\yamlr.exe scan yamlr-demo --sovereign"
+Run-Test "Offline" "dist\yamlr.exe scan yamlr-demo"
 Run-Test "Fast-Scan" "dist\yamlr.exe scan yamlr-demo --fast"
 
 # 5. Toolbox

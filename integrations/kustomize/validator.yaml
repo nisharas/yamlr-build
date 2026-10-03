@@ -1,0 +1,13 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Validator
+metadata:
+  name: yamlr-validator
+  annotations:
+    config.kubernetes.io/function: |
+      exec:
+        path: yamlr
+        args:
+          - "scan"
+          - "."
+          - "--fail-on"
+          - "error"

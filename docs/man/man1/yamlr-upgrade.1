@@ -1,9 +1,14 @@
-.TH "YAMLR-UPGRADE" "1" "March 2026" "Yamlr Manual" "User Commands"
-The \fByamlr upgrade\fR command is a specialized wrapper around the healing engine designed exclusively for \fBKubernetes API Version Migrations\fR.
+.TH "YAMLR-UPGRADE" "1" "May 2026" "Yamlr Manual" "User Commands"
+.SH "NAME"
+yamlr-upgrade \- Propose repairs and remediate Kubernetes manifests.
+.SH "DESCRIPTION"
+\fB✅ FREE / OSS\fR
+.PP
+The \fByamlr upgrade\fR command is a specialized wrapper around the healing engine designed for \fBKubernetes API Version Migrations\fR.
 .PP
 It helps you move from deprecated APIs (e.g., \fBextensions/v1beta1\fR) to modern stable APIs (e.g., \fBapps/v1\fR) while preserving your application's logic.
 .PP
-.SH "USAGE"
+.SH "SYNOPSIS"
 .nf
 .RS
 # Upgrade to match the version of your currently connected cluster
@@ -18,18 +23,18 @@ yamlr upgrade ./manifests --to 1.30
 \fByamlr upgrade\fR is strictly \fBForward-Only\fR.
 .PP
 .IP "\(bu" 2
-  **If your manifest is older than the target:** It upgrades it.
+  \fBIf your manifest is older than the target:\fR It upgrades it.
 .IP "\(bu" 2
-  **If your manifest is equal to or newer:** It does nothing (Green/Pass).
+  \fBIf your manifest is equal to or newer:\fR It does nothing (Green/Pass).
 .IP "\(bu" 2
-  **It NEVER downgrades.** You cannot use this tool to revert to an older API version.
+  \fBIt NEVER downgrades.\fR You cannot use this tool to revert to an older API version.
 .SS "2. Structural Reconstruction"
 Unlike \fBsed\fR or \fBgrep\fR replacements, Yamlr parses the object into a semantic model and reconstructs it.
 .PP
 .IP "\(bu" 2
-  **Fixes Structure:** It adds standard fields that are required in newer versions (e.g., \fBspec.selector\fR for Deployments).
+  \fBFixes Structure:\fR It adds standard fields that are required in newer versions (e.g., \fBspec.selector\fR for Deployments).
 .IP "\(bu" 2
-  **Preserves Comments:** It strives to keep your YAML comments intact.
+  \fBPreserves Comments:\fR It strives to keep your YAML comments intact.
 .SS "3. Safety First"
 By default, \fByamlr upgrade\fR runs in \fBPreview Mode\fR (dry-run).
 .PP
@@ -72,36 +77,73 @@ spec:
     metadata:
       labels:
         app: my-app
-
-### 🛡 Universal Expert Flags
-These flags are available across almost all primary Yamlr commands:
-
-*   **`--output FORMAT`**: Report format (text, json).
-*   **`--dry-run`**: Show proposed changes without writing (Preview mode).
-*   **`--diff`**: Show visual diff of changes (Preview mode).
-*   **`--fast`**: Skip heavy semantic analysis for maximum speed.
-*   **`--kube-version <V>`**: Force a specific Kubernetes version (e.g., `1.31`).
-*   **`--max-depth <N>`**: Limit recursive scanning depth (Default: 10).
-*   **`--ext <list>`**: Comma-separated list of file extensions (Default: `.yaml,.yml`).
-*   **`--concurrency <N>`**: Number of parallel worker processes.
-*   **`--strict`**: Treat all schema warnings as hard errors.
-*   **`--compact`**: Use minimal whitespace (2-space indent) in output.
-*   **`--health-threshold <0-100>`**: Minimum score to pass (Default: 70).
-*   **`--namespace <name>`**: Default namespace for generated resources.
-*   **`--check-deprecations`**: Audit for and record deprecated K8s APIs.
-*   **`--cpu-limit <limit>`**: Default CPU for auto-injection (e.g., `500m`).
-*   **`--mem-limit <limit>`**: Default Memory for auto-injection (e.g., `512Mi`).
-*   **`--enforce-limits`**: Auto-inject missing CPU/Memory limits.
-*   **`--enforce-probes`**: Auto-inject missing Liveness/Readiness probes.
-*   **`--enforce-namespace`**: Auto-inject default namespace if missing.
-*   **`--fix-tags`**: Auto-remediate `:latest` or missing image tags.
-*   **`--harden`**: Apply security hardening (Non-root, Read-only FS).
-*   **`--stream-to <FILE>`**: Batch-mode: Stream results to NDJSON (prevents RAM saturation).
-*   **`--fail-on <CHOICE>`**: Exit 1 if specified severity found (error/warning/any).
-*   **`--summary-only`**: Show aggregate stats only (recommended for 100+ files).
-*   **`--plain`**: ASCII-only output mode (Recommended for Log redirection).
-*   **`--verbose`**: Show full audit logs and engine stages.
-*   **`-q`, `--quiet`**: Minimal output mode (CI/CD optimized; errors and exit codes only).
-*   **`--identity-mode {infer,strict}`**: Control how Yamlr identifies resources (Default: infer).
 .RE
 .fi
+.SS " Universal Expert Flags"
+These flags are available across almost all primary Yamlr commands:
+.PP
+.IP "\(bu" 2
+  \fB\fB--output FORMAT\fR\fR: Report format (text, json).
+.IP "\(bu" 2
+  \fB\fB--dry-run\fR\fR: Show proposed changes without writing (Preview mode).
+.IP "\(bu" 2
+  \fB\fB--diff\fR\fR: Show visual diff of changes (Preview mode).
+.IP "\(bu" 2
+  \fB\fB--fast\fR\fR: Skip heavy semantic analysis for maximum speed.
+.IP "\(bu" 2
+  \fB\fB--kube-version <V>\fR\fR: Force a specific Kubernetes version (e.g., \fB1.31\fR).
+.IP "\(bu" 2
+  \fB\fB--max-depth <N>\fR\fR: Limit recursive scanning depth (Default: 10).
+.IP "\(bu" 2
+  \fB\fB--ext <list>\fR\fR: Comma-separated list of file extensions (Default: \fB.yaml,.yml\fR).
+.IP "\(bu" 2
+  \fB\fB--concurrency <N>\fR\fR: Number of parallel worker processes.
+.IP "\(bu" 2
+  \fB\fB--strict\fR\fR: Treat all schema warnings as hard errors.
+.IP "\(bu" 2
+  \fB\fB--compact\fR\fR: Use minimal whitespace (2-space indent) in output.
+.IP "\(bu" 2
+  \fB\fB--health-threshold <0-100>\fR\fR: Minimum score to pass (Default: 70).
+.IP "\(bu" 2
+  \fB\fB--namespace <name>\fR\fR: Default namespace for generated resources.
+.IP "\(bu" 2
+  \fB\fB--check-deprecations\fR\fR: Audit for and record deprecated K8s APIs.
+.IP "\(bu" 2
+  \fB\fB--cpu-limit <limit>\fR\fR: Default CPU for auto-injection (e.g., \fB500m\fR).
+.IP "\(bu" 2
+  \fB\fB--mem-limit <limit>\fR\fR: Default Memory for auto-injection (e.g., \fB512Mi\fR).
+.IP "\(bu" 2
+  \fB\fB--enforce-limits\fR\fR: Auto-inject missing CPU/Memory limits.
+.IP "\(bu" 2
+  \fB\fB--enforce-probes\fR\fR: Auto-inject missing Liveness/Readiness probes.
+.IP "\(bu" 2
+  \fB\fB--enforce-namespace\fR\fR: Auto-inject default namespace if missing.
+.IP "\(bu" 2
+  \fB\fB--fix-tags\fR\fR: Auto-remediate \fB:latest\fR or missing image tags.
+.IP "\(bu" 2
+  \fB\fB--harden\fR\fR: Apply security hardening (Non-root, Read-only FS).
+.IP "\(bu" 2
+  \fB\fB--native\fR\fR [Pro]: Enable high-fidelity native export with comment grafting and schema-aware sorting.
+.IP "\(bu" 2
+  \fB\fB--stream-to <FILE>\fR\fR: Batch-mode: Stream results to NDJSON (prevents RAM saturation).
+.IP "\(bu" 2
+  \fB\fB--fail-on <CHOICE>\fR\fR: Exit 1 if specified severity found (error/warning/any).
+.IP "\(bu" 2
+  \fB\fB--summary-only\fR\fR: Show aggregate stats only (recommended for 100+ files).
+.IP "\(bu" 2
+  \fB\fB--plain\fR\fR: ASCII-only output mode (Recommended for Log redirection).
+.IP "\(bu" 2
+  \fB\fB--verbose\fR\fR: Show full audit logs and engine stages.
+.IP "\(bu" 2
+  \fB\fB--timing\fR\fR: [PERFORMANCE] Output surgical execution timing breakdown.
+.IP "\(bu" 2
+  \fB\fB--timing-file <FILE>\fR\fR: [PERFORMANCE] Save performance profiling data to a JSON file.
+.IP "\(bu" 2
+  \fB-q\fR, \fB--quiet\fR: Minimal output mode (CI/CD optimized; errors and exit codes only).
+.IP "\(bu" 2
+  \fB\fB--identity-mode {infer,strict}\fR\fR: Control how Yamlr identifies resources (Default: infer).
+.SH "REPORTING BUGS"
+Report bugs to <https://github.com/yamlr/yamlr/issues>
+.PP
+.SH "COPYRIGHT"
+Copyright \(co 2026 Timonel Labs. Proprietary & Commercial Software (All Rights Reserved).

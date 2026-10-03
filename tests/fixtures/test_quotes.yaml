@@ -1,8 +1,0 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: web-config
-data:
-  APP_ENV: prod
-  FEATURE_FLAG_X: true
-  PORT: 8080

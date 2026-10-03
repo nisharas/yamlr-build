@@ -1,0 +1,25 @@
+# Turnkey Pre-Commit Configuration for Kubernetes Manifests
+# Place this file as .pre-commit-config.yaml in your repository root.
+# Install pre-commit: pip install pre-commit && pre-commit install
+
+repos:
+  - repo: https://github.com/yamlr/yamlr
+    rev: v0.1.0
+    hooks:
+      # 1. Canonical Formatter: Automatically sorts keys to Kubernetes OpenAPI hierarchy and sets 2-space indent
+      - id: yamlr-fmt
+
+      # 2. Manifest Auto-Fixer: Upgrades deprecated APIs and pins latest tags
+      - id: yamlr-fix
+
+      # 3. Manifest Auto-Healer (Recommended): Safe, comment-preserving auto-heal before commit
+      - id: yamlr-heal
+        args: ["--apply"]
+
+      # 4. Optional Diff Preview: Read-only diff preview without modifying files
+      # - id: yamlr-diff
+      #   args: ["--unified"]
+
+      # 5. Optional Scanner Gate: Strict audit gate exiting with code 1 on schema errors
+      # - id: yamlr-scan
+      #   args: ["--fail-on", "error"]

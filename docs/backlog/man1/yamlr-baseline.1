@@ -1,0 +1,77 @@
+.TH "YAMLR-BASELINE" "1" "May 2026" "Yamlr Manual" "User Commands"
+.SH "NAME"
+yamlr-baseline \- Propose repairs and remediate Kubernetes manifests.
+.SH "DESCRIPTION"
+\fBSnapshot Current Violations to Ignore in Future Scans\fR
+.PP
+The \fBbaseline\fR command is a core component of the \fBGitOps Guard\fR strategy. It allows teams to adopt Yamlr on legacy codebases by "fingerprinting" all existing violations and saving them to a JSON file. Future scans can then use this file to ignore those specific issues, ensuring that only \fBnew\fR regressions block your CI/CD pipelines.
+.PP
+.SH "SYNOPSIS"
+.nf
+.RS
+yamlr baseline [PATH]... [FLAGS]
+.RE
+.fi
+.SH "DESCRIPTION"
+Scans your manifests and generates a \fB.yamlr-baseline.json\fR file (by default) containing SHA-256 fingerprints of every finding.
+.PP
+.SS "Fingerprint Integrity"
+Fingerprints are generated based on:
+.PP
+1.  \fBRule ID\fR: The specific check that failed.
+.PP
+2.  \fBResource Identity\fR: The \fBkind\fR and \fBname\fR of the resource.
+.PP
+3.  \fBNormalized Path\fR: The workspace-relative path to the file.
+.PP
+4.  \fBMessage Context\fR: The specific error message.
+.PP
+.IP "\fBNOTE:\fR" 4
+\fBLine numbers are excluded\fR from the fingerprint. This ensures that the baseline remains valid even if you add or remove lines elsewhere in the file.
+.PP
+.SH "OPTIONS"
+.IP "\(bu" 2
+  \fB--output <PATH>\fR: Custom path for the baseline file (Default: \fB.yamlr-baseline.json\fR).
+.IP "\(bu" 2
+  \fB--ext <EXTENSIONS>\fR: Extensions to process (Default: \fB.yaml,.yml\fR).
+.IP "\(bu" 2
+  \fB--max-depth <N>\fR: Limit directory recursion.
+.SH "HOW TO USE IN CI/CD (GITOPS GUARD)"
+1.  \fBEstablish Baseline\fR: Run once on your main branch.
+.PP
+.nf
+.RS
+    yamlr baseline . --output .yamlr-baseline.json
+    git add .yamlr-baseline.json && git commit -m "docs: establish yamlr baseline"
+.RE
+.fi
+2.  \fBEnforce in PRs\fR: Use the \fB--baseline\fR flag in your PR checks.
+.PP
+.nf
+.RS
+    yamlr scan . --baseline .yamlr-baseline.json --fail-on any
+.RE
+.fi
+Yamlr will return \fBexit code 0\fR (PASS) if all findings are in the baseline, and \fBexit code 1\fR (FAIL) only if a new violation is introduced.
+.PP
+.SS " Universal Expert Flags"
+Available across primary commands:
+.PP
+.IP "\(bu" 2
+  \fB\fB--timing\fR\fR: [PERFORMANCE] Output surgical execution timing breakdown.
+.IP "\(bu" 2
+  \fB\fB--timing-file <FILE>\fR\fR: [PERFORMANCE] Save performance profiling data to a JSON file.
+.IP "\(bu" 2
+  \fB\fB--verbose\fR\fR: Full audit logs and engine stages.
+.IP "\(bu" 2
+  \fB-q\fR, \fB--quiet\fR: Minimal output mode (exit codes only).
+.SH "SEE ALSO"
+.IP "\(bu" 2
+[yamlr scan](yamlr_scan.md) - Deep audit with baseline filtering support.
+.IP "\(bu" 2
+[yamlr dna](yamlr_dna.md) - Mathematical proof of semantic integrity.
+.SH "REPORTING BUGS"
+Report bugs to <https://github.com/yamlr/yamlr/issues>
+.PP
+.SH "COPYRIGHT"
+Copyright \(co 2026 Timonel Labs. Proprietary & Commercial Software (All Rights Reserved).

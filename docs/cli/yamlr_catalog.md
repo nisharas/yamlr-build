@@ -26,7 +26,7 @@ yamlr catalog list
 ## Options
 *   **`--kube-version V`**: Target version for catalog operations (alias: **`--k8s-version`**).
 
-### 🛡 Universal Expert Flags
+### Universal Expert Flags
 Available across primary commands:
 
 *   **`--timing`**: [PERFORMANCE] Output surgical execution timing breakdown.

@@ -1,50 +1,40 @@
 # yamlr roi
 
-**Executive ROI & Budget Justification**
+**Manifest Quality & Engineering Impact Analysis**
 
-Displays high-fidelity ROI metrics, cost savings, and financial justification for the Yamlr investment.
+Displays verified manifest health metrics, defect remediation impact, and reliability statistics computed across Kubernetes workspaces.
 
 ## Usage
 ```bash
-yamlr roi [FLAGS]
+yamlr roi [PATH] [FLAGS]
+yamlr impact [PATH] [FLAGS]
 ```
 
 ## Description
-The `roi` command provides an executive-level view of the value Yamlr brings to your organization. It calculates wealth reclaimed through automation and risk prevention.
+The `roi` command (aliased to `impact`) provides factual engineering analytics on the reliability value delivered by Yamlr's automated manifest parsing and remediation engine. Rather than using speculative financial models, Yamlr measures direct technical outcomes across syntax, schema, and relational topology.
 
 ## Flags
 *   `-h, --help`: Show this help message.
-*   `--output=json`: Output statistics as structured JSON.
+*   `--output=json`: Output statistics as machine-readable structured JSON.
+*   `--verbose`: Full execution breakdown of analyzed resources.
+*   `-q`, `--quiet`: Minimal output mode (exit codes only).
 
 ## Metrics Displayed
-*   **Engineering Time Reclaimed**: Total hours saved by automated healing.
-*   **Total Wealth Reclaimed**: Estimated financial value of reclaimed time (Default: $100/hr).
-*   **Risk Prevention Surface**: Cumulative count of potential outages defused.
-*   **Organization-Wide Proof of Value**: Impact aggregated across all workspaces on the machine.
-
-## Philosophy
-Yamlr calculates ROI based on surgical complexity weights:
-- **Lexer/Syntax**: 2 minutes
-- **Semantic/Logic**: 15 minutes
-- **Security Hardening**: 30 minutes
-- **API Migration**: 60 minutes
+*   **Manifests Analyzed**: Total Kubernetes manifest files discovered and ingested.
+*   **Documents Parsed**: Discrete YAML document streams partitioned and validated.
+*   **Outages Prevented**: Critical cross-resource link failures (e.g. dangling Service selectors, orphaned Ingress backends, broken ConfigMap/Secret references) intercepted before cluster deployment.
+*   **Violations Remediated**: Schema errors, missing required fields, and policy violations safely fixed.
+*   **API Deprecations Upgraded**: Obsolete Kubernetes API versions automatically transitioned to stable counterparts.
+*   **Integrity Risk Mitigated**: Cumulative severity-weighted risk reduction score.
 
 ## Examples
 ```bash
-# View the Executive ROI Dashboard
-yamlr roi
+# View workspace manifest quality and impact
+yamlr roi ./k8s
 
-# Export ROI data for budget meetings
-yamlr roi --output=json
+# Export factual impact metrics for CI reporting or observability
+yamlr roi ./k8s --output=json
 ```
 
-### 🛡 Universal Expert Flags
-Available across primary commands:
-
-*   **`--timing`**: [PERFORMANCE] Output surgical execution timing breakdown.
-*   **`--timing-file <FILE>`**: [PERFORMANCE] Save performance profiling data to a JSON file.
-*   **`--verbose`**: Full audit logs and engine stages.
-*   `-q`, `--quiet`: Minimal output mode (exit codes only).
-
 ---
-*Note: This command uses aggregated local telemetry to prove organizational efficiency without compromising data privacy.*
+*Note: All telemetry is computed hermetically and locally from manifest AST and topological graphs. Zero data egress.*

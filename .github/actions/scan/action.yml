@@ -2,27 +2,47 @@ name: 'Yamlr Scan'
 description: 'Fast, semantic Kubernetes manifest auditor.'
 inputs:
   path:
-    description: 'Path(s) to scan (comma separated or glob)'
+    description: 'Path(s) to scan'
     required: false
     default: '.'
   args:
-    description: 'Additional arguments for yamlr scan (e.g. --harden)'
+    description: 'Additional arguments for yamlr scan'
     required: false
     default: ''
   sarif_output:
     description: 'Path to save SARIF report'
     required: false
     default: 'yamlr-results.sarif'
+  version:
+    description: 'Exact Yamlr release tag to install when no binary is already available (for example, v1.2.3)'
+    required: true
 
 runs:
-  using: 'docker'
-  image: 'Dockerfile'
-  args:
-    - 'scan'
-    - '${{ inputs.path }}'
-    - '--output=sarif'
-    - '--output=${{ inputs.sarif_output }}'
-    - '${{ inputs.args }}'
+  using: 'composite'
+  steps:
+    - name: Install Standalone Yamlr Binary
+      shell: bash
+      env:
+        YAMLR_INSTALL_DIR: ${{ runner.temp }}/yamlr-bin
+        YAMLR_VERSION: ${{ inputs.version }}
+        YAMLR_VERIFY_ATTESTATION: 'true'
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        mkdir -p "$YAMLR_INSTALL_DIR"
+        bash "$GITHUB_ACTION_PATH/../../../scripts/install.sh"
+        printf '%s\n' "$YAMLR_INSTALL_DIR" >> "$GITHUB_PATH"
+    - name: Run Yamlr Scan
+      shell: bash
+      env:
+        YAMLR_SCAN_PATH: ${{ inputs.path }}
+        YAMLR_SCAN_ARGS: ${{ inputs.args }}
+        YAMLR_SCAN_SARIF_OUTPUT: ${{ inputs.sarif_output }}
+      run: |
+        extra_args=()
+        if [[ -n "$YAMLR_SCAN_ARGS" ]]; then
+          read -r -a extra_args <<< "$YAMLR_SCAN_ARGS"
+        fi
+        yamlr scan "$YAMLR_SCAN_PATH" --output sarif "${extra_args[@]}" > "$YAMLR_SCAN_SARIF_OUTPUT"
 
 branding:
   icon: 'shield'

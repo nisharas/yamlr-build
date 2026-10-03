@@ -1,0 +1,24 @@
+[package]
+name = "yamlr-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.yamlr-native]
+path = ".."
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "fuzz_sharder"
+path = "fuzz_targets/fuzz_sharder.rs"
+test = false
+doc = false

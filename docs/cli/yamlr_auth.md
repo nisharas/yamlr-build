@@ -20,7 +20,7 @@ yamlr auth login
 # Follow the prompts to authenticate via browser
 ```
 
-### 🛡 Global Performance Flags
+### Global Performance Flags
 Available across all commands:
 
 *   **`--timing`**: [PERFORMANCE] Output surgical execution timing breakdown.

@@ -1,21 +1,45 @@
-MIT License
+YAMLR PROPRIETARY & COMMERCIAL SOFTWARE LICENSE
+(All Rights Reserved)
 
-Copyright (c) 2026 Yamlr Team
+Copyright (c) 2026 Timonel Labs. All Rights Reserved.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+IMPORTANT: PLEASE READ THIS SOFTWARE LICENSE AGREEMENT CAREFULLY BEFORE DOWNLOADING,
+INSTALLING, COPYING, OR USING THIS SOFTWARE.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+1. PROPRIETARY RIGHTS AND OWNERSHIP
+This software ("Yamlr"), including its source code, object code, documentation,
+architecture, data models, algorithms, and interface designs, is the proprietary
+and confidential intellectual property of Timonel Labs ("Licensor").
+Yamlr is protected by international copyright laws and applicable trade secret laws.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+2. GRANT OF LICENSE
+Subject to the terms of this Agreement:
+a) Evaluation / Community Use: You are granted a limited, personal, non-exclusive,
+   non-transferable, revocable license to install and execute the community tier of
+   Yamlr solely for internal evaluation and non-commercial development purposes.
+b) Commercial / Enterprise Use: Any production deployment, automated CI/CD pipeline
+   execution across multi-node or enterprise infrastructure, or commercial use
+   requires a valid, active commercial license issued by the Licensor.
+
+3. RESTRICTIONS
+You may NOT:
+a) Decompile, reverse engineer, disassemble, or attempt to derive the underlying
+   source code of compiled native components or cryptographic services.
+b) Sub-license, lease, rent, sell, distribute, or host Yamlr as a managed service
+   or SaaS offering without prior written authorization from the Licensor.
+c) Remove, alter, or obscure any proprietary notices, copyright marks, or license
+   identifiers contained within Yamlr or its documentation.
+d) Bypass, disable, or circumvent any license validation or cryptographic verification
+   mechanisms.
+
+4. DISCLAIMER OF WARRANTIES
+YAMLR IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL THE LICENSOR BE LIABLE
+FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT,
+OR OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE.
+
+5. TERMINATION
+This license is effective until terminated. Your rights under this license will
+terminate automatically without notice from the Licensor if you fail to comply with
+any term(s) of this Agreement.

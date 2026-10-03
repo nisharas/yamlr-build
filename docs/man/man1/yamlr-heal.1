@@ -1,186 +1,79 @@
-.TH "YAMLR-HEAL" "1" "March 2026" "Yamlr Manual" "User Commands"
+.TH "YAMLR-HEAL" "1" "May 2026" "Yamlr Manual" "User Commands"
+.SH "NAME"
+yamlr-heal \- Propose repairs and remediate Kubernetes manifests.
+.SH "DESCRIPTION"
 \fBPropose Repairs (Safe-by-default)\fR
 .PP
 The \fBheal\fR command is the core of Yamlr. It proposes repairs for syntax errors, schema violations, and logic issues in your Kubernetes manifests.
 .PP
-.SH "USAGE"
+.SH "SYNOPSIS"
 .nf
 .RS
 yamlr heal [PATH]... [FLAGS]
 .RE
 .fi
 .SH "DESCRIPTION"
-Scans the target files for issues and applies fixers.
+Scans target files and applies fixers.
 .PP
 .IP "\(bu" 2
-  **Interactive Mode**: By default, \fBheal\fR prompts for confirmation before writing changes unless specific flags are used.
+  \fBInteractive Mode\fR: Prompts before writing unless \fB-y\fR is used.
 .IP "\(bu" 2
-  **Atomic Writes**: All writes are atomic (\fBfsync\fR + rename) to prevent data loss.
+  \fBAtomic Writes\fR: Prevents data loss during writes.
 .IP "\(bu" 2
-  **Backups**: Automatically creates backups in \fB.yamlr/backups/\fR before modifying files.
+  \fBBackups\fR: Created in \fB.yamlr/backups/\fR automatically.
 .IP "\(bu" 2
-  **Trauma Healing (Epistemic)** \fB[Pro]\fR: Automatically repairs structural "Type Trauma" (e.g., converting Maps to Lists when the schema expects an array).
+  \fBType Healing\fR [Pro]: Structural type mismatch repair.
 .IP "\(bu" 2
-  **Referential Alignment**: Proactively fixes broken references to ConfigMaps, Secrets, and PVCs using fuzzy matching.
-> [!IMPORTANT]
+  \fBReferential Alignment\fR: Fixes broken ConfigMap/Secret/PVC references.
+.IP "\fBIMPORTANT:\fR" 4
+\fBFree Tier Healing Limits\fR
 .PP
-> \fBFree Tier Healing Limits (The Habit Gate)\fR
-.PP
-> For users on the Free Tier, \fByamlr heal\fR is strictly limited to \fB5 single files per day\fR, and large batch healing (\fB>5 files\fR) is blocked. Upgrading to \fBYamlr Enterprise\fR unlocks unlimited scale batch-healing. Note: \fByamlr scan\fR remains 100% free and unlimited for auditing!
+Limited to \fB5 files per day\fR. \fByamlr scan\fR remains 100% free and unlimited!
 .PP
 .SH "KEY FLAGS"
-.SS "Automation"
-.IP "\(bu" 2
-  \fB-y, --yes\fR: Auto-approve changes for single files.
-.IP "\(bu" 2
-  \fB--yes-all\fR: Auto-approve changes for all files (Batch mode).
-.IP "\(bu" 2
-  \fB--dry-run\fR: Preview changes without writing to disk.
-.IP "\(bu" 2
-  \fB--diff\fR: Alias for \fB--dry-run\fR. Shows a visual diff of proposed changes.
-.SS "Pro / Advanced Features"
-.IP "\(bu" 2
-  \fB--pro-preview\fR: The Enterprise Demo Mode. Simulates all PRO-tier hardening and fixes below safely via a dry-run diff.
-.IP "\(bu" 2
-  \fB--harden\fR [Pro]: Enable security hardening (Drop capabilities, Non-root, etc.).
-.IP "\(bu" 2
-  \fB--enforce-limits\fR [Pro]: Inject default CPU/Memory limits.
-.IP "\(bu" 2
-  \fB--enforce-probes\fR [Pro]: Inject Liveness/Readiness probes.
-.IP "\(bu" 2
-  \fB--fix-tags\fR [Pro]: Pin \fB:latest\fR image tags.
-.IP "\(bu" 2
-  \fB--stub-refs [KINDS]\fR: Automatically generate missing resources (ConfigMaps, Secrets, Services). Safe kinds only by default. Use \fB--stub-refs=ConfigMap,Secret\fR to filter.
-.IP "\(bu" 2
-  \fB--fix-refs\fR [Pro]: **Cross-Resource Auto-Fix.** Corrects selector typos (fuzzy match), fixes Service/container port mismatches (including named-port fuzzy matching for multi-port workloads), and stubs missing ConfigMaps/Secrets. Superset of \fB--stub-refs\fR.
-.IP "\(bu" 2
-  \fB--identity-mode {infer,strict}\fR: Control how the engine identifies malformed resources.
-.IP "\(bu" 2
-  \fB--unsafe\fR: Allow healing of sensitive resources like \fBSecret\fR.
-.SS "Enterprise Compliance (Epic 21)"
-.IP "\(bu" 2
-  \fB--evidence-dir <DIR>\fR: Generate signed cryptographic DNA evidence receipts.
-.IP "\(bu" 2
-  \fB--adapters-dir <DIR>\fR: Dynamically execute custom Python/Bash remediation scripts against AST findings.
-.IP "\(bu" 2
-  \fB--kyverno-report <PATH>\fR: Path to ingest Kyverno \fBPolicyReport\fR JSON and map to Yamlr auto-fixes.
-.SS "CI/CD & Ultra-Scale"
-.IP "\(bu" 2
-  \fB-q, --quiet\fR: Suppress output (exit code only).
-.IP "\(bu" 2
-  \fB--no-backup\fR: Skip backup creation (Faster, but risky).
-.IP "\(bu" 2
-  \fB--check-deprecations\fR: Audit for deprecated APIs (Engine-level).
-.IP "\(bu" 2
-  \fB--fail-on CHOICE\fR: Exit 1 if issues found (any/warning/error).
-.IP "\(bu" 2
-  \fB--stream-to FILE\fR: Stream incremental results to NDJSON.
-.IP "\(bu" 2
-  \fB--fast\fR: Skip deep semantic analysis for maximum throughput.
-.SH "EXAMPLES"
-\fBInteractive Repair:\fR
-.PP
-.nf
-.RS
-yamlr heal .
-.RE
-.fi
-\fBCI/CD Auto-Fix:\fR
-.PP
-.nf
-.RS
-yamlr heal . --yes-all --no-backup
-.RE
-.fi
-\fBSecurity Hardening:\fR
-.PP
-.nf
-.RS
-yamlr heal deployment.yaml --harden
-.RE
-.fi
-\fBCross-Resource Auto-Fix (Pro):\fR
-.PP
-.nf
-.RS
-# Fix selector typos, port mismatches, and stub missing refs in one pass
-yamlr heal . --fix-refs
+.SS "Primary Remediation Options"
+.TP
+\fB--apply\fR
+Apply fixes directly to manifests on disk (Default: Preview).
+.TP
+\fB--diff\fR
+Show side-by-side diff of proposed changes.
+.TP
+\fB--dry-run\fR
+Show forensic impact without applying changes to disk.
+.SS "Targeting & Environment"
+.TP
+\fB--kube-version\fR, \fB--k8s-version <VERSION>\fR
+Target Kubernetes schema version (e.g., \fB1.30\fR, \fB1.31\fR).
+.TP
+\fB--crd <PATH>\fR
+Path to CRD manifests to ingest and validate against.
+.TP
+\fB--helm\fR
+Audit & heal Helm values in-memory.
+.TP
+\fB--kustomize\fR
+Audit & heal Kustomize overlays in-memory.
+.SS "Policy & Tool Ingestion"
+.TP
+\fB--ingest-opa <PATH>\fR
+Path to OPA Gatekeeper JSON report to ingest and auto-repair.
+.TP
+\fB--ingest-kyverno <PATH>\fR
+Path to Kyverno PolicyReport JSON to ingest and auto-repair.
+.SS "CI/CD & Pipeline Integration"
+.TP
+\fB-f\fR, \fB--output-file <FILE>\fR
+Path to write report (SARIF/JSON).
+.TP
+\fB--exit-zero\fR
+Always exit with code 0 (for non-blocking CI warnings).
+.TP
+\fB--push-telemetry\fR
+Push anonymous ROI data to global dashboard.
 
-# Preview what cross-resource fixes would be made (without writing)
-yamlr heal . --fix-refs --dry-run
-.RE
-.fi
-\fBStub Missing References (OSS):\fR
+.SH "REPORTING BUGS"
+Report bugs to <https://github.com/yamlr/yamlr/issues>
 .PP
-.nf
-.RS
-# Generate placeholder ConfigMaps and Secrets for volume refs
-yamlr heal . --stub-refs
-
-# Stub only ConfigMap and Secret kinds
-yamlr heal . --stub-refs=ConfigMap,Secret
-.RE
-.fi
-.SS "🛡 Universal Expert Flags"
-These flags are available across almost all primary Yamlr commands:
-.PP
-.IP "\(bu" 2
-  **\fB--output FORMAT\fR**: Report format (text, json, sarif).
-.IP "\(bu" 2
-  **\fB--opa-bundle <PATH>\fR**: Path or URL to OPA bundle.
-.IP "\(bu" 2
-  **\fB--diff\fR**: Show visual diff of changes (Preview mode — alias for \fB--dry-run\fR).
-.IP "\(bu" 2
-  **\fB--fast\fR**: Skip heavy semantic analysis for maximum speed.
-.IP "\(bu" 2
-  **\fB--kube-version <V>\fR**: Force a specific Kubernetes version (e.g., \fB1.31\fR).
-.IP "\(bu" 2
-  **\fB--catalog <PATH>\fR**: (Optional) Path to custom catalog. Yamlr now includes an **Embedded Magic Fallback** if this is omitted.
-.IP "\(bu" 2
-  **\fB--max-depth <N>\fR**: Limit recursive scanning depth (Default: 10).
-.IP "\(bu" 2
-  **\fB--ext <list>\fR**: Comma-separated list of file extensions (Default: \fB.yaml,.yml\fR).
-.IP "\(bu" 2
-  **\fB--concurrency <N>\fR**: Number of parallel worker processes.
-.IP "\(bu" 2
-  **\fB--strict\fR**: Treat all schema warnings as hard errors.
-.IP "\(bu" 2
-  **\fB--compact\fR**: Use minimal whitespace (2-space indent) in output.
-.IP "\(bu" 2
-  **\fB--health-threshold <0-100>\fR**: Minimum score to pass (Default: 70).
-.IP "\(bu" 2
-  **\fB--namespace <name>\fR**: Default namespace for generated resources.
-.IP "\(bu" 2
-  **\fB--check-deprecations\fR**: Audit for and record deprecated K8s APIs.
-.IP "\(bu" 2
-  **\fB--cpu-limit <limit>\fR**: Default CPU for auto-injection (e.g., \fB500m\fR).
-.IP "\(bu" 2
-  **\fB--mem-limit <limit>\fR**: Default Memory for auto-injection (e.g., \fB512Mi\fR).
-.IP "\(bu" 2
-  **\fB--enforce-limits\fR** [Pro]: Auto-inject missing CPU/Memory limits.
-.IP "\(bu" 2
-  **\fB--enforce-probes\fR** [Pro]: Auto-inject missing Liveness/Readiness probes.
-.IP "\(bu" 2
-  **\fB--enforce-namespace\fR**: Auto-inject default namespace if missing.
-.IP "\(bu" 2
-  **\fB--fix-tags\fR** [Pro]: Auto-remediate \fB:latest\fR or missing image tags.
-.IP "\(bu" 2
-  **\fB--stub-refs [KINDS]\fR**: Auto-generate missing resource stubs (ConfigMaps, Secrets, Services).
-.IP "\(bu" 2
-  **\fB--fix-refs\fR** [Pro]: Full Cross-Resource Auto-Fix (superset of \fB--stub-refs\fR).
-.IP "\(bu" 2
-  **\fB--harden\fR** [Pro]: Apply security hardening (Non-root, Read-only FS).
-.IP "\(bu" 2
-  **\fB--stream-to <FILE>\fR**: Batch-mode: Stream results to NDJSON (prevents RAM saturation).
-.IP "\(bu" 2
-  **\fB--fail-on <CHOICE>\fR**: Exit 1 if specified severity found (error/warning/any).
-.IP "\(bu" 2
-  **\fB--summary-only\fR**: Show aggregate stats only (recommended for 100+ files).
-.IP "\(bu" 2
-  **\fB--plain\fR**: ASCII-only output mode (Recommended for Log redirection).
-.IP "\(bu" 2
-  **\fB--verbose\fR**: Show full audit logs and engine stages.
-.IP "\(bu" 2
-  **\fB-q\fR, \fB--quiet\fR**: Minimal output mode (CI/CD optimized; errors and exit codes only).
-.IP "\(bu" 2
-  **\fB--identity-mode {infer,strict}\fR**: Control how Yamlr identifies resources (Default: infer).
+.SH "COPYRIGHT"
+Copyright \(co 2026 Timonel Labs. Proprietary & Commercial Software (All Rights Reserved).

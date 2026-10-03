@@ -1,22 +1,25 @@
-.TH "YAMLR-DNA" "1" "March 2026" "Yamlr Manual" "User Commands"
+.TH "YAMLR-DNA" "1" "May 2026" "Yamlr Manual" "User Commands"
+.SH "NAME"
+yamlr-dna \- Propose repairs and remediate Kubernetes manifests.
+.SH "DESCRIPTION"
 Calculate or verify the \fBSemantic SHA-256 DNA\fR of a Kubernetes manifest \fB[Pro]\fR.
 .PP
-.SH "USAGE"
+.SH "SYNOPSIS"
 .nf
 .RS
 yamlr dna <path> [flags]
 .RE
 .fi
 .SH "DESCRIPTION"
-The \fBdna\fR command is a core component of Yamlr's \fBZero-Failure Trust Pillar\fR. It calculates a cryptographic hash that is invariant to formatting, comments, and field ordering. This allows you to mathematically prove that the \fImeaning\fR of a manifest has not changed, even if the file structure has been reformatted or healed.
+The \fBdna\fR command is a core component of Yamlr's \fBSemantic Invariance Guarantee\fR. It calculates a cryptographic hash that is invariant to formatting, comments, and field ordering. This allows you to mathematically prove that the *meaning* of a manifest has not changed, even if the file structure has been reformatted or healed.
 .PP
 .SS "Why use Semantic DNA?"
 .IP "\(bu" 2
-**Drift Detection**: Verify that a manifest in Git matches the intent in your cluster, even if whitespace differs.
+\fBDrift Detection\fR: Verify that a manifest in Git matches the intent in your cluster, even if whitespace differs.
 .IP "\(bu" 2
-**Healing Integrity**: Prove that \fByamlr heal\fR preserved your original intent while fixing syntax or security issues.
+\fBHealing Integrity\fR: Prove that \fByamlr heal\fR preserved your original intent while fixing syntax or security issues.
 .IP "\(bu" 2
-**CI/CD Gates**: Fail builds if the Semantic DNA changes unexpectedly during a pipeline run.
+\fBCI/CD Gates\fR: Fail builds if the Semantic DNA changes unexpectedly during a pipeline run.
 .SH "ARGUMENTS"
 .IP "\(bu" 2
 \fBpath\fR: The path to the manifest file (required).
@@ -47,8 +50,24 @@ yamlr dna deployment.yaml --hash 250f0af28fe5f1bc89f88eeb0ac086aa70d6028a955fee7
 yamlr dna pod.yaml --output json
 .RE
 .fi
+.SS " Universal Expert Flags"
+Available across primary commands:
+.PP
+.IP "\(bu" 2
+  \fB\fB--timing\fR\fR: [PERFORMANCE] Output surgical execution timing breakdown.
+.IP "\(bu" 2
+  \fB\fB--timing-file <FILE>\fR\fR: [PERFORMANCE] Save performance profiling data to a JSON file.
+.IP "\(bu" 2
+  \fB\fB--verbose\fR\fR: Full audit logs and engine stages.
+.IP "\(bu" 2
+  \fB-q\fR, \fB--quiet\fR: Minimal output mode (exit codes only).
 .SH "SEE ALSO"
 .IP "\(bu" 2
 [yamlr status](yamlr_status.md) - View project-wide health and HAS metrics.
 .IP "\(bu" 2
 [yamlr heal](yamlr_heal.md) - Repair manifesting while preserving DNA integrity.
+.SH "REPORTING BUGS"
+Report bugs to <https://github.com/yamlr/yamlr/issues>
+.PP
+.SH "COPYRIGHT"
+Copyright \(co 2026 Timonel Labs. Proprietary & Commercial Software (All Rights Reserved).

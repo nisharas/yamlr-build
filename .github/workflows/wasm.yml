@@ -1,0 +1,46 @@
+name: WASM Build & Verify
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'native_core/src/wasm.rs'
+      - 'native_core/Cargo.toml'
+      - '.github/workflows/wasm.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'native_core/src/wasm.rs'
+      - 'native_core/Cargo.toml'
+      - '.github/workflows/wasm.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build-wasm:
+    name: Build WASM Web Package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Install Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@46268bd060767258de96ed93c1251119784f2ab6 # v1.16.1
+        with:
+          toolchain: stable
+          target: wasm32-unknown-unknown
+          cache: false
+
+      - name: Install wasm-pack
+        run: cargo install wasm-pack --version 0.15.0 --locked
+
+      - name: Build WASM Package
+        run: |
+          cd native_core
+          wasm-pack build --target web --out-dir ../website/public/wasm -- --features wasm
+
+      - name: Verify WASM Output
+        run: |
+          test -f website/public/wasm/yamlr_native.js
+          test -f website/public/wasm/yamlr_native_bg.wasm
+          echo "WASM build verified successfully."

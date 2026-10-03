@@ -1,0 +1,54 @@
+name: Yamlr Manifest Safety
+on: [push, pull_request]
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    outputs:
+      sarif_artifact_id: ${{ steps.upload_sarif.outputs.artifact-id }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Rust
+        uses: actions-rust-lang/setup-rust-toolchain@46268bd060767258de96ed93c1251119784f2ab6 # v1.16.1
+        with:
+          toolchain: stable
+          cache: false
+
+      - name: Build Yamlr
+        run: cargo build --manifest-path native_core/Cargo.toml --bin yamlr
+
+      - name: Scan repository manifests
+        run: native_core/target/debug/yamlr scan . --fail-on error --output sarif --output-file results.sarif
+
+      - name: Upload SARIF artifact
+        id: upload_sarif
+        if: always() && hashFiles('results.sarif') != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: yamlr-safety-sarif
+          path: results.sarif
+          if-no-files-found: error
+
+  publish-sarif:
+    needs: audit
+    if: ${{ always() && needs.audit.outputs.sarif_artifact_id != '' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Download SARIF artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: yamlr-safety-sarif
+          path: results
+
+      - name: Upload SARIF report
+        uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4.37.8
+        with:
+          sarif_file: results/results.sarif

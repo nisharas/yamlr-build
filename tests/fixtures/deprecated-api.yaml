@@ -1,0 +1,14 @@
+# DEPRECATED API: Using v1beta1 for Ingress (Deprecated in 1.14, Removed in 1.22)
+apiVersion: networking.k8s.io/v1beta1
+kind: Ingress
+metadata:
+  name: legacy-ingress
+spec:
+  rules:
+  - host: example.com
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: legacy-svc
+          servicePort: 80

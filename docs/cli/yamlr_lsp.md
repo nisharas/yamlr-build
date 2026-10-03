@@ -1,7 +1,7 @@
 # yamlr lsp
 **Language Server Protocol (LSP) Engine (PRO)**
 
-The `yamlr lsp` command starts the sovereign Protocol Server. This allows IDEs (like VS Code) to leverage Yamlr's forensic analysis and interactive healing directly in the editor.
+The `yamlr lsp` command starts the LSP Server. This allows IDEs (like VS Code) to leverage Yamlr's forensic analysis and interactive healing directly in the editor.
 
 ## Usage
 
@@ -12,7 +12,7 @@ yamlr lsp
 
 ## IDE Integration
 
-The LSP server is the "Sovereign Proxy" that powers the **Yamlr VS Code Extension**. It provides real-time feedback for:
+The LSP server is the "Language Server Proxy" that powers the **Yamlr VS Code Extension**. It provides real-time feedback for:
 - **Schema Violations**: Instant squiggles for invalid K8s types.
 - **Surgical Healing**: Quick-fixes for missing probes, limits, and resource gaps.
 - **Forensic Highlighting**: Specialized syntax highlighting for broken manifest shards.

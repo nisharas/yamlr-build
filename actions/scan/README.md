@@ -1,15 +1,15 @@
-# 🛡 Yamlr Guard: Autonomous K8s Manifest Sentinel
+# Yamlr Guard: Autonomous K8s Manifest Sentinel
 
-**Yamlr Guard** (`yamlr/scan`) is an autonomous security and configuration gate for your Kubernetes manifests. Built with our **natively compiled C-engine**, it provides high-performance auditing without exposing your environment's proprietary logic.
+**Yamlr Guard** (`yamlr/scan`) is an autonomous security and configuration gate for your Kubernetes manifests. Built with a **native Rust engine**, it provides high-performance auditing without exposing your environment's proprietary logic.
 
-## 🚀 Why Guard?
+## Architecture
 
-- **Native Speed**: Compiled with Nuitka into a high-performance C binary.
-- **Binary-in-a-Box**: Runs in a hermetically sealed container. No Python runtime required.
-- **Deep Audit**: Beyond simple linting—Guard understands Kubernetes intent and hierarchy.
-- **SARIF Support**: Seamlessly integrates with GitHub Code Scanning alerts.
+- **Native Speed**: Rust-based scanning with borrowed document-slice streaming for multi-document input; downstream parsing and AST construction allocate owned shard data.
+- **Hermetic Execution**: Runs in an isolated container with zero external network calls.
+- **Deep Audit**: Beyond syntax linting—Guard models Kubernetes topology and cross-resource dependencies.
+- **SARIF Support**: Integrates directly with GitHub Code Scanning alerts.
 
-## 🛠️ Usage
+## Usage
 
 ```yaml
 jobs:

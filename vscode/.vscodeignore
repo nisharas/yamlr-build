@@ -10,7 +10,9 @@ package-lock.json
 .editorconfig
 **/*.ts
 node_modules/**
-!bin/**
+bin/**
+!bin/yamlr.exe
+!bin/yamlr
 audit_vsix/**
 audit_vsix_new/**
 audit_vsix_v011/**

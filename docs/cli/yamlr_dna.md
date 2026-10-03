@@ -8,7 +8,7 @@ yamlr dna <path> [flags]
 ```
 
 ## Description
-The `dna` command is a core component of Yamlr's **Zero-Failure Trust Pillar**. It calculates a cryptographic hash that is invariant to formatting, comments, and field ordering. This allows you to mathematically prove that the *meaning* of a manifest has not changed, even if the file structure has been reformatted or healed.
+The `dna` command is a core component of Yamlr's **Semantic Invariance Guarantee**. It calculates a cryptographic hash that is invariant to formatting, comments, and field ordering. This allows you to mathematically prove that the *meaning* of a manifest has not changed, even if the file structure has been reformatted or healed.
 
 ### Why use Semantic DNA?
 - **Drift Detection**: Verify that a manifest in Git matches the intent in your cluster, even if whitespace differs.
@@ -41,7 +41,7 @@ yamlr dna deployment.yaml --hash 250f0af28fe5f1bc89f88eeb0ac086aa70d6028a955fee7
 yamlr dna pod.yaml --output json
 ```
 
-### 🛡 Universal Expert Flags
+### Universal Expert Flags
 Available across primary commands:
 
 *   **`--timing`**: [PERFORMANCE] Output surgical execution timing breakdown.

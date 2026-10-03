@@ -1,0 +1,73 @@
+.TH "YAMLR" "1" "May 2026" "Yamlr Manual" "User Commands"
+.SH NAME
+yamlr \- Kubernetes Manifest Safety and Healing Engine
+.SH SYNOPSIS
+.B yamlr
+.I COMMAND
+[\fIPATH\fR] [\fIOPTIONS\fR]
+.SH DESCRIPTION
+.B yamlr
+is a manifest auditing and healing tool designed to ensure the integrity, security, and stability of Kubernetes manifests. Built on a Rust-native core, Yamlr provides sub-millisecond manifest discovery and streaming audits.
+.PP
+Yamlr unifies its capabilities under two primary workflows:
+.IP "\(bu" 2
+\fBAudit Mode (Scan):\fR Real-time diagnostics, schema validation, and risk analysis. 
+.IP "\(bu" 2
+\fBHealing Mode (Heal):\fR Automated remediation with comment preservation and safety previews.
+.SH COMMANDS
+.TP
+\fBscan\fR [\fIpath\fR]
+Audits manifests for schema violations, dangling references, and syntax errors.
+.TP
+\fBheal\fR [\fIpath\fR]
+Surgically remediates violations. Defaults to Preview mode with side-by-side diffs.
+.TP
+\fBrestore\fR [\fIpath\fR]
+Forensically rolls back all remediations using local \fB.bak\fR backups.
+.TP
+\fBdoctor\fR
+Performs a system health check to verify Rust core linkage, OS compatibility, and environment health.
+.TP
+\fBdna\fR [\fIpath\fR]
+Visualizes semantic relationships and topological graph awareness in real-time.
+.TP
+\fBroi\fR
+Displays value-based risk mitigation dashboard (PRO). Provides simulation for Free users.
+.TP
+\fBdrift\fR
+Detects drift between live cluster state and GitOps DNA (PRO).
+.TP
+\fBversion\fR
+Displays engine heartbeat, registry version, and licensing metadata.
+.TP
+\fBinstall\fR [\fIhook|action\fR]
+Installs Yamlr as a pre-commit hook or GitHub Action.
+.TP
+\fBlsp\fR
+Starts the Language Server for VS Code and other IDEs.
+.SH OPTIONS
+.TP
+\fB--apply\fR
+Bypasses preview and applies remediations directly.
+.TP
+\fB--yes-all\fR
+Auto-confirm all remediations in non-interactive mode.
+.TP
+\fB--output\fR [\fItext|sarif|json\fR]
+Specifies the forensic output format for audits and CI integration.
+.SH EXIT STATUS
+.TP
+\fB0\fR
+Success. No critical violations found.
+.TP
+\fB1\fR
+Forensic violations detected or system error occurred.
+.SH FILES
+.TP
+\fI.yamlr.yaml\fR
+Configuration file for workspace-level policy enforcement.
+.SH AUTHOR
+Engineered by Yamlr. (https://yamlr.dev)
+.PP
+.SH COPYRIGHT
+Copyright \(co 2026 Timonel Labs. Proprietary & Commercial Software (All Rights Reserved).

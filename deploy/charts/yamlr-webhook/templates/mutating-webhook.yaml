@@ -1,0 +1,24 @@
+{{- if .Values.webhook.mutate }}
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: {{ include "yamlr-webhook.fullname" . }}-mutating
+webhooks:
+  - name: mutate.yamlr.dev
+    rules:
+      - apiGroups: ["apps", ""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["deployments", "statefulsets", "services"]
+        scope: "Namespaced"
+    clientConfig:
+      service:
+        namespace: {{ .Release.Namespace }}
+        name: {{ include "yamlr-webhook.fullname" . }}
+        path: "/mutate"
+        port: {{ .Values.service.port }}
+    admissionReviewVersions: ["v1"]
+    sideEffects: None
+    timeoutSeconds: {{ .Values.webhook.timeoutSeconds }}
+    failurePolicy: {{ .Values.webhook.failurePolicy }}
+{{- end }}

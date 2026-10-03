@@ -1,0 +1,37 @@
+.TH "YAMLR-DOCTOR" "1" "May 2026" "Yamlr Manual" "User Commands"
+.SH "NAME"
+yamlr-doctor \- Perform environment diagnostics, schema cache verification, and toolchain checks.
+.SH "DESCRIPTION"
+\fBEnvironment & Health Diagnostics\fR
+.PP
+The \fBdoctor\fR command runs a suite of diagnostic checks to ensure the Yamlr Engine, native PyO3 core, cluster toolchain (kubectl), and local Kubernetes schema caches are healthy and functioning correctly.
+.PP
+.SH "SYNOPSIS"
+.nf
+.RS
+yamlr doctor [OPTIONS]
+.RE
+.fi
+.SH "DIAGNOSTIC OPTIONS"
+.IP "\(bu" 2
+\fB--fix\fR: Automatically repair local environment drift (e.g., initialize local schema cache).
+.SH "TARGETING & ENVIRONMENT"
+.IP "\(bu" 2
+\fB--k8s-version\fR \fIVERSION\fR: Target Kubernetes schema version to diagnose (e.g., \fB1.30\fR, \fB1.31\fR).
+.IP "\(bu" 2
+\fB--crd\fR \fIPATH\fR: Path to CustomResourceDefinition manifests to validate against the engine parser.
+.SH "EXAMPLES"
+.nf
+.RS
+# Run environment diagnostics
+yamlr doctor
+
+# Automatically provision missing schemas
+yamlr doctor --fix
+.RE
+.fi
+.SH "REPORTING BUGS"
+Report bugs to <https://github.com/yamlr/yamlr/issues>
+.PP
+.SH "COPYRIGHT"
+Copyright \(co 2026 Timonel Labs. Proprietary & Commercial Software (All Rights Reserved).

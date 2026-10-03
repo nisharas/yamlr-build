@@ -1,0 +1,28 @@
+replicaCount: 2
+
+image:
+  repository: ghcr.io/yamlr/yamlr-webhook
+  pullPolicy: IfNotPresent
+  tag: "0.1.0"
+
+service:
+  type: ClusterIP
+  port: 443
+  targetPort: 8443
+
+webhook:
+  failurePolicy: Ignore # "Fail" to strictly block non-compliant resources, or "Ignore" for non-blocking audits
+  timeoutSeconds: 3
+  mutate: false
+
+tls:
+  autoGenerate: true
+  secretName: "yamlr-webhook-tls"
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 256Mi
+  requests:
+    cpu: 50m
+    memory: 64Mi

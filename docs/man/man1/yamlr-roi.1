@@ -1,0 +1,58 @@
+.TH "YAMLR-ROI" "1" "May 2026" "Yamlr Manual" "User Commands"
+.SH "NAME"
+yamlr-roi \- Manifest Quality and Engineering Impact Analysis.
+.SH "DESCRIPTION"
+\fBManifest Quality & Engineering Impact Analysis\fR
+.PP
+Displays verified manifest health metrics, defect remediation impact, and reliability statistics computed across Kubernetes workspaces.
+.PP
+.SH "SYNOPSIS"
+.nf
+.RS
+yamlr roi [PATH] [FLAGS]
+yamlr impact [PATH] [FLAGS]
+.RE
+.fi
+.SH "DESCRIPTION"
+The \fBroi\fR command (aliased to \fBimpact\fR) provides factual engineering analytics on the reliability value delivered by Yamlr's automated manifest parsing and remediation engine. Rather than using speculative financial models, Yamlr measures direct technical outcomes across syntax, schema, and relational topology.
+.PP
+.SH "FLAGS"
+.IP "\(bu" 2
+  \fB-h, --help\fR: Show this help message.
+.IP "\(bu" 2
+  \fB--output=json\fR: Output statistics as machine-readable structured JSON.
+.IP "\(bu" 2
+  \fB--verbose\fR: Full execution breakdown of analyzed resources.
+.IP "\(bu" 2
+  \fB-q, --quiet\fR: Minimal output mode (exit codes only).
+.SH "METRICS DISPLAYED"
+.IP "\(bu" 2
+  \fBManifests Analyzed\fR: Total Kubernetes manifest files discovered and ingested.
+.IP "\(bu" 2
+  \fBDocuments Parsed\fR: Discrete YAML document streams partitioned and validated.
+.IP "\(bu" 2
+  \fBOutages Prevented\fR: Critical cross-resource link failures intercepted before deployment.
+.IP "\(bu" 2
+  \fBViolations Remediated\fR: Schema errors, missing required fields, and policy violations safely fixed.
+.IP "\(bu" 2
+  \fBAPI Deprecations Upgraded\fR: Obsolete Kubernetes API versions automatically transitioned.
+.IP "\(bu" 2
+  \fBIntegrity Risk Mitigated\fR: Cumulative severity-weighted risk reduction score.
+.SH "EXAMPLES"
+.nf
+.RS
+# View workspace manifest quality and impact
+yamlr roi ./k8s
+
+# Export factual impact metrics for CI reporting
+yamlr roi ./k8s --output=json
+.RE
+.fi
+.PP
+*Note: All telemetry is computed hermetically and locally from manifest AST and topological graphs. Zero data egress.*
+.PP
+.SH "REPORTING BUGS"
+Report bugs to <https://github.com/yamlr/yamlr/issues>
+.PP
+.SH "COPYRIGHT"
+Copyright \(co 2026 Timonel Labs. Proprietary & Commercial Software (All Rights Reserved).

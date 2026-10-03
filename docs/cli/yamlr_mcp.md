@@ -3,7 +3,7 @@
 Start the Yamlr Model Context Protocol (MCP) server.
 
 ## Why 
-MCP is the standard protocol for connecting AI agents to precision tools. By running Yamlr as an MCP server, you enable AI assistants (like Cursor, Claude, or custom DevOps agents) to perform surgical Kubernetes manifest analysis and healing with 100% deterministic safety.
+MCP is an open protocol for connecting development environments and developer tools to precision language engines. By running Yamlr as an MCP server, you enable editor integrations (such as VS Code, Neovim, JetBrains, or automated dev tools) to perform surgical Kubernetes manifest analysis and healing with 100% deterministic safety.
 
 ## Usage
 ```bash
@@ -41,9 +41,9 @@ Provides deep architectural context for any Yamlr Rule ID.
 - **Input**: `rule_id` (string)
 - **Output**: A comprehensive explanation of the security or operational logic behind the rule.
 
-## IDE Integration Example (Cursor/Claude Desktop)
+## IDE Integration Configuration Example
 
-To connect Yamlr to your AI agent, add the following to your MCP configuration:
+To connect Yamlr to your IDE or MCP client, add the following to your MCP client configuration:
 
 ```json
 {
@@ -61,7 +61,7 @@ To connect Yamlr to your AI agent, add the following to your MCP configuration:
 - **DNA Receipts**: Every `heal_manifest` call generates a cryptographic proof that nothing outside the intended fix was altered.
 - **Deterministic**: Unlike raw LLM suggestions, Yamlr's MCP tools are strictly deterministic and schema-validated.
 
-### 🛡 Universal Expert Flags
+### Universal Expert Flags
 Available across primary commands:
 
 *   **`--timing`**: [PERFORMANCE] Output surgical execution timing breakdown.

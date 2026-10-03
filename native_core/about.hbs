@@ -1,0 +1,13 @@
+# Third-party Rust dependency notices
+
+This file contains license texts for the third-party Rust crates included in the Yamlr native binary.
+
+{{#each licenses}}
+## {{name}} ({{id}})
+
+{{#each used_by}}
+- {{crate.name}} {{crate.version}}
+{{/each}}
+
+{{text}}
+{{/each}}

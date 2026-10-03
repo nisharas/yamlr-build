@@ -1,0 +1,34 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "yamlr-webhook.fullname" . }}
+  labels:
+    app.kubernetes.io/name: {{ include "yamlr-webhook.name" . }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "yamlr-webhook.name" . }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "yamlr-webhook.name" . }}
+    spec:
+      containers:
+        - name: webhook
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["python", "-m", "yamlr.webhook.server"]
+          ports:
+            - containerPort: {{ .Values.service.targetPort }}
+              name: https
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: tls
+              mountPath: /etc/yamlr/certs
+              readOnly: true
+      volumes:
+        - name: tls
+          secret:
+            secretName: {{ .Values.tls.secretName }}

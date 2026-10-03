@@ -1,0 +1,104 @@
+#!/bin/bash
+# Yamlr: The Kubernetes Configuration Safety Engine
+# -----------------------------------------------
+# Release installer for Linux and macOS; verifies the pinned release archive.
+# Version: @VERSION@
+#
+# Requires GitHub CLI (`gh`) for signed release provenance verification.
+
+set -e
+
+# Configuration
+REPO="yamlr/yamlr"
+INSTALL_DIR="${HOME}/.yamlr/bin"
+BINARY_NAME="yamlr"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+echo -e "${BLUE} Yamlr: The Kubernetes Configuration Safety Engine${NC}"
+echo -e "Starting installation..."
+
+# Detect OS and Arch
+OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+ARCH=$(uname -m)
+
+case "$ARCH" in
+    x86_64|amd64) ARCH="x86_64" ;;
+    aarch64|arm64) ARCH="aarch64" ;;
+    *) echo -e "${RED}Unsupported architecture: $ARCH${NC}"; exit 1 ;;
+esac
+
+case "$OS" in
+    linux) PLATFORM="linux" ;;
+    darwin) PLATFORM="macos" ;;
+    *) echo -e "${RED}Unsupported OS: $OS${NC}"; exit 1 ;;
+esac
+
+VERSION="@VERSION@"
+case "$VERSION" in v*) ;; *) VERSION="v$VERSION" ;; esac
+if ! printf '%s\n' "$VERSION" | grep -Eq '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'; then
+    echo -e "${RED}Invalid packaged release version: $VERSION${NC}" >&2
+    exit 1
+fi
+DOWNLOAD_NAME="yamlr-${PLATFORM}-${ARCH}.tar.gz"
+BASE_URL="https://github.com/${REPO}/releases/download/${VERSION}"
+DOWNLOAD_URL="${BASE_URL}/${DOWNLOAD_NAME}"
+
+# Create install directory
+mkdir -p "$INSTALL_DIR"
+
+TMP_DIR="$(mktemp -d)"
+trap 'rm -rf "$TMP_DIR"' EXIT
+ARCHIVE_PATH="$TMP_DIR/$DOWNLOAD_NAME"
+CHECKSUM_PATH="$TMP_DIR/checksums.txt"
+curl -fsSL "$DOWNLOAD_URL" -o "$ARCHIVE_PATH"
+curl -fsSL "$BASE_URL/checksums.txt" -o "$CHECKSUM_PATH"
+EXPECTED_HASH="$(awk -v asset="$DOWNLOAD_NAME" '$2 == asset { print $1; exit }' "$CHECKSUM_PATH")"
+if ! printf '%s\n' "$EXPECTED_HASH" | grep -Eq '^[a-fA-F0-9]{64}$'; then
+    echo -e "${RED}Missing valid SHA-256 checksum for $DOWNLOAD_NAME${NC}" >&2
+    exit 1
+fi
+if command -v sha256sum >/dev/null 2>&1; then
+    ACTUAL_HASH="$(sha256sum "$ARCHIVE_PATH" | awk '{print $1}')"
+else
+    ACTUAL_HASH="$(shasum -a 256 "$ARCHIVE_PATH" | awk '{print $1}')"
+fi
+if [ "$EXPECTED_HASH" != "$ACTUAL_HASH" ]; then
+    echo -e "${RED}Checksum mismatch for $DOWNLOAD_NAME${NC}" >&2
+    exit 1
+fi
+if ! command -v gh >/dev/null 2>&1; then
+    echo -e "${RED}GitHub CLI (gh) is required for release attestation verification${NC}" >&2
+    exit 1
+fi
+if ! gh attestation verify "$ARCHIVE_PATH" --repo "$REPO" --signer-workflow "$REPO/.github/workflows/release-binaries.yml" --source-ref "refs/tags/$VERSION"; then
+    echo -e "${RED}Release provenance verification failed${NC}" >&2
+    exit 1
+fi
+tar -xzf "$ARCHIVE_PATH" -C "$TMP_DIR"
+mkdir -p "$INSTALL_DIR"
+install -m 0755 "$TMP_DIR/$BINARY_NAME" "${INSTALL_DIR}/${BINARY_NAME}"
+
+echo -e "${GREEN}✅ Yamlr installed successfully to ${INSTALL_DIR}/${BINARY_NAME}${NC}"
+
+# Path suggestion
+if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
+    echo -e "\n${BLUE}Final Step: Add Yamlr to your PATH${NC}"
+    case "$SHELL" in
+        */zsh)
+            echo -e "Run: ${GREEN}echo 'export PATH=\"\$HOME/.yamlr/bin:\$PATH\"' >> ~/.zshrc && source ~/.zshrc${NC}"
+            ;;
+        */bash)
+            echo -e "Run: ${GREEN}echo 'export PATH=\"\$HOME/.yamlr/bin:\$PATH\"' >> ~/.bashrc && source ~/.bashrc${NC}"
+            ;;
+        *)
+            echo -e "Add ${INSTALL_DIR} to your environment PATH."
+            ;;
+    esac
+fi
+
+echo -e "\nTry it out: ${GREEN}yamlr welcome${NC}"

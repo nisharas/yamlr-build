@@ -1,9 +1,12 @@
-.TH "YAMLR-COMPLETION" "1" "March 2026" "Yamlr Manual" "User Commands"
+.TH "YAMLR-COMPLETION" "1" "May 2026" "Yamlr Manual" "User Commands"
+.SH "NAME"
+yamlr-completion \- Propose repairs and remediate Kubernetes manifests.
+.SH "DESCRIPTION"
 \fBShell Autocomplete Generator\fR
 .PP
 Generates shell completion scripts for Bash, Zsh, Fish, and PowerShell.
 .PP
-.SH "USAGE"
+.SH "SYNOPSIS"
 .nf
 .RS
 yamlr completion [SHELL] [--install]
@@ -41,3 +44,15 @@ source <(yamlr completion zsh)
 yamlr completion powershell | Out-String | Invoke-Expression
 .RE
 .fi
+.SS " Global Performance Flags"
+Available across all commands:
+.PP
+.IP "\(bu" 2
+  \fB\fB--timing\fR\fR: [PERFORMANCE] Output surgical execution timing breakdown.
+.IP "\(bu" 2
+  \fB\fB--timing-file <FILE>\fR\fR: [PERFORMANCE] Save performance profiling data to a JSON file.
+.SH "REPORTING BUGS"
+Report bugs to <https://github.com/yamlr/yamlr/issues>
+.PP
+.SH "COPYRIGHT"
+Copyright \(co 2026 Timonel Labs. Proprietary & Commercial Software (All Rights Reserved).

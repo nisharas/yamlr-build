@@ -6,21 +6,51 @@ inputs:
     required: false
     default: '.'
   args:
-    description: 'Additional arguments for yamlr heal (e.g. --enforce-limits)'
+    description: 'Additional arguments for yamlr heal'
     required: false
-    default: '--yes-all --no-backup'
-  commit_changes:
-    description: 'Automatically commit fixed manifests (Not recommended for PRs)'
+    default: ''
+  apply:
+    description: 'Apply repairs to the workspace; defaults to preview only'
     required: false
     default: 'false'
+  version:
+    description: 'Exact Yamlr release tag to install when no binary is already available (for example, v1.2.3)'
+    required: true
 
 runs:
-  using: 'docker'
-  image: 'Dockerfile'
-  args:
-    - 'heal'
-    - '${{ inputs.path }}'
-    - '${{ inputs.args }}'
+  using: 'composite'
+  steps:
+    - name: Install Standalone Yamlr Binary
+      shell: bash
+      env:
+        YAMLR_INSTALL_DIR: ${{ runner.temp }}/yamlr-bin
+        YAMLR_VERSION: ${{ inputs.version }}
+        YAMLR_VERIFY_ATTESTATION: 'true'
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        mkdir -p "$YAMLR_INSTALL_DIR"
+        bash "$GITHUB_ACTION_PATH/../../../scripts/install.sh"
+        printf '%s\n' "$YAMLR_INSTALL_DIR" >> "$GITHUB_PATH"
+    - name: Run Yamlr Heal
+      shell: bash
+      env:
+        YAMLR_HEAL_PATH: ${{ inputs.path }}
+        YAMLR_HEAL_ARGS: ${{ inputs.args }}
+        YAMLR_HEAL_APPLY: ${{ inputs.apply }}
+      run: |
+        if [[ "$YAMLR_HEAL_APPLY" != "true" && "$YAMLR_HEAL_APPLY" != "false" ]]; then
+          echo "::error::The apply input must be 'true' or 'false'." >&2
+          exit 2
+        fi
+        apply_args=()
+        if [[ "$YAMLR_HEAL_APPLY" == "true" ]]; then
+          apply_args+=(--apply)
+        fi
+        extra_args=()
+        if [[ -n "$YAMLR_HEAL_ARGS" ]]; then
+          read -r -a extra_args <<< "$YAMLR_HEAL_ARGS"
+        fi
+        yamlr heal "$YAMLR_HEAL_PATH" "${apply_args[@]}" "${extra_args[@]}"
 
 branding:
   icon: 'activity'

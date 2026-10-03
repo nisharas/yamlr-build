@@ -1,16 +1,24 @@
 apiVersion: argoproj.io/v1alpha1
 kind: ConfigManagementPlugin
 metadata:
-  name: yamlr
+  name: yamlr-healer
 spec:
-  version: v1.0
+  version: v2.0
+  init:
+    command: ["sh", "-c"]
+    args: ["yamlr init --dry-run || true"]
   generate:
-    # We run yamlr heal on the current directory. 
-    # --quiet suppresses all headers/banners.
-    # --output text ensures pure YAML is returned to Argo.
-    # --yes-all ensures we don't block on confirmation.
-    command: ["yamlr"]
-    args: ["heal", ".", "--quiet", "--output", "text", "--yes-all"]
+    command: ["sh", "-c"]
+    args:
+      - |
+        # 1. Non-destructive in-memory auto-healing with zero-comment loss
+        if [ -f "kustomization.yaml" ] || [ -f "kustomization.yml" ]; then
+          kustomize build . | yamlr heal -
+        elif [ -f "Chart.yaml" ]; then
+          helm template . | yamlr heal -
+        else
+          cat *.yaml *.yml 2>/dev/null | yamlr heal -
+        fi
   discover:
     find:
       glob: "**/*.{yaml,yml}"

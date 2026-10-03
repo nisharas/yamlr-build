@@ -1,0 +1,94 @@
+.TH "YAMLR-MCP" "1" "May 2026" "Yamlr Manual" "User Commands"
+.SH "NAME"
+yamlr-mcp \- Start Model Context Protocol server for IDE and editor integrations.
+.SH "DESCRIPTION"
+Start the Yamlr Model Context Protocol (MCP) server.
+.PP
+.SH "WHY"
+MCP is an open protocol for connecting development environments and developer tools to precision language engines. By running Yamlr as an MCP server, you enable editor integrations (such as VS Code, Neovim, JetBrains, or automated dev tools) to perform surgical Kubernetes manifest analysis and healing with 100% deterministic safety.
+.PP
+.SH "SYNOPSIS"
+.nf
+.RS
+yamlr mcp [OPTIONS]
+.RE
+.fi
+.SH "OPTIONS"
+.SS "`--transport` (default: `stdio`)"
+The transport protocol to use for communication.
+.PP
+.IP "\(bu" 2
+\fBstdio\fR: standard input/output (recommended for IDE integrations).
+.IP "\(bu" 2
+\fBhttp\fR: (Not yet implemented in v1.1).
+.SS "`--port` (default: `8000`)"
+The port to listen on when using HTTP transport.
+.PP
+.SH "MCP TOOLS EXPOSED"
+.SS "🔍 `scan_manifest`"
+Performs a deep safety audit of a directory or single manifest.
+.PP
+.IP "\(bu" 2
+\fBInput\fR: \fBpath\fR (string)
+.IP "\(bu" 2
+\fBOutput\fR: A safety report containing:
+.IP "\(bu" 2
+\fBRule ID\fR: Unique identifier for the violation.
+.IP "\(bu" 2
+\fBRationale\fR: An architectural explanation of why the fix is necessary.
+.IP "\(bu" 2
+\fBImpact Description\fR: The real-world consequence of ignoring the issue.
+.IP "\(bu" 2
+\fBRisk Level\fR: High/Medium/Low assessment.
+.SS "🔧 `heal_manifest`"
+Applies surgical repairs to Kubernetes manifests.
+.PP
+.IP "\(bu" 2
+\fBInput\fR: \fBpath\fR (string), \fBrules\fR (optional list of Rule IDs to filter).
+.IP "\(bu" 2
+\fBOutput\fR: A transaction receipt showing exactly what was changed and a SHA-256 DNA proof of intent preservation.
+.SS "❓ `why`"
+Provides deep architectural context for any Yamlr Rule ID.
+.PP
+.IP "\(bu" 2
+\fBInput\fR: \fBrule_id\fR (string)
+.IP "\(bu" 2
+\fBOutput\fR: A comprehensive explanation of the security or operational logic behind the rule.
+.SH "IDE INTEGRATION CONFIGURATION EXAMPLE"
+To connect Yamlr to your IDE or MCP client, add the following to your configuration:
+.PP
+.nf
+.RS
+{
+  "mcpServers": {
+    "yamlr": {
+      "command": "yamlr",
+      "args": ["mcp"]
+    }
+  }
+}
+.RE
+.fi
+.SH "SAFETY GUARDRAILS"
+.IP "\(bu" 2
+\fBRead-Only by Default\fR: The \fBscan_manifest\fR tool never modifies files.
+.IP "\(bu" 2
+\fBDNA Receipts\fR: Every \fBheal_manifest\fR call generates a cryptographic proof that nothing outside the intended fix was altered.
+.IP "\(bu" 2
+\fBDeterministic\fR: Unlike raw LLM suggestions, Yamlr's MCP tools are strictly deterministic and schema-validated.
+.SS " Universal Expert Flags"
+Available across primary commands:
+.PP
+.IP "\(bu" 2
+  \fB\fB--timing\fR\fR: [PERFORMANCE] Output surgical execution timing breakdown.
+.IP "\(bu" 2
+  \fB\fB--timing-file <FILE>\fR\fR: [PERFORMANCE] Save performance profiling data to a JSON file.
+.IP "\(bu" 2
+  \fB\fB--verbose\fR\fR: Full audit logs and engine stages.
+.IP "\(bu" 2
+  \fB-q\fR, \fB--quiet\fR: Minimal output mode (exit codes only).
+.SH "REPORTING BUGS"
+Report bugs to <https://github.com/yamlr/yamlr/issues>
+.PP
+.SH "COPYRIGHT"
+Copyright \(co 2026 Timonel Labs. Proprietary & Commercial Software (All Rights Reserved).

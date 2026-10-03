@@ -1,6 +1,6 @@
 # 🩹 Yamlr Surgeon: Autonomous Manifest Repair
 
-**Yamlr Surgeon** (`yamlr/heal`) is the industry's first **autonomous repair bot** for Kubernetes configurations. It doesn't just find issues—it fixes them, commits the repairs, and pushes them back to your branch.
+**Yamlr Surgeon** (`yamlr/heal`) previews fixes by default. Set `apply: 'true'` to modify manifests; set both `apply: 'true'` and `push: 'true'` to commit and push the repairs.
 
 ## 🧪 The "Slash Command" Experience
 
@@ -25,6 +25,7 @@ jobs:
         uses: yamlr/heal@v1
         with:
           path: './k8s'
+          apply: 'true'
           push: 'true'
 ```
 

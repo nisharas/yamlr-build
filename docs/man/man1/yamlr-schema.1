@@ -1,0 +1,54 @@
+.TH "YAMLR-SCHEMA" "1" "May 2026" "Yamlr Manual" "User Commands"
+.SH "NAME"
+yamlr-schema \- Propose repairs and remediate Kubernetes manifests.
+.SH "DESCRIPTION"
+\fBKubernetes Resource Schema Explorer\fR
+.PP
+The \fBschema\fR command allows you to inspect the internal OpenAPI schema used by Yamlr for validation and healing.
+.PP
+.SH "SYNOPSIS"
+.nf
+.RS
+yamlr schema [RESOURCE]
+.RE
+.fi
+.SH "DESCRIPTION"
+Provides a detailed view of the fields, types, and descriptions for a specific Kubernetes resource kind, as defined in the target Kubernetes version's catalog.
+.PP
+.SH "ARGUMENTS"
+.IP "\(bu" 2
+  \fB\fBRESOURCE\fR\fR: The resource kind to inspect (e.g., \fBDeployment\fR, \fBPod\fR, \fBService\fR).
+.SH "OUTPUT"
+Displays:
+.PP
+.IP "\(bu" 2
+  API Group and Version
+.IP "\(bu" 2
+  Required fields
+.IP "\(bu" 2
+  Field-level descriptions and types
+.IP "\(bu" 2
+  Deprecated fields (marked with ⚠)
+.SH "EXAMPLES"
+\fBInspect Deployment schema:\fR
+.PP
+.nf
+.RS
+yamlr schema Deployment
+.RE
+.fi
+\fBInspect Pod schema for a specific K8s version:\fR
+.PP
+.nf
+.RS
+yamlr schema Pod --kube-version v1.30
+.RE
+.fi
+.SH "WHY THIS EXISTS"
+Yamlr's healing engine is schema-driven. This command provides transparency into the "Truth" the engine uses to make mutation decisions, ensuring users can verify why a certain fix was proposed.
+.PP
+.SH "REPORTING BUGS"
+Report bugs to <https://github.com/yamlr/yamlr/issues>
+.PP
+.SH "COPYRIGHT"
+Copyright \(co 2026 Timonel Labs. Proprietary & Commercial Software (All Rights Reserved).

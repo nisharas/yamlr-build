@@ -1,0 +1,29 @@
+# ArgoCD Config Management Plugin (CMP v2) Sidecar for Yamlr
+# Multi-arch lightweight production image for GitOps manifest normalization
+FROM rust:1.98.1-alpine@sha256:7cc1c22d77d9432f7fe012a70e6d3e555af54c2a6832700ed7d553f1769ae89f AS builder
+
+WORKDIR /src
+RUN apk add --no-cache musl-dev
+
+COPY native_core /src/native_core
+WORKDIR /src/native_core
+RUN cargo build --locked --release --bin yamlr
+
+FROM alpine:3.20
+
+LABEL maintainer="Yamlr Core Team"
+LABEL description="ArgoCD CMP v2 Sidecar container for real-time manifest auto-repair"
+
+# Install ArgoCD CMP dependencies
+RUN apk add --no-cache bash git curl jq
+
+# Install pre-compiled native yamlr binary
+COPY --from=builder /src/native_core/target/release/yamlr /usr/local/bin/yamlr
+RUN chmod +x /usr/local/bin/yamlr
+
+# Install CMP v2 plugin configuration
+COPY integrations/argocd/plugin.yaml /home/argocd/cmp-server/config/plugin.yaml
+
+USER 999:999
+
+ENTRYPOINT ["/var/run/argocd/argocd-cmp-server"]

@@ -67,7 +67,7 @@ spec:
         app: my-app
 ```
 
-### 🛡 Universal Expert Flags
+### Universal Expert Flags
 These flags are available across almost all primary Yamlr commands:
 
 *   **`--output FORMAT`**: Report format (text, json).
@@ -90,7 +90,7 @@ These flags are available across almost all primary Yamlr commands:
 *   **`--enforce-namespace`**: Auto-inject default namespace if missing.
 *   **`--fix-tags`**: Auto-remediate `:latest` or missing image tags.
 *   **`--harden`**: Apply security hardening (Non-root, Read-only FS).
-*   **`--sovereign`** [Pro]: Enable high-fidelity sovereign export with comment grafting and schema-aware sorting.
+*   **`--canonical`** [Pro]: Enable high-fidelity canonical export with comment grafting and schema-aware sorting.
 *   **`--stream-to <FILE>`**: Batch-mode: Stream results to NDJSON (prevents RAM saturation).
 *   **`--fail-on <CHOICE>`**: Exit 1 if specified severity found (error/warning/any).
 *   **`--summary-only`**: Show aggregate stats only (recommended for 100+ files).

@@ -1,0 +1,63 @@
+.TH "YAMLR-INTEGRATIONS" "1" "May 2026" "Yamlr Manual" "User Commands"
+.SH "NAME"
+yamlr-integrations \- Propose repairs and remediate Kubernetes manifests.
+.SH "DESCRIPTION"
+\fBCI/CD Template Marketplace\fR
+.PP
+The \fByamlr integrations\fR command provides production-ready CI/CD templates to bridge the gap between local manifest auditing and automated pipeline enforcement.
+.PP
+.SH "SYNOPSIS"
+.nf
+.RS
+# Export GitLab CI template
+yamlr integrations gitlab
+
+# Export Jenkins Pipeline snippet
+yamlr integrations jenkins
+.RE
+.fi
+.SH "DESCRIPTION"
+To ensure "Zero-Touch" adoption in large organizations, Yamlr provides opinionated integration templates. These templates are optimized for:
+.PP
+.IP "\(bu" 2
+\fBPerformance\fR: Leveraging caching and shallow cloning where possible.
+.IP "\(bu" 2
+\fBObservability\fR: Standardized SARIF output for GitHub/GitLab security dashboards.
+.IP "\(bu" 2
+\fBSafety\fR: Enabling strict GitOps gates that block deployments on critical safety regressions.
+.SH "SUPPORTED PLATFORMS"
+.SS "1. GitLab CI (`gitlab`)"
+Generates a \fB.gitlab-ci.yml\fR job definition that can be included in your main pipeline.
+.PP
+.IP "\(bu" 2
+\fBFeatures\fR: Merge Request security reports, code quality artifacts, and pipeline badges.
+.SS "2. Jenkins (`jenkins`)"
+Generates a \fBJenkinsfile\fR stage snippet compatible with modern Pipeline-as-Code.
+.PP
+.IP "\(bu" 2
+\fBFeatures\fR: Specialized pipeline steps for \fByamlr scan\fR and \fByamlr heal --dry-run\fR to provide feedback to developers.
+.SH "EXAMPLES"
+.SS "GitLab CI Integration"
+.nf
+.RS
+yamlr integrations gitlab > .yamlr-ci.yml
+.RE
+.fi
+Then include it in your \fB.gitlab-ci.yml\fR:
+.PP
+.nf
+.RS
+include:
+  - local: '.yamlr-ci.yml'
+.RE
+.fi
+---
+.PP
+.IP "\fBNOTE:\fR" 4
+This command is part of the \fBYamlr Ecosystem\fR and is available in the Free version to encourage best-practice GitOps adoption.
+.PP
+.SH "REPORTING BUGS"
+Report bugs to <https://github.com/yamlr/yamlr/issues>
+.PP
+.SH "COPYRIGHT"
+Copyright \(co 2026 Timonel Labs. Proprietary & Commercial Software (All Rights Reserved).

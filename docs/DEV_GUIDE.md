@@ -1,6 +1,6 @@
 # Yamlr Developer Guide (Agent & External Contributor Edition)
 
-Welcome to the Yamlr core engine. This guide is designed to help both human developers and AI agents (Cursor, Claude, etc.) understand how to extend Yamlr's healing and auditing capabilities.
+Welcome to the Yamlr core engine. This guide is designed to help engineers understand how to extend Yamlr's healing and auditing capabilities.
 
 ## 🏁 Core Mission
 Yamlr is a **Deterministic K8s Healing Engine**. Every contribution must prioritize:
@@ -10,7 +10,7 @@ Yamlr is a **Deterministic K8s Healing Engine**. Every contribution must priorit
 
 ---
 
-## 🏗️ Architecture Overview
+## 🏗 Architecture Overview
 
 Yamlr uses a **Tiered Execution** model:
 - **Infrastructure (`core/managers/`)**: Handles I/O, persistence, and external state.
@@ -31,7 +31,7 @@ Rules live in `src/yamlr/core/analyzers/`. To add a new audit rule:
 3. **Register in Pipeline**: Ensure your analyzer is called by the `StageAnalysis` in `core/stages/`.
 4. **Test**: Add a test case in `tests/analyzers/` with a sample broken manifest.
 
-## 🛠️ How to Add a New Healer
+## 🛠 How to Add a New Healer
 
 Healers are the "Surgeons" of Yamlr. They live in `src/yamlr/core/healers/`.
 
@@ -41,7 +41,7 @@ Healers are the "Surgeons" of Yamlr. They live in `src/yamlr/core/healers/`.
 
 ---
 
-## 🛡️ Safety & Security standards
+## Safety & Security standards
 
 ### subprocess usage
 **NEVER** use `shell=True` or raw string formatting for subprocess commands. Use `yamlr.core.safe_exec` wrappers.
@@ -64,10 +64,10 @@ If a healer modifies a resource, it must verify that the **Semantic DNA** of the
 
 ---
 
-## 🤖 AI Agent Instructions
+## 🛠 Contributor Engineering Checklist
 
-If you are an AI agent working on this codebase:
-1. **Check KIs**: Read existing Knowledge Items in `.gemini/antigravity/knowledge`.
-2. **Follow Protocol**: Strictly adhere to the `modularity-enforcement.md` user rule.
-3. **Atomic Changes**: Prefer multiple smaller PRs/edits over one monolithic change.
-4. **Self-Audit**: Run `yamlr diagnose --engine=native` after significant refactors to verify engine stability.
+When developing or refactoring Yamlr core modules:
+1. **Architectural Separation**: Keep parser transformation pure and separate from filesystem I/O.
+2. **Comment Preservation**: Ensure all healing stages preserve human comments, blank lines, and formatting invariants.
+3. **Targeted Changes**: Keep changes atomic and accompany every stage with dedicated unit test coverage.
+4. **Validation Suite**: Run `pytest` and `cargo test --manifest-path native_core/Cargo.toml` to verify engine stability.
