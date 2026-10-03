@@ -429,10 +429,7 @@ legacy_ghost_logic/
 !schemas/scan-report.schema.json
 !infra/gateway/package.json
 !infra/gateway/package-lock.json
-!docs/development/measurements/release-windows-20261001-1.json
-!docs/development/measurements/release-windows-20261001-250.json
-!docs/development/measurements/release-windows-20261001-1000.json
-!docs/development/measurements/release-windows-20261002-workloads.json
+!docs/development/measurements/*.json
 
 # Node & Editor Artifacts
 node_modules/
