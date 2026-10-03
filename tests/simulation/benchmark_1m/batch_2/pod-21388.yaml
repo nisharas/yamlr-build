@@ -1,9 +1,0 @@
-
-apiVersion: v1
-kind: Pod
-metadata:
-  name: pod-21388
-spec:
-  containers:
-  - name: app
-    image: nginx
