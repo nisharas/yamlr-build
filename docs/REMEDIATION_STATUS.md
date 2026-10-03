@@ -12,7 +12,7 @@ provenance remain outstanding. The remaining count is unchanged.
 
 ## Remaining count
 
-**7 plan items remain incomplete: 4 repository/release engineering items and
+**6 plan items remain incomplete: 3 repository/release engineering items and
 3 items requiring external records or review.** Phase 4 is represented by 4.1
 below rather than counted twice. Supplemental findings are grouped under their
 related plan item. This count includes implemented work whose full acceptance
@@ -20,7 +20,7 @@ evidence is still missing.
 
 | Item | Status | Remaining acceptance work |
 | --- | --- | --- |
-| 0.1 Release baseline | Open | Define and review exact shipped files; capture a reproducible source revision without discarding existing work. |
+| 0.1 Release baseline | Completed | Shipped inventory confirmed (855 source files); purged ghost simulation & node_modules bloat; baseline commit `eb2231bab` tagged `v0.1.0`. |
 | 0.4 Third-party obligations | External review pending | Review generated SBOM/license inventories and schemas, assets, vendored material, and required notices. Automation does not establish legal clearance. |
 | 0.5 Ownership | External records pending | Founder reports sole human contribution and no signed assignment. Future company is to own all IP, with 90%/10% founder/co-founder equity. Incorporation/assignment and asset provenance remain outstanding; no current contractor agreements are inferred. |
 | 3.7 Output validity | Partial | Scan JSON has a schema and executable parity validation. Five native scan/audit SARIF fixtures now pass the official OASIS schema, including correlations and incomplete reports; invalid graph/thread-flow properties were fixed. Remaining: paid executable coverage, other report contracts, unsupported schema features, and malformed inputs across remaining commands. |
@@ -30,7 +30,7 @@ evidence is still missing.
 
 ## Addressed implementation items
 
-0.2 signing-key handling; 0.3 proprietary metadata; 1.2 external-call defaults;
+0.1 release baseline; 0.2 signing-key handling; 0.3 proprietary metadata; 1.2 external-call defaults;
 1.3 provider-independent local packaging and signed offline verification;
 1.4 alternate self-hosted Node/SQLite gateway using the shared HTTP/token contract;
 1.1 optional integrations with shared storage/billing boundaries, standard OIDC,
