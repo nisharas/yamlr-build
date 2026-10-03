@@ -32,7 +32,7 @@ fn payload(cli_version: &str, timestamp: u64) -> Value {
 pub fn push_scan_telemetry(args: &[String]) {
     if !args.iter().any(|arg| arg == "--push-telemetry")
         || !crate::telemetry_gate::is_telemetry_enabled(args)
-        || crate::security::stored_tier(crate::security::EMBEDDED_LICENSE_PUBLIC_KEY)
+        || crate::security::stored_tier(crate::security::active_license_public_key())
             != crate::security::LicenseTier::Enterprise
     {
         return;
@@ -47,7 +47,7 @@ fn send_enterprise_event() {
     use std::time::Duration;
 
     let Ok(Some(token)) =
-        crate::security::stored_license_token(crate::security::EMBEDDED_LICENSE_PUBLIC_KEY)
+        crate::security::stored_license_token(crate::security::active_license_public_key())
     else {
         return;
     };

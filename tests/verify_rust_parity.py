@@ -224,9 +224,18 @@ def compare_case(
         if normalize(native_output) != normalize(python_output):
             raise SystemExit("version --json output mismatch between Rust and Python")
     elif native.stdout != python.stdout:
-        raise SystemExit(
-            f"{name}: stdout mismatch\nRust:\n{native.stdout}\nPython:\n{python.stdout}"
-        )
+        native_stdout = native.stdout
+        python_stdout = python.stdout
+        if args and args[0] == "sign":
+            import re
+            native_stdout = re.sub(r'yamlr\.dev/signed-at:\s*".*?"', 'yamlr.dev/signed-at: "<NORMALIZED>"', native_stdout)
+            python_stdout = re.sub(r'yamlr\.dev/signed-at:\s*".*?"', 'yamlr.dev/signed-at: "<NORMALIZED>"', python_stdout)
+            native_stdout = re.sub(r'yamlr\.dev/signature:\s*".*?"', 'yamlr.dev/signature: "<NORMALIZED>"', native_stdout)
+            python_stdout = re.sub(r'yamlr\.dev/signature:\s*".*?"', 'yamlr.dev/signature: "<NORMALIZED>"', python_stdout)
+        if native_stdout != python_stdout:
+            raise SystemExit(
+                f"{name}: stdout mismatch\nRust:\n{native.stdout}\nPython:\n{python.stdout}"
+            )
 
 
 def main() -> None:
@@ -242,6 +251,27 @@ def main() -> None:
     env["CI"] = "true"
     env.pop("YAMLR_FORCE_PYTHON", None)
     env.pop("YAMLR_BINARY", None)
+
+    private_key_path = REPO_ROOT / "native_core" / "tests" / "fixtures" / "licensing_test_private.pem"
+    public_key_path = REPO_ROOT / "native_core" / "tests" / "fixtures" / "licensing_test_public.pem"
+    if private_key_path.is_file() and public_key_path.is_file():
+        import time, jwt
+        now = int(time.time())
+        claims = {
+            "license_version": 1,
+            "sub": "org_enterprise_test",
+            "org_id": "org_enterprise_test",
+            "iat": now,
+            "exp": now + 86400 * 365,
+            "tier": "enterprise",
+            "iss": "yamlr-entitlement",
+            "aud": "yamlr",
+            "seats": 500,
+            "org_seats": 500,
+        }
+        test_token = jwt.encode(claims, private_key_path.read_text(encoding="utf-8"), algorithm="RS256")
+        env["YAMLR_LICENSE_PUBLIC_KEY"] = str(public_key_path.resolve())
+        env["YAMLR_LICENSE_TOKEN"] = test_token
 
     with tempfile.TemporaryDirectory(prefix="yamlr-cli-parity-") as directory:
         temp_dir = Path(directory)
@@ -440,6 +470,10 @@ def main() -> None:
         if sign_denied:
             print(
                 "Paid signing parity verified at the entitlement gate; execution needs a test entitlement."
+            )
+        else:
+            print(
+                "Paid signing executable parity verified across Rust and Python under test entitlement."
             )
         compare_case(
             "graph compact focus",

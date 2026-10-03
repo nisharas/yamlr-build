@@ -4,7 +4,7 @@
 //! without requiring external network dependencies in air-gapped secure enclaves.
 
 use crate::cli::{EXIT_SUCCESS, EXIT_VIOLATIONS};
-use crate::security::{activate_license, stored_tier, LicenseTier, EMBEDDED_LICENSE_PUBLIC_KEY};
+use crate::security::{activate_license, stored_tier, LicenseTier, active_license_public_key};
 
 /// Executes the subscribe or upgrade command.
 ///
@@ -43,7 +43,7 @@ pub fn execute_subscription(args: &[String]) -> i32 {
         None => {
             println!("Yamlr License & Subscription Status");
             println!("===================================");
-            print_tier(stored_tier(EMBEDDED_LICENSE_PUBLIC_KEY));
+            print_tier(stored_tier(active_license_public_key()));
             println!("\nTo activate a Team seat or Enterprise organization grant:");
             println!("  yamlr subscribe --key <SIGNED_LICENSE_TOKEN>");
             EXIT_SUCCESS
@@ -71,7 +71,7 @@ pub fn execute_auth(args: &[String]) -> i32 {
         "status" => {
             println!("Yamlr Authentication & License Status");
             println!("=====================================");
-            print_tier(stored_tier(EMBEDDED_LICENSE_PUBLIC_KEY));
+            print_tier(stored_tier(active_license_public_key()));
             println!("\nTo activate a paid license:");
             println!("  yamlr auth activate <SIGNED_LICENSE_TOKEN>");
             EXIT_SUCCESS
@@ -84,10 +84,10 @@ pub fn execute_auth(args: &[String]) -> i32 {
 }
 
 fn activate(token: &str) -> i32 {
-    match activate_license(token, EMBEDDED_LICENSE_PUBLIC_KEY) {
+    match activate_license(token, active_license_public_key()) {
         Ok(()) => {
             println!("[OK] Signed license verified and activated.");
-            print_tier(stored_tier(EMBEDDED_LICENSE_PUBLIC_KEY));
+            print_tier(stored_tier(active_license_public_key()));
             EXIT_SUCCESS
         }
         Err(error) => {

@@ -45,7 +45,7 @@ use super::{
 };
 use crate::security::{
     renew_team_access_if_due, required_features_for_args, stored_tier, LicenseFeature,
-    EMBEDDED_LICENSE_PUBLIC_KEY,
+    active_license_public_key,
 };
 
 /// Dispatches CLI arguments to the appropriate command handler and returns POSIX exit code.
@@ -73,11 +73,11 @@ pub fn run(args: &[String]) -> i32 {
             && !crate::telemetry_gate::is_telemetry_enabled(&clean_args);
         if !telemetry_suppressed {
             if feature != LicenseFeature::PulseTelemetry {
-                if let Err(error) = renew_team_access_if_due(EMBEDDED_LICENSE_PUBLIC_KEY) {
+                if let Err(error) = renew_team_access_if_due(active_license_public_key()) {
                     eprintln!("[WARN] Team entitlement renewal could not complete: {error}");
                 }
             }
-            let tier = stored_tier(EMBEDDED_LICENSE_PUBLIC_KEY);
+            let tier = stored_tier(active_license_public_key());
             if !tier.includes(feature) {
                 let required_tier = if feature == LicenseFeature::PulseTelemetry {
                     "Enterprise"

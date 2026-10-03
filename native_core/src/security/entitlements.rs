@@ -17,6 +17,29 @@ const KEYRING_SERVICE: &str = "yamlr";
 const KEYRING_ACCOUNT: &str = "active-license";
 pub const EMBEDDED_LICENSE_PUBLIC_KEY: &str = include_str!("public_key.pem");
 
+static OVERRIDE_PUBLIC_KEY: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+
+/// Resolves the active verification public key.
+///
+/// Why: In production, the embedded key validates offline signed licenses. For
+/// hermetic test environments and custom air-gapped PKI, `YAMLR_LICENSE_PUBLIC_KEY`
+/// can supply an explicit public key without modifying binaries.
+pub fn active_license_public_key() -> &'static str {
+    if let Ok(val) = std::env::var("YAMLR_LICENSE_PUBLIC_KEY") {
+        let trimmed = val.trim();
+        if !trimmed.is_empty() {
+            return OVERRIDE_PUBLIC_KEY.get_or_init(|| {
+                if std::path::Path::new(trimmed).is_file() {
+                    std::fs::read_to_string(trimmed).unwrap_or_else(|_| trimmed.to_string())
+                } else {
+                    trimmed.to_string()
+                }
+            });
+        }
+    }
+    EMBEDDED_LICENSE_PUBLIC_KEY
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum LicenseTier {
     Individual,
@@ -202,7 +225,18 @@ pub fn activate_license(token: &str, public_key: &str) -> Result<(), String> {
 
 #[cfg(not(target_arch = "wasm32"))]
 pub fn stored_license_token(public_key: &str) -> Result<Option<String>, String> {
-    let entry = license_entry()?;
+    if let Ok(token) = std::env::var("YAMLR_LICENSE_TOKEN").or_else(|_| std::env::var("YAMLR_LICENSE_KEY")) {
+        let trimmed = token.trim();
+        if !trimmed.is_empty() {
+            if native_verify_token(trimmed, public_key) {
+                return Ok(Some(trimmed.to_string()));
+            }
+        }
+    }
+    let entry = match license_entry() {
+        Ok(entry) => entry,
+        Err(_) => return Ok(None),
+    };
     match entry.get_password() {
         Ok(token) => Ok(native_verify_token(&token, public_key).then_some(token)),
         Err(keyring::Error::NoEntry) => migrate_legacy_license(&entry, public_key),

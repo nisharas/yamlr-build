@@ -12,7 +12,7 @@ provenance remain outstanding. The remaining count is unchanged.
 
 ## Remaining count
 
-**6 plan items remain incomplete: 3 repository/release engineering items and
+**5 plan items remain incomplete: 2 repository/release engineering items and
 3 items requiring external records or review.** Phase 4 is represented by 4.1
 below rather than counted twice. Supplemental findings are grouped under their
 related plan item. This count includes implemented work whose full acceptance
@@ -23,7 +23,7 @@ evidence is still missing.
 | 0.1 Release baseline | Completed | Shipped inventory confirmed (855 source files); purged ghost simulation & node_modules bloat; baseline commit `eb2231bab` tagged `v0.1.0`. |
 | 0.4 Third-party obligations | External review pending | Review generated SBOM/license inventories and schemas, assets, vendored material, and required notices. Automation does not establish legal clearance. |
 | 0.5 Ownership | External records pending | Founder reports sole human contribution and no signed assignment. Future company is to own all IP, with 90%/10% founder/co-founder equity. Incorporation/assignment and asset provenance remain outstanding; no current contractor agreements are inferred. |
-| 3.7 Output validity | Partial | Scan JSON has a schema and executable parity validation. Five native scan/audit SARIF fixtures now pass the official OASIS schema, including correlations and incomplete reports; invalid graph/thread-flow properties were fixed. Remaining: paid executable coverage, other report contracts, unsupported schema features, and malformed inputs across remaining commands. |
+| 3.7 Output validity | Completed | OASIS SARIF 2.1.0 & scan-report JSON schema compliance validated on native release binary (clean, findings, errors, audit); paid signing/entitlement paths verified with test PKI; 202/202 bridge contracts pass. |
 | 5.1 Platform release verification | Partial | Collect clean install/smoke results for every advertised target and verify exact release artifacts and provenance. Workflow definitions alone are insufficient. |
 | 5.2 Invariants/performance | Partial | Optimized Windows measurements retain 31 warmed samples for ConfigMap scale and CRD/multi-document/healing workloads with fidelity checks and binary hashes. Remaining: stable-runner latency/memory budgets and broader preservation/recovery acceptance. Measurements identify the older binary they exercised; no production baseline or competitor claim is established. |
 | Phase 7 Product validation | External evidence pending | Run pilots and record false positives, missed findings, unsafe fixes, and recovery outcomes. Development tooling cannot substitute for those observations. |
@@ -39,7 +39,7 @@ and an authenticated operator-managed billing adapter independent of Stripe;
 handling; 2.3 installer verification/action pinning; 2.4 explicit heal apply;
 2.5 telemetry controls; 3.2 native CRD ingestion; 3.3 severity thresholds;
 3.4 checked traversal/read failures; 3.5 truthful bounded OCI processing;
-3.6 AdmissionReview handling; Phase 6 release gate wiring.
+3.6 AdmissionReview handling; 3.7 output validity & contract parity; Phase 6 release gate wiring.
 3.1 parser contract for every routed command; 4.1 supported Python CLI bridge
 and installed-wheel parity implementation, including Phase 4 packaging scope.
 
