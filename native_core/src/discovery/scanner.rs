@@ -8,6 +8,7 @@ use crate::models::{NativeDiscoveryResult, NativeIdentity, NativeShard};
 use crate::sharder::native_shard;
 use std::collections::HashSet;
 use std::fs;
+#[cfg(windows)]
 use std::path::Path;
 use walkdir::WalkDir;
 
