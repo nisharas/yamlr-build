@@ -23,7 +23,10 @@ pub fn execute_mcp(args: &[String]) -> i32 {
         return EXIT_SUCCESS;
     }
 
-    if args.iter().any(|a| a == "--install-config" || a == "--config") {
+    if args
+        .iter()
+        .any(|a| a == "--install-config" || a == "--config")
+    {
         let exe_path = std::env::current_exe()
             .ok()
             .and_then(|p| p.to_str().map(String::from))
@@ -37,7 +40,10 @@ pub fn execute_mcp(args: &[String]) -> i32 {
             }
         });
         println!("Add the following to your Claude Desktop or Cursor configuration:\n");
-        println!("{}", serde_json::to_string_pretty(&config).unwrap_or_default());
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&config).unwrap_or_default()
+        );
         return EXIT_SUCCESS;
     }
 

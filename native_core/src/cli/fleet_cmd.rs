@@ -250,9 +250,8 @@ pub fn execute_fleet(args: &[String]) -> i32 {
                             .output();
                         if let Ok(glab_out) = glab_res {
                             if glab_out.status.success() {
-                                let mr_url = String::from_utf8_lossy(&glab_out.stdout)
-                                    .trim()
-                                    .to_string();
+                                let mr_url =
+                                    String::from_utf8_lossy(&glab_out.stdout).trim().to_string();
                                 println!("  [PR] Created GitLab MR: {}", mr_url);
                                 pr_created = true;
                             }

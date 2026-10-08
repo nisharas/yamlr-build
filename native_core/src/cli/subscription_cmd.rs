@@ -4,7 +4,7 @@
 //! without requiring external network dependencies in air-gapped secure enclaves.
 
 use crate::cli::{EXIT_SUCCESS, EXIT_VIOLATIONS};
-use crate::security::{activate_license, stored_tier, LicenseTier, active_license_public_key};
+use crate::security::{activate_license, active_license_public_key, stored_tier, LicenseTier};
 
 /// Executes the subscribe or upgrade command.
 ///

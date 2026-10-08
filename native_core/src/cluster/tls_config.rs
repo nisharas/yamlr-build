@@ -114,8 +114,8 @@ pub fn build_tls_server_config(
     let key_pem = std::fs::read_to_string(key_path)
         .map_err(|e| format!("Failed to read TLS key from {}: {}", key_path, e))?;
 
-    let pems = pem::parse_many(&cert_pem)
-        .map_err(|e| format!("Failed to parse TLS cert PEM: {}", e))?;
+    let pems =
+        pem::parse_many(&cert_pem).map_err(|e| format!("Failed to parse TLS cert PEM: {}", e))?;
     let certs: Vec<rustls_pki_types::CertificateDer<'static>> = pems
         .into_iter()
         .filter(|p| p.tag() == "CERTIFICATE")
@@ -126,8 +126,8 @@ pub fn build_tls_server_config(
         return Err("No certificates found in TLS cert PEM".to_string());
     }
 
-    let key_pems = pem::parse_many(&key_pem)
-        .map_err(|e| format!("Failed to parse TLS key PEM: {}", e))?;
+    let key_pems =
+        pem::parse_many(&key_pem).map_err(|e| format!("Failed to parse TLS key PEM: {}", e))?;
     let mut private_key = None;
     for p in key_pems {
         match p.tag() {

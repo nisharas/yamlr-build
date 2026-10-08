@@ -44,8 +44,8 @@ use super::{
     EXIT_SUCCESS, EXIT_USAGE,
 };
 use crate::security::{
-    renew_team_access_if_due, required_features_for_args, stored_tier, LicenseFeature,
-    active_license_public_key,
+    active_license_public_key, renew_team_access_if_due, required_features_for_args, stored_tier,
+    LicenseFeature,
 };
 
 /// Dispatches CLI arguments to the appropriate command handler and returns POSIX exit code.

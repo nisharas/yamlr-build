@@ -5,9 +5,9 @@
 pub mod tls_config;
 pub mod webhook;
 
-pub use tls_config::{validate_webhook_client_attestation, WebhookRateLimiter, WebhookTlsConfig};
 #[cfg(not(target_arch = "wasm32"))]
 pub use tls_config::build_tls_server_config;
+pub use tls_config::{validate_webhook_client_attestation, WebhookRateLimiter, WebhookTlsConfig};
 pub use webhook::handle_admission_review;
 
 use serde_json::Value;

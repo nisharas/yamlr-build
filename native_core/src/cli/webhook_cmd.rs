@@ -23,7 +23,9 @@ pub fn execute_webhook(args: &[String]) -> i32 {
     let tls_key = matches.get_one::<String>("tls-key");
 
     if (tls_cert.is_some() && tls_key.is_none()) || (tls_cert.is_none() && tls_key.is_some()) {
-        eprintln!("Error: Both --tls-cert and --tls-key must be provided together for TLS termination.");
+        eprintln!(
+            "Error: Both --tls-cert and --tls-key must be provided together for TLS termination."
+        );
         return crate::cli::EXIT_USAGE;
     }
 
@@ -39,7 +41,11 @@ pub fn execute_webhook(args: &[String]) -> i32 {
     }
 
     if dry_run {
-        let mode = if tls_cert.is_some() { " (TLS enabled)" } else { "" };
+        let mode = if tls_cert.is_some() {
+            " (TLS enabled)"
+        } else {
+            ""
+        };
         println!("yamlr webhook configuration valid: port={}{}", port, mode);
         return EXIT_SUCCESS;
     }

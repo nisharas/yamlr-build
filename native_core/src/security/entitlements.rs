@@ -225,7 +225,9 @@ pub fn activate_license(token: &str, public_key: &str) -> Result<(), String> {
 
 #[cfg(not(target_arch = "wasm32"))]
 pub fn stored_license_token(public_key: &str) -> Result<Option<String>, String> {
-    if let Ok(token) = std::env::var("YAMLR_LICENSE_TOKEN").or_else(|_| std::env::var("YAMLR_LICENSE_KEY")) {
+    if let Ok(token) =
+        std::env::var("YAMLR_LICENSE_TOKEN").or_else(|_| std::env::var("YAMLR_LICENSE_KEY"))
+    {
         let trimmed = token.trim();
         if !trimmed.is_empty() {
             if native_verify_token(trimmed, public_key) {

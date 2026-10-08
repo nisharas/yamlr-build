@@ -76,7 +76,8 @@ pub fn native_validate_ast_against_schema(
                 let allows_null = !prop.required || prop.prop_type.contains("null");
                 if is_null_val && allows_null {
                     // Valid optional/nullable field explicitly set to null
-                } else if !validate_type_union(&prop.prop_type, trimmed, !node.children.is_empty()) {
+                } else if !validate_type_union(&prop.prop_type, trimmed, !node.children.is_empty())
+                {
                     violations.push(SchemaViolation {
                         field_path: prop.name.clone(),
                         message: format!(
@@ -115,10 +116,9 @@ pub fn native_validate_ast_against_schema(
                             shard.is_list_item
                                 || (shard.key.is_empty()
                                     && !shard.comment.is_empty()
-                                    && child
-                                        .children
-                                        .iter()
-                                        .any(|gc| gc.shards.first().is_some_and(|s| s.is_list_item)))
+                                    && child.children.iter().any(|gc| {
+                                        gc.shards.first().is_some_and(|s| s.is_list_item)
+                                    }))
                         })
                     }) || node.shards.iter().any(|shard| shard.is_list_item));
                 let inferred = if node.children.is_empty() {
@@ -266,7 +266,11 @@ spec:
         let manifest = crate::structurer::native_structurize(shards);
         let schemas = crate::schemas::native_get_schema_for_version("1.30");
         let violations = native_validate_ast_against_schema(&manifest, &schemas);
-        assert!(violations.is_empty(), "Expected no violations, got {:?}", violations);
+        assert!(
+            violations.is_empty(),
+            "Expected no violations, got {:?}",
+            violations
+        );
     }
 }
 

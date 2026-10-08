@@ -32,7 +32,9 @@ pub fn heal_cluster_role_binding_subjects(
 
     if let Some(subjects_node) = manifest.root.find_node_mut("subjects") {
         let is_flat = subjects_node.children.iter().any(|c| c.key == "kind");
-        let has_top_ns = subjects_node.children.iter().any(|c| c.key == "namespace" && c.value.as_ref().map_or(false, |v| !v.trim().is_empty()));
+        let has_top_ns = subjects_node.children.iter().any(|c| {
+            c.key == "namespace" && c.value.as_ref().map_or(false, |v| !v.trim().is_empty())
+        });
 
         for subject in &mut subjects_node.children {
             let subj_kind = subject.find_value("kind").unwrap_or_default();
