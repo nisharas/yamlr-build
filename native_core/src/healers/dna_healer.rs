@@ -18,6 +18,18 @@ fn canonical_serialize_node(node: &SemanticNode, buf: &mut String) {
         return;
     }
 
+    let filtered_children: Vec<&SemanticNode> = node
+        .children
+        .iter()
+        .filter(|c| c.key != "yamlr.dev/dna-seal")
+        .collect();
+
+    // If an annotations container holds only the DNA seal itself, ignore the synthetic container
+    // so hashing is invariant whether the annotations map was pre-existing or created for the seal.
+    if node.key == "annotations" && filtered_children.is_empty() && node.value.is_none() {
+        return;
+    }
+
     buf.push_str(&node.key);
     buf.push(':');
     if let Some(ref val) = node.value {
@@ -25,11 +37,10 @@ fn canonical_serialize_node(node: &SemanticNode, buf: &mut String) {
     }
     buf.push('\n');
 
-    // Clone and sort children deterministically by key
-    let mut sorted_children = node.children.clone();
+    let mut sorted_children = filtered_children;
     sorted_children.sort_by(|a, b| a.key.cmp(&b.key));
 
-    for child in &sorted_children {
+    for child in sorted_children {
         canonical_serialize_node(child, buf);
     }
 }
