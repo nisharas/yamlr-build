@@ -1,0 +1,8 @@
+<svg width="150" height="28" viewBox="0 0 150 28" xmlns="http://www.w3.org/2000/svg">
+  <rect width="150" height="28" rx="6" fill="#020617"/>
+  <rect width="45" height="28" rx="6" fill="#4285F4"/>
+  <text x="7" y="18" font-family="Arial, sans-serif" font-weight="bold" font-size="10" fill="#FFFFFF">YAMLR</text>
+  <text x="52" y="18" font-family="Arial, sans-serif" font-weight="bold" font-size="10" fill="#4285F4">VERIFIED</text>
+  <circle cx="135" cy="14" r="5" fill="#4285F4" opacity="0.8"/>
+  <path d="M132 14L134 16L138 12" stroke="#FFFFFF" stroke-width="1.5" fill="none"/>
+</svg>

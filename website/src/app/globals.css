@@ -1,0 +1,104 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 0 0% 100%;
+  --foreground: 222 10% 10%;
+  --primary: 217 89% 61%; /* Google Blue #4285F4 approx */
+  --primary-foreground: 0 0% 100%;
+  --card: 0 0% 100%;
+  --border: 214 32% 91%;
+  --muted: 210 40% 96.1%;
+  --muted-foreground: 215.4 16.3% 46.9%;
+  --radius: 16px; /* Google's standard card radius (rounded-2xl) */
+  /* Canonical surface tokens — all dark bg values must use one of these */
+  --bg-page: #0D1117;    /* page canvas */
+  --bg-surface: #161B22; /* elevated cards/panels */
+}
+
+.dark {
+  --background: 216 28% 7%; /* Exact HSL for #0D1117 page canvas */
+  --foreground: 210 40% 98%;
+  --primary: 217 89% 61%;
+  --primary-foreground: 222 47.4% 11.2%;
+  --card: 215 21% 11%; /* Exact HSL for #161B22 surface level for cards */
+  --border: 215 14% 20%; /* Subtle border depth #28303B */
+  --muted: 217 32% 10%;
+  --muted-foreground: 215 20.2% 65.1%;
+}
+
+@layer base {
+  body {
+    @apply bg-background text-foreground antialiased selection:bg-primary/20 selection:text-primary;
+    font-feature-settings: "rlig" 1, "calt" 1;
+    letter-spacing: -0.01em;
+    /* WCAG AA: body text on white = 5.7:1 (slate-600) */
+    color: theme('colors.slate.700');
+  }
+  .dark body {
+    color: theme('colors.slate.300');
+  }
+}
+
+@layer components {
+  .console-panel {
+    @apply bg-white dark:bg-[#161B22] border border-slate-200 dark:border-slate-800 shadow-sm transition-all;
+  }
+
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-br from-slate-900 to-slate-500 dark:from-white dark:to-slate-400;
+  }
+
+  /* Google-Style Button */
+  .google-button {
+    @apply px-6 py-2.5 rounded-full bg-[#4285F4] text-white font-bold text-sm tracking-normal hover:bg-[#3367D6] active:bg-[#2A56C6] transition-all shadow-sm active:scale-95 flex items-center justify-center gap-2;
+  }
+
+  .google-button-outline {
+    @apply px-6 py-2.5 rounded-full border border-[#DADCE0] dark:border-slate-700 bg-transparent text-[#4285F4] font-bold text-sm tracking-normal hover:bg-slate-50 dark:hover:bg-slate-800 active:bg-slate-100 dark:active:bg-slate-700 transition-all flex items-center justify-center gap-2;
+  }
+
+  .glass-card {
+    @apply bg-white/70 dark:bg-[#161B22]/70 backdrop-blur-xl border border-slate-200/50 dark:border-slate-800/50 shadow-xl;
+  }
+}
+
+/* Clinical Dot Grid */
+.dot-grid {
+  background-image: radial-gradient(circle at 1px 1px, rgb(66 133 244 / 0.05) 1px, transparent 0);
+  background-size: 40px 40px;
+}
+.dark .dot-grid {
+  background-image: radial-gradient(circle at 1px 1px, rgb(66 133 244 / 0.1) 1px, transparent 0);
+}
+
+/* Custom Scrollbar (supports both PascalCase and lowercase) */
+.CustomScrollbar::-webkit-scrollbar,
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.CustomScrollbar::-webkit-scrollbar-track,
+.custom-scrollbar::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+.CustomScrollbar::-webkit-scrollbar-thumb,
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  @apply bg-slate-200 dark:bg-slate-800/50 rounded-full hover:bg-primary/50 transition-colors;
+}
+
+.clinical-shadow {
+  box-shadow: 0 0 50px -12px rgba(50, 108, 229, 0.1);
+}
+
+/* Accessibility: respect user motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

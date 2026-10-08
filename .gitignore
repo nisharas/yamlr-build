@@ -175,7 +175,6 @@ catalog/k8sv1distilled.json
 testworkspace/catalog.json
 .agent/
 old_codebase/
-website/
 k8s-issues-dataset/
 dummy_receipts/
 
@@ -380,9 +379,6 @@ catalog/k8sv1distilled.json
 testworkspace/catalog.json
 .agent/
 old_codebase/
-website/**
-!website/package.json
-!website/package-lock.json
 k8s-issues-dataset/
 dummy_receipts/
 

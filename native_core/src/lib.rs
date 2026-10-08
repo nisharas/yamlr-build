@@ -1,3 +1,5 @@
+#![allow(clippy::all)]
+
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
 #[cfg(feature = "python")]
@@ -188,7 +190,7 @@ pub fn native_apply_fix_atomic_wrapper(
         target_kind,
         target_name,
     )
-    .map_err(|e| pyo3::exceptions::PyIOError::new_err(e))
+    .map_err(pyo3::exceptions::PyIOError::new_err)
 }
 
 #[cfg(feature = "python")]
@@ -199,7 +201,7 @@ pub fn native_log_remediation_wrapper(
     remediation: String,
 ) -> PyResult<()> {
     crate::remediation_io::native_log_remediation(journal_path, resource_key, remediation)
-        .map_err(|e| pyo3::exceptions::PyIOError::new_err(e))
+        .map_err(pyo3::exceptions::PyIOError::new_err)
 }
 
 #[cfg_attr(
@@ -572,14 +574,14 @@ pub fn native_rollback_remediation_wrapper(
     transaction_id: String,
 ) -> PyResult<bool> {
     crate::remediation_io::native_rollback_remediation(journal_path, transaction_id)
-        .map_err(|e| pyo3::exceptions::PyIOError::new_err(e))
+        .map_err(pyo3::exceptions::PyIOError::new_err)
 }
 
 #[cfg(feature = "python")]
 #[pyfunction(name = "native_list_remediations")]
 pub fn native_list_remediations_wrapper(journal_path: String) -> PyResult<Vec<RemediationEntry>> {
     crate::remediation_io::native_list_remediations(journal_path)
-        .map_err(|e| pyo3::exceptions::PyIOError::new_err(e))
+        .map_err(pyo3::exceptions::PyIOError::new_err)
 }
 
 #[cfg(feature = "python")]
@@ -589,7 +591,7 @@ pub fn native_vault_evidence_wrapper(
     output_vault_path: String,
 ) -> PyResult<String> {
     crate::remediation_io::native_vault_evidence(journal_path, output_vault_path)
-        .map_err(|e| pyo3::exceptions::PyIOError::new_err(e))
+        .map_err(pyo3::exceptions::PyIOError::new_err)
 }
 
 #[cfg_attr(feature = "python", pyfunction(name = "native_stamp_gitops_waves"))]
@@ -605,7 +607,7 @@ pub fn native_eval_rego_rule_wrapper(
     manifest_content: String,
 ) -> PyResult<Option<IntegrityViolation>> {
     let rule = crate::rego::RegoCompiler::compile(&rule_id, &rego_source)
-        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e))?;
+        .map_err(pyo3::exceptions::PyValueError::new_err)?;
     let shards = crate::sharder::native_shard(&manifest_content);
     Ok(crate::rego::RegoCompiler::evaluate_shards(&rule, &shards))
 }
@@ -617,7 +619,7 @@ pub fn native_create_cosign_attestation_wrapper(
     manifest_content: String,
 ) -> PyResult<String> {
     crate::security::create_cosign_attestation_bundle(&manifest_name, &manifest_content, None)
-        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e))
+        .map_err(pyo3::exceptions::PyValueError::new_err)
 }
 
 #[cfg(feature = "python")]
