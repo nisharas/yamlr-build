@@ -64,6 +64,7 @@ pub fn native_discover_resources(root_path: String) -> Result<Vec<NativeDiscover
                 let raw_abs = fs::canonicalize(&path)
                     .map(|p| p.to_string_lossy().into_owned())
                     .unwrap_or_else(|_| path.clone());
+                #[allow(unused_mut)]
                 let mut abs_path = crate::path_utils::normalize_display_path(&raw_abs);
 
                 #[cfg(any(windows, target_os = "macos"))]

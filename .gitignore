@@ -432,6 +432,7 @@ legacy_ghost_logic/
 !docs/development/measurements/*.json
 !native_core/catalog/*.json
 !native_core/src/security/public_key.pem
+!native_core/tests/fixtures/*.pem
 
 # Node & Editor Artifacts
 node_modules/

@@ -170,7 +170,10 @@ def main() -> None:
         run_checked([str(venv_python), "-I", "-c", api_smoke], cwd=workdir, env=env)
 
         if args.native_bin:
-            native_bin = args.native_bin.resolve(strict=True)
+            bin_path = args.native_bin
+            if not bin_path.exists() and bin_path.with_suffix(".exe").exists():
+                bin_path = bin_path.with_suffix(".exe")
+            native_bin = bin_path.resolve(strict=True)
             parity_runner = (
                 Path(__file__).resolve().parents[2] / "tests" / "verify_rust_parity.py"
             )

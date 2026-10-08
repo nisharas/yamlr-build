@@ -25,7 +25,10 @@ def run(
 
 
 def main() -> None:
-    binary = Path(sys.argv[1]).resolve()
+    binary = Path(sys.argv[1])
+    if not binary.exists() and binary.with_suffix(".exe").exists():
+        binary = binary.with_suffix(".exe")
+    binary = binary.resolve()
     if not binary.is_file():
         raise SystemExit(f"Standalone binary does not exist: {binary}")
 
