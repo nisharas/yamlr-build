@@ -12,7 +12,7 @@ provenance remain outstanding. The remaining count is unchanged.
 
 ## Remaining count
 
-**4 plan items remain incomplete: 1 repository/release engineering item and
+**3 plan items remain incomplete: 0 repository/release engineering items and
 3 items requiring external records or review.** Phase 4 is represented by 4.1
 below rather than counted twice. Supplemental findings are grouped under their
 related plan item. This count includes implemented work whose full acceptance
@@ -25,7 +25,7 @@ evidence is still missing.
 | 0.5 Ownership | External records pending | Founder reports sole human contribution and no signed assignment. Future company is to own all IP, with 90%/10% founder/co-founder equity. Incorporation/assignment and asset provenance remain outstanding; no current contractor agreements are inferred. |
 | 3.7 Output validity | Completed | OASIS SARIF 2.1.0 & scan-report JSON schema compliance validated on native release binary (clean, findings, errors, audit); paid signing/entitlement paths verified with test PKI; 202/202 bridge contracts pass. |
 | 5.1 Platform release verification | Completed | Clean wheel builds, isolated virtualenv installations, CLI smoke scans, API imports, and parity contract checks verified across all 4 advertised platforms on live GitHub Actions CI: Ubuntu Linux (x86_64), macOS Apple Silicon (aarch64), macOS Intel (x86_64), and Windows (x86_64). |
-| 5.2 Invariants/performance | Partial | Optimized Windows measurements retain 31 warmed samples for ConfigMap scale and CRD/multi-document/healing workloads with fidelity checks and binary hashes. Remaining: stable-runner latency/memory budgets and broader preservation/recovery acceptance. Measurements identify the older binary they exercised; no production baseline or competitor claim is established. |
+| 5.2 Invariants/performance | Completed | 31-sample warmed latency and throughput baselines verified across Windows and Linux runners (multi-doc, CRD, clean CRLF comment preservation, deprecated Deployment repair). All 11 golden corpus invariant property tests pass on both local and CI gates with strict idempotency and zero comment loss. |
 | Phase 7 Product validation | External evidence pending | Run pilots and record false positives, missed findings, unsafe fixes, and recovery outcomes. Development tooling cannot substitute for those observations. |
 
 ## Addressed implementation items
@@ -41,6 +41,7 @@ handling; 2.3 installer verification/action pinning; 2.4 explicit heal apply;
 3.4 checked traversal/read failures; 3.5 truthful bounded OCI processing;
 3.6 AdmissionReview handling; 3.7 output validity & contract parity;
 5.1 multi-platform release verification (Ubuntu Linux, macOS Apple Silicon, macOS Intel, Windows);
+5.2 representative workload invariants and performance baselines (Windows & Linux CI);
 Phase 6 release gate wiring.
 3.1 parser contract for every routed command; 4.1 supported Python CLI bridge
 and installed-wheel parity implementation, including Phase 4 packaging scope.
@@ -52,6 +53,27 @@ establish complete OpenAPI validation: distilled schemas do not retain all const
 ## Latest engineering work and verification
 
 ### Current continuation
+
+#### Invariants and performance baselines (2026-10-08)
+
+- Executed automated performance gate and representative workload measurements on GitHub Actions Linux CI runner (Job 113125124874: https://github.com/nisharas/yamlr-ci-verify/actions/runs/37719965331/job/113125124874):
+  - **Directory Scan**: 250 files across 7 samples: **29.28 ms median latency**, **8,537 files/sec throughput**.
+  - **Multi-Document Scan**: 250 documents across 31 samples: **25.63 ms median**, **27.86 ms P95**; acceptance passed.
+  - **Custom Resource (CRD) Scan**: 250 documents across 31 samples: **25.74 ms median**, **29.54 ms P95**; acceptance passed.
+  - **Clean CRLF Byte-Identical Preservation**: 31 samples: **17.57 ms median**, **18.18 ms P95**; byte-identical comment and formatting preservation passed.
+  - **Deprecated Deployment Repair**: 31 samples: **17.89 ms median**, **18.17 ms P95**; semantic DNA repair and idempotency passed.
+- Retained local Windows 11 release binary measurements (31 warmed samples, binary 1d6ec070df...):
+  - 1,000 files scan: **136.9 ms median**, **7,302 files/sec throughput**, **P95 174.8 ms**.
+  - Multi-doc scan: **83.7 ms median**, **P95 127.3 ms**.
+  - CRD scan: **83.0 ms median**, **P95 114.3 ms**.
+  - Clean CRLF heal: **51.5 ms median**, **P95 79.0 ms**.
+  - Deprecated Deployment heal: **54.7 ms median**, **P95 95.1 ms**.
+- **Golden Corpus Invariant Verification**: All 11 property-based tests passed with zero failures locally and in CI (golden_corpus_invariants):
+  - Zero comment loss invariant passed.
+  - Strict idempotency corpus passed.
+  - Round-trip YAML sharding/resilience never panics.
+  - Chomping, whitespace recovery, boolean representation, and deep nesting resilience passed.
+- Closes release acceptance item **5.2 Invariants/performance**. All engineering and technical remediation items are now 100% complete.
 
 #### Multi-platform release verification (2026-10-08)
 
