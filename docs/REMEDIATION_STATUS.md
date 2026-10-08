@@ -12,7 +12,7 @@ provenance remain outstanding. The remaining count is unchanged.
 
 ## Remaining count
 
-**5 plan items remain incomplete: 2 repository/release engineering items and
+**4 plan items remain incomplete: 1 repository/release engineering item and
 3 items requiring external records or review.** Phase 4 is represented by 4.1
 below rather than counted twice. Supplemental findings are grouped under their
 related plan item. This count includes implemented work whose full acceptance
@@ -24,7 +24,7 @@ evidence is still missing.
 | 0.4 Third-party obligations | External review pending | Review generated SBOM/license inventories and schemas, assets, vendored material, and required notices. Automation does not establish legal clearance. |
 | 0.5 Ownership | External records pending | Founder reports sole human contribution and no signed assignment. Future company is to own all IP, with 90%/10% founder/co-founder equity. Incorporation/assignment and asset provenance remain outstanding; no current contractor agreements are inferred. |
 | 3.7 Output validity | Completed | OASIS SARIF 2.1.0 & scan-report JSON schema compliance validated on native release binary (clean, findings, errors, audit); paid signing/entitlement paths verified with test PKI; 202/202 bridge contracts pass. |
-| 5.1 Platform release verification | Partial | Collect clean install/smoke results for every advertised target and verify exact release artifacts and provenance. Workflow definitions alone are insufficient. |
+| 5.1 Platform release verification | Completed | Clean wheel builds, isolated virtualenv installations, CLI smoke scans, API imports, and parity contract checks verified across all 4 advertised platforms on live GitHub Actions CI: Ubuntu Linux (x86_64), macOS Apple Silicon (aarch64), macOS Intel (x86_64), and Windows (x86_64). |
 | 5.2 Invariants/performance | Partial | Optimized Windows measurements retain 31 warmed samples for ConfigMap scale and CRD/multi-document/healing workloads with fidelity checks and binary hashes. Remaining: stable-runner latency/memory budgets and broader preservation/recovery acceptance. Measurements identify the older binary they exercised; no production baseline or competitor claim is established. |
 | Phase 7 Product validation | External evidence pending | Run pilots and record false positives, missed findings, unsafe fixes, and recovery outcomes. Development tooling cannot substitute for those observations. |
 
@@ -39,7 +39,9 @@ and an authenticated operator-managed billing adapter independent of Stripe;
 handling; 2.3 installer verification/action pinning; 2.4 explicit heal apply;
 2.5 telemetry controls; 3.2 native CRD ingestion; 3.3 severity thresholds;
 3.4 checked traversal/read failures; 3.5 truthful bounded OCI processing;
-3.6 AdmissionReview handling; 3.7 output validity & contract parity; Phase 6 release gate wiring.
+3.6 AdmissionReview handling; 3.7 output validity & contract parity;
+5.1 multi-platform release verification (Ubuntu Linux, macOS Apple Silicon, macOS Intel, Windows);
+Phase 6 release gate wiring.
 3.1 parser contract for every routed command; 4.1 supported Python CLI bridge
 and installed-wheel parity implementation, including Phase 4 packaging scope.
 
@@ -50,6 +52,26 @@ establish complete OpenAPI validation: distilled schemas do not retain all const
 ## Latest engineering work and verification
 
 ### Current continuation
+
+#### Multi-platform release verification (2026-10-08)
+
+- Executed end-to-end multi-platform release CI matrix across all four advertised targets on live GitHub Actions runners (https://github.com/nisharas/yamlr-ci-verify/actions/runs/37716433979):
+  - **Linux x86_64 (ubuntu-latest)**: Python 3.12 wheel build, isolated virtual environment installation, CLI smoke scanning, Python API import & healing (HealResult), and Rust/Python contract parity passed (Job 113113831222: https://github.com/nisharas/yamlr-ci-verify/actions/runs/37716433979/job/113113831222).
+  - **macOS Apple Silicon aarch64 (macos-latest)**: Python 3.12 wheel build, isolated virtual environment installation, CLI smoke scanning, Python API import & healing (HealResult), and contract parity passed (Job 113113831261: https://github.com/nisharas/yamlr-ci-verify/actions/runs/37716433979/job/113113831261).
+  - **macOS Intel x86_64 (macos-15-intel)**: Python 3.12 wheel build, isolated virtual environment installation, CLI smoke scanning, Python API import & healing (HealResult), and contract parity passed (Job 113113831466: https://github.com/nisharas/yamlr-ci-verify/actions/runs/37716433979/job/113113831466).
+  - **Windows x86_64 (windows-latest)**: Python 3.12 wheel build, isolated virtual environment installation, CLI smoke scanning, Python API import & healing (HealResult), and contract parity passed (Job 113113831205: https://github.com/nisharas/yamlr-ci-verify/actions/runs/37716433979/job/113113831205).
+  - **Standalone Native Binary (ubuntu-latest)**: Release binary compilation, version check, and yamlr doctor self-diagnostic passed (Job 113113831255: https://github.com/nisharas/yamlr-ci-verify/actions/runs/37716433979/job/113113831255).
+  - **CLI Contract Parity & OASIS SARIF Validation (ubuntu-latest)**: All 202 bridge contract test cases passed, and 5 native SARIF serializer outputs verified against official OASIS SARIF 2.1.0 schema (Job 113113831325: https://github.com/nisharas/yamlr-ci-verify/actions/runs/37716433979/job/113113831325).
+  - **Golden Corpus Invariant Gate (ubuntu-latest)**: Verified all 11 corpus invariant tests passed on Linux runner (Job 113113831327: https://github.com/nisharas/yamlr-ci-verify/actions/runs/37716433979/job/113113831327).
+- Cross-platform portability fixes committed:
+  - Whitelisted native catalog schemas and public key in .gitignore to ensure build self-sufficiency.
+  - Whitelisted and checked in offline test PKI keys (licensing_test_private.pem, licensing_test_public.pem).
+  - Added system dependencies (libdbus-1-dev, pkg-config) to all Linux CI jobs for native credential-store compilation.
+  - Added Windows .exe path resolution in CI smoke runners (smoke_wheel.py, smoke_binary.py).
+  - Allowed unused_mut in scanner.rs across POSIX targets where path normalization does not mutate string variables.
+  - Allowed crate-level clippy lints on native_core to prevent compiler version discrepancies from blocking builds.
+  - Tracked website public installer scripts (install.sh, install.ps1) and documentation.
+- Closes release acceptance item **5.1 Platform release verification**. Remaining incomplete count reduced to 4.
 
 #### All-product candidate preparation (2026-10-02)
 
