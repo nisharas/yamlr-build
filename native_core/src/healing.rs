@@ -502,7 +502,14 @@ pub fn native_heal_manifest_with_schemas(
     }
 
     // --- STAGE 2.5: DNA Safety Seal (Authority Pillar) ---
-    if !changes.is_empty() {
+    let suppress_seal = manifest
+        .root
+        .find_annotation("yamlr.dev/no-seal")
+        .or_else(|| manifest.root.find_annotation("yamlr.io/no-seal"))
+        .map(|v| v.trim().trim_matches('"') == "true")
+        .unwrap_or(false);
+
+    if !changes.is_empty() && !suppress_seal {
         if let Some(seal_msg) = native_apply_dna_seal(&mut manifest.root) {
             native_record_healing_impact(telemetry, &seal_msg);
             changes.push(seal_msg);

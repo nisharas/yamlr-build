@@ -113,7 +113,49 @@ pub static SERVICE_SPEC_KEYS: &[&str] = &[
     "ipFamilyPolicy",
 ];
 
+pub static SERVICE_REFERENCE_KEYS: &[&str] = &[
+    "name",
+    "namespace",
+    "path",
+    "port",
+];
+
+pub static SERVICE_PORT_KEYS: &[&str] = &[
+    "name",
+    "protocol",
+    "port",
+    "targetPort",
+    "nodePort",
+    "appProtocol",
+];
+
 pub static INGRESS_SPEC_KEYS: &[&str] = &["rules", "tls", "ingressClassName", "defaultBackend"];
+
+pub static HTTP_GET_KEYS: &[&str] = &[
+    "path",
+    "port",
+    "host",
+    "scheme",
+    "httpHeaders",
+];
+
+pub static TCP_SOCKET_KEYS: &[&str] = &[
+    "port",
+    "host",
+];
+
+pub static PROBE_KEYS: &[&str] = &[
+    "httpGet",
+    "tcpSocket",
+    "exec",
+    "grpc",
+    "initialDelaySeconds",
+    "timeoutSeconds",
+    "periodSeconds",
+    "successThreshold",
+    "failureThreshold",
+    "terminationGracePeriodSeconds",
+];
 
 /// Calculates standard Levenshtein edit distance between two UTF-8 strings.
 pub fn levenshtein(a: &str, b: &str) -> usize {
@@ -180,6 +222,7 @@ pub fn fuzzy_match_property<'a>(input: &str, candidate_keys: &'a [&'a str]) -> O
 fn heal_node_recursive(
     node: &mut SemanticNode,
     path: &mut Vec<String>,
+    kind: &str,
     telemetry: &mut NativeTelemetry,
     changes: &mut Vec<String>,
 ) {
@@ -191,13 +234,36 @@ fn heal_node_recursive(
     } else if parent_path == "metadata" || parent_path.ends_with(".metadata") {
         Some(METADATA_KEYS)
     } else if parent_path == "spec" {
-        Some(WORKLOAD_SPEC_KEYS)
+        if kind == "Service" {
+            Some(SERVICE_SPEC_KEYS)
+        } else if kind == "Ingress" {
+            Some(INGRESS_SPEC_KEYS)
+        } else {
+            Some(WORKLOAD_SPEC_KEYS)
+        }
     } else if parent_path == "spec.template.spec" || parent_path == "template.spec" {
         Some(POD_SPEC_KEYS)
-    } else if parent_path.contains("containers") {
+    } else if parent_path.ends_with(".httpGet") || parent_path == "httpGet" {
+        Some(HTTP_GET_KEYS)
+    } else if parent_path.ends_with(".tcpSocket") || parent_path == "tcpSocket" {
+        Some(TCP_SOCKET_KEYS)
+    } else if parent_path.ends_with(".livenessProbe")
+        || parent_path.ends_with(".readinessProbe")
+        || parent_path.ends_with(".startupProbe")
+    {
+        Some(PROBE_KEYS)
+    } else if parent_path.ends_with(".service") || parent_path == "service" {
+        Some(SERVICE_REFERENCE_KEYS)
+    } else if parent_path.ends_with(".ports") || parent_path == "ports" || parent_path.contains("spec.ports") {
+        Some(SERVICE_PORT_KEYS)
+    } else if parent_path.ends_with("containers")
+        || parent_path.ends_with("containers.-")
+        || parent_path.ends_with("initContainers")
+        || parent_path.ends_with("initContainers.-")
+        || parent_path.ends_with("ephemeralContainers")
+        || parent_path.ends_with("ephemeralContainers.-")
+    {
         Some(CONTAINER_KEYS)
-    } else if parent_path.contains("service") {
-        Some(SERVICE_SPEC_KEYS)
     } else if parent_path.contains("ingress") {
         Some(INGRESS_SPEC_KEYS)
     } else {
@@ -234,7 +300,7 @@ fn heal_node_recursive(
 
         // Recurse into child nodes
         path.push(child.key.clone());
-        heal_node_recursive(child, path, telemetry, changes);
+        heal_node_recursive(child, path, kind, telemetry, changes);
         path.pop();
     }
 }
@@ -246,9 +312,10 @@ pub fn heal_schema_typos(
 ) -> Vec<String> {
     let mut changes = Vec::new();
     let mut path = Vec::new();
+    let kind = manifest.root.find_value("kind").unwrap_or_default();
 
     // Check root-level keys
-    heal_node_recursive(&mut manifest.root, &mut path, telemetry, &mut changes);
+    heal_node_recursive(&mut manifest.root, &mut path, &kind, telemetry, &mut changes);
 
     changes
 }
@@ -305,5 +372,33 @@ mod tests {
             fuzzy_match_property("securitycontext", CONTAINER_KEYS),
             Some("securityContext")
         );
+    }
+
+    #[test]
+    fn test_service_reference_port_preserved() {
+        // 'port' under a service reference (webhook clientConfig.service or ingress backend)
+        // is valid singular integer property and MUST NOT be converted to 'ports'.
+        assert_eq!(fuzzy_match_property("port", SERVICE_REFERENCE_KEYS), None);
+        // But typos in 'port' like 'prt' or 'portt' should heal to 'port'
+        assert_eq!(fuzzy_match_property("portt", SERVICE_REFERENCE_KEYS), Some("port"));
+        assert_eq!(fuzzy_match_property("name", SERVICE_REFERENCE_KEYS), None);
+        assert_eq!(fuzzy_match_property("namme", SERVICE_REFERENCE_KEYS), Some("name"));
+    }
+
+    #[test]
+    fn test_service_port_keys_preserved() {
+        // Under spec.ports, 'port' is valid singular and 'targetPort' is valid camelCase
+        assert_eq!(fuzzy_match_property("port", SERVICE_PORT_KEYS), None);
+        assert_eq!(fuzzy_match_property("targetPort", SERVICE_PORT_KEYS), None);
+        assert_eq!(fuzzy_match_property("targetport", SERVICE_PORT_KEYS), Some("targetPort"));
+        assert_eq!(fuzzy_match_property("nodeport", SERVICE_PORT_KEYS), Some("nodePort"));
+    }
+
+    #[test]
+    fn test_probe_httpget_port_preserved() {
+        // Under httpGet, 'port' is valid singular and MUST NOT be converted to 'ports'.
+        assert_eq!(fuzzy_match_property("port", HTTP_GET_KEYS), None);
+        assert_eq!(fuzzy_match_property("portt", HTTP_GET_KEYS), Some("port"));
+        assert_eq!(fuzzy_match_property("path", HTTP_GET_KEYS), None);
     }
 }

@@ -94,27 +94,26 @@ pub fn heal_lifecycle_grace_periods(
             }
         }
 
-        if !has_prestop {
+        if !has_prestop || max_prestop_sleep == 0 {
+            // Safety guard: If no preStop hook exists, or if the hook does not specify a measurable sleep duration
+            // (e.g. an instantaneous script or httpGet probe), do not blindly alter or inject grace periods.
             continue;
         }
-
-        // Buffer calculation: sleep time + 15 seconds for graceful SIGTERM drain
-        let recommended_grace = if max_prestop_sleep > 0 {
-            max_prestop_sleep + 15
-        } else {
-            45
-        };
 
         let current_grace = spec
             .find_value("terminationGracePeriodSeconds")
             .and_then(|v| v.parse::<u32>().ok());
 
-        let needs_update = match current_grace {
-            Some(g) => g < recommended_grace,
-            None => true,
-        };
+        // Kubernetes default terminationGracePeriodSeconds is 30s.
+        let effective_grace = current_grace.unwrap_or(30);
 
-        if needs_update {
+        // If the effective grace period is already greater than the sleep duration,
+        // kubelet will not prematurely SIGKILL the container during drain - preserve author's intent!
+        if effective_grace > max_prestop_sleep {
+            continue;
+        }
+
+        let recommended_grace = max_prestop_sleep + 15;
             let spec_indent = spec.indent;
             if let Some(grace_node) = spec.find_node_mut("terminationGracePeriodSeconds") {
                 let old_val = grace_node.value.clone().unwrap_or_default();
@@ -144,7 +143,6 @@ pub fn heal_lifecycle_grace_periods(
                 native_record_healing_impact(telemetry, &msg);
                 changes.push(msg);
             }
-        }
     }
 
     changes

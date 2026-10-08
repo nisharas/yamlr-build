@@ -19,13 +19,12 @@
 
 ### 1. Ingress-Nginx (28 Manifests)
 - **Findings:** 206 security and forensic violations detected (missing root filesystem isolation, termination grace periods, port typos).
-- **Remediations Applied:**
-  - `[SCHEMA-002]`: Corrected schema property typo `port` -> `ports` across webhook configs.
-  - `[OPS-004]`: Adjusted `terminationGracePeriodSeconds` 0s -> 45s to accommodate preStop drain hook.
-  - `[SEC-004]`: Injected writable `/tmp` emptyDir mounts for containers running with `readOnlyRootFilesystem: true`.
-  - `[TOPOLOGY-001]`: Re-sorted multi-document streams to ensure CRDs and foundational RBAC precede dependent workloads.
-  - `[DNA-001]`: Injected cryptographic Semantic DNA safety seals.
-- **Idempotency:** 100% byte-identical across successive runs (Diff 1: 81,524 bytes == Diff 2: 81,524 bytes).
+- **Audit & Safety Gate Refinements:**
+  - `[SCHEMA-002]` Resolution: Resolved critical false-positive where `port` in `clientConfig.service`, Ingress `backend.service`, and `livenessProbe.httpGet` was previously coerced to plural `ports`. Introduced strictly scoped `SERVICE_REFERENCE_KEYS`, `HTTP_GET_KEYS`, `TCP_SOCKET_KEYS`, and `SERVICE_PORT_KEYS` so valid singular `port` fields are 100% preserved.
+  - `[OPS-004]` Guardrail: Refined `terminationGracePeriodSeconds` synchronization to only trigger when an explicit `preStop` sleep duration strictly exceeds the effective grace period, eliminating blind 45s injections on jobs or instantaneous scripts.
+  - `[SEC-004]` Guardrail: Hardened `/tmp` emptyDir volume synthesis to only target runtimes requiring scratch writes (or explicit `yamlr.dev/sec-tmp: "true"` opt-in), preserving batch jobs (`Job`/`CronJob` like `kube-webhook-certgen`) and distroless binaries.
+  - `[DNA-001]` & Seal Suppression: Semantic DNA safety seals applied; added support for `yamlr.dev/no-seal: "true"` for teams requiring zero-annotation diffs.
+- **Idempotency:** 100% byte-identical across successive runs.
 
 ### 2. ArgoCD (141 Manifests)
 - **Findings:** 4,946 findings detected across GitOps multi-document streams, CRDs, and cluster roles.

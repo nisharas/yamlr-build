@@ -10,15 +10,65 @@ use crate::telemetry::native_record_healing_impact;
 
 pub const SEC_RULE_ID: &str = "SEC-004";
 
+/// Evaluates whether a container running readOnlyRootFilesystem actually requires a /tmp scratch volume.
+fn container_needs_tmp_scratch(container: &SemanticNode, kind: &str, explicit_opt_in: bool) -> bool {
+    if explicit_opt_in {
+        return true;
+    }
+    // Batch jobs are run-to-completion tasks; do not inject scratch volumes unless explicitly requested
+    if kind == "Job" || kind == "CronJob" {
+        return false;
+    }
+    // For long-running services, verify whether image is a known runtime/server requiring scratch write access
+    if let Some(img) = container.find_value("image") {
+        let img_lower = img.to_lowercase();
+        let runtime_indicators = [
+            "nginx", "httpd", "apache", "node", "python", "ruby", "java", "jvm",
+            "tomcat", "php", "express", "flask", "django", "spring", "redis",
+            "postgres", "mysql", "mariadb", "mongo", "elasticsearch", "kafka",
+        ];
+        for ind in runtime_indicators {
+            if img_lower.contains(ind) {
+                return true;
+            }
+        }
+        // If image is a specialized/distroless/go binary, do not inject by default
+        false
+    } else {
+        // If image is unspecified (or Helm templated), default to true for long-running workloads
+        true
+    }
+}
+
 pub fn heal_security_context_issues(
     manifest: &mut SemanticManifest,
     telemetry: &mut NativeTelemetry,
 ) -> Vec<String> {
     let mut changes = Vec::new();
+    let kind = manifest.root.find_value("kind").unwrap_or_default();
+
+    let suppress_tmp = manifest
+        .root
+        .find_annotation("yamlr.dev/sec-tmp")
+        .or_else(|| manifest.root.find_annotation("yamlr.io/tmp-mount"))
+        .map(|v| v.trim().trim_matches('"') == "false")
+        .unwrap_or(false);
+
+    let explicit_opt_in = manifest
+        .root
+        .find_annotation("yamlr.dev/sec-tmp")
+        .or_else(|| manifest.root.find_annotation("yamlr.io/tmp-mount"))
+        .map(|v| v.trim().trim_matches('"') == "true")
+        .unwrap_or(false);
 
     for spec in manifest.root.find_pod_specs_mut() {
         let mut needs_tmp_volume = false;
         let tmp_volume_name = "yamlr-tmp-dir".to_string();
+
+        let pod_has_run_as_user = spec
+            .find_node("securityContext")
+            .and_then(|sc| sc.find_node("runAsUser"))
+            .is_some();
 
         // 1. Inspect containers
         if let Some(containers) = spec.find_node_mut("containers") {
@@ -46,8 +96,8 @@ pub fn heal_security_context_issues(
                     }
                 }
 
-                // Auto-inject runAsUser: 10001 if runAsNonRoot is true but user is unspecified
-                if run_as_non_root && !has_run_as_user {
+                // Auto-inject runAsUser: 10001 if runAsNonRoot is true but user is unspecified at container AND pod level
+                if run_as_non_root && !has_run_as_user && !pod_has_run_as_user {
                     if let Some(sec) = container.find_node_mut("securityContext") {
                         let indent = sec.indent + 2;
                         sec.children.push(SemanticNode {
@@ -68,7 +118,7 @@ pub fn heal_security_context_issues(
                 }
 
                 // Check for readOnlyRootFilesystem without /tmp mount
-                if readonly_root {
+                if readonly_root && !suppress_tmp && container_needs_tmp_scratch(container, &kind, explicit_opt_in) {
                     let mut has_tmp_mount = false;
                     if let Some(vm) = container.find_node("volumeMounts") {
                         for mount in &vm.children {
