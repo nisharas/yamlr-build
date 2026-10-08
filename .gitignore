@@ -430,6 +430,8 @@ legacy_ghost_logic/
 !infra/gateway/package.json
 !infra/gateway/package-lock.json
 !docs/development/measurements/*.json
+!native_core/catalog/*.json
+!native_core/src/security/public_key.pem
 
 # Node & Editor Artifacts
 node_modules/

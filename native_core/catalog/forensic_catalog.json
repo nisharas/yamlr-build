@@ -1,0 +1,419 @@
+{
+  "catalog_version": "1.7.0",
+  "total_detectors": 53,
+  "detectors": [
+    {
+      "id": "NET-001",
+      "category": "Networking",
+      "name": "Ingress/Gateway Collision",
+      "severity": "ERROR",
+      "rationale": "Overlapping hostnames or paths in Ingress/Gateway resources cause non-deterministic routing."
+    },
+    {
+      "id": "NET-002",
+      "category": "Networking",
+      "name": "Orphaned Backend",
+      "severity": "WARNING",
+      "rationale": "Ingress backend points to a Service that does not exist in the manifest set."
+    },
+    {
+      "id": "NET-003",
+      "category": "Networking",
+      "name": "Localhost Trap",
+      "severity": "ERROR",
+      "rationale": "Service targeting 127.0.0.1/localhost will fail to reach containers in other pods."
+    },
+    {
+      "id": "NET-004",
+      "category": "Networking",
+      "name": "Service Shadowing",
+      "severity": "WARNING",
+      "rationale": "Multiple Services sharing the same selector may lead to unintended traffic distribution."
+    },
+    {
+      "id": "NET-005",
+      "category": "Networking",
+      "name": "Shadowing Endpoint",
+      "severity": "ERROR",
+      "rationale": "Endpoints manually defined for a Service that also has a selector will be overwritten."
+    },
+    {
+      "id": "NET-006",
+      "category": "Networking",
+      "name": "Circular Service Ref",
+      "severity": "ERROR",
+      "rationale": "Service selector matches its own pod, creating a routing loop."
+    },
+    {
+      "id": "SEC-001",
+      "category": "Security",
+      "name": "Identity Context Gap",
+      "severity": "WARNING",
+      "rationale": "Missing securityContext in Pod/Container allows pods to run with excessive permissions."
+    },
+    {
+      "id": "SEC-002",
+      "category": "Security",
+      "name": "Pull-Safe Hazard",
+      "severity": "ERROR",
+      "rationale": "ImagePullPolicy should be 'Always' for ':latest' tags to prevent stale image execution."
+    },
+    {
+      "id": "SEC-003",
+      "category": "Security",
+      "name": "Namespace Pollution",
+      "severity": "WARNING",
+      "rationale": "Resources defined without an explicit namespace can end up in 'default', causing collisions."
+    },
+    {
+      "id": "SEC-004",
+      "category": "Security",
+      "name": "Binding Conflict",
+      "severity": "ERROR",
+      "rationale": "RoleBinding/ClusterRoleBinding with overlapping subjects and roles can lead to privilege escalation."
+    },
+    {
+      "id": "SEC-005",
+      "category": "Security",
+      "name": "Role/RBAC Collision",
+      "severity": "WARNING",
+      "rationale": "Multiple Roles defining the same permissions in the same namespace are redundant."
+    },
+    {
+      "id": "SEC-006",
+      "category": "Security",
+      "name": "StringData Leakage",
+      "severity": "ERROR",
+      "rationale": "Raw strings in Secret 'data' fields must be base64 encoded or moved to 'stringData'."
+    },
+    {
+      "id": "SEC-007",
+      "category": "Security",
+      "name": "Privilege Escalation",
+      "severity": "ERROR",
+      "rationale": "allowPrivilegeEscalation: true allows a child process to gain more privileges than its parent."
+    },
+    {
+      "id": "SEC-008",
+      "category": "Security",
+      "name": "Root User Hazard",
+      "severity": "ERROR",
+      "rationale": "Containers running as root (UID 0) are a significant security risk."
+    },
+    {
+      "id": "NET-001",
+      "category": "Networking",
+      "name": "Invisible Outage",
+      "severity": "CRITICAL",
+      "rationale": "Mismatched Service and Workload ports cause silent traffic loss."
+    },
+    {
+      "id": "NET-002",
+      "category": "Networking",
+      "name": "Ingress backend mismatch",
+      "severity": "CRITICAL",
+      "rationale": "Ingress must point to a valid Service and Port to avoid 404/503 errors."
+    },
+    {
+      "id": "NET-003",
+      "category": "Networking",
+      "name": "Service Shadowing",
+      "severity": "WARNING",
+      "rationale": "Two services with identical selectors cause non-deterministic routing."
+    },
+    {
+      "id": "NET-004",
+      "category": "Networking",
+      "name": "Unsatisfiable LoadBalancer",
+      "severity": "WARNING",
+      "rationale": "type: LoadBalancer requires a cloud provider or controller to avoid permanent <pending> status."
+    },
+    {
+      "id": "NET-006",
+      "category": "Networking",
+      "name": "ExternalName Loop",
+      "severity": "CRITICAL",
+      "rationale": "Recursive DNS lookups can saturate CoreDNS and cause cluster-wide outages."
+    },
+    {
+      "id": "SEC-009",
+      "category": "Security",
+      "name": "Host Network Exposure",
+      "severity": "CRITICAL",
+      "rationale": "Using hostNetwork allows the pod to access all network traffic on the node."
+    },
+    {
+      "id": "SEC-010",
+      "category": "Security",
+      "name": "Host Path Exposure",
+      "severity": "CRITICAL",
+      "rationale": "hostPath volumes allow containers to access sensitive files on the host filesystem."
+    },
+    {
+      "id": "REL-001",
+      "category": "Reliability",
+      "name": "Webhook Brownout",
+      "severity": "WARNING",
+      "rationale": "Missing timeoutSeconds or failurePolicy: Fail can cause cluster-wide API latency."
+    },
+    {
+      "id": "REL-002",
+      "category": "Reliability",
+      "name": "Webhook Target Collision",
+      "severity": "ERROR",
+      "rationale": "Multiple webhooks targeting the same service/path can cause conflicting mutations."
+    },
+    {
+      "id": "REL-003",
+      "category": "Reliability",
+      "name": "Scaling War",
+      "severity": "ERROR",
+      "rationale": "Defining replicas in Deployment while an HPA is active causes the cluster to 'fight' itself."
+    },
+    {
+      "id": "REL-004",
+      "category": "Reliability",
+      "name": "Affinity Deadlock",
+      "severity": "ERROR",
+      "rationale": "podAntiAffinity with 'requiredDuringSchedulingIgnoredDuringExecution' can prevent all pods from starting."
+    },
+    {
+      "id": "REL-005",
+      "category": "Reliability",
+      "name": "PDB Overlap",
+      "severity": "WARNING",
+      "rationale": "Multiple PodDisruptionBudgets targeting the same pods can cause eviction deadlocks."
+    },
+    {
+      "id": "REL-006",
+      "category": "Reliability",
+      "name": "Resource Logic Error",
+      "severity": "ERROR",
+      "rationale": "Resource requests cannot be greater than limits."
+    },
+    {
+      "id": "REL-007",
+      "category": "Reliability",
+      "name": "Liveness Aggression",
+      "severity": "WARNING",
+      "rationale": "Liveness probes with low initialDelay can kill apps before they finish booting."
+    },
+    {
+      "id": "REL-008",
+      "category": "Reliability",
+      "name": "Sidecar Race-Condition",
+      "severity": "WARNING",
+      "rationale": "Missing preStop hooks in sidecars can lead to traffic loss during pod termination."
+    },
+    {
+      "id": "REL-009",
+      "category": "Reliability",
+      "name": "Grace Period Mismatch",
+      "severity": "WARNING",
+      "rationale": "terminationGracePeriod must be long enough for the app to flush buffers and close connections."
+    },
+    {
+      "id": "REL-010",
+      "category": "Reliability",
+      "name": "Proportional Resource Hazard",
+      "severity": "WARNING",
+      "rationale": "High CPU limits paired with low Memory limits increase the risk of Burst OOM during processing spikes."
+    },
+    {
+      "id": "TOP-001",
+      "category": "Topology",
+      "name": "Topology Deadlock",
+      "severity": "ERROR",
+      "rationale": "maxSkew: 1 on small clusters (e.g. 2 nodes) can prevent scaling beyond node count."
+    },
+    {
+      "id": "OPS-001",
+      "category": "Operations",
+      "name": "Immutable Field Drift",
+      "severity": "ERROR",
+      "rationale": "Changing immutable fields like 'spec.selector' in a Deployment will cause apply failures."
+    },
+    {
+      "id": "OPS-002",
+      "category": "Operations",
+      "name": "Floating Tag Hazard",
+      "severity": "WARNING",
+      "rationale": "Using tags like ':v1' or ':stable' is non-deterministic and makes rollbacks difficult."
+    },
+    {
+      "id": "OPS-003",
+      "category": "Operations",
+      "name": "Mount-Path Collision",
+      "severity": "ERROR",
+      "rationale": "Mounting multiple volumes to the same path will hide previously mounted data."
+    },
+    {
+      "id": "STO-001",
+      "category": "Storage",
+      "name": "Orphaned StorageClass",
+      "severity": "INFO",
+      "rationale": "StorageClasses with no associated PVCs or PVs are potential clutter."
+    },
+    {
+      "id": "STO-002",
+      "category": "Storage",
+      "name": "Dangling PV",
+      "severity": "WARNING",
+      "rationale": "PersistentVolumes without a claim (PVC) are consuming resources without being used."
+    },
+    {
+      "id": "HYG-001",
+      "category": "Hygiene",
+      "name": "Dangling CRD",
+      "severity": "INFO",
+      "rationale": "CustomResourceDefinitions with no active instances may be leftovers from uninstalled apps."
+    },
+    {
+      "id": "HYG-002",
+      "category": "Hygiene",
+      "name": "Dangling Identity",
+      "severity": "INFO",
+      "rationale": "ServiceAccounts not referenced by any Pods increase the attack surface."
+    },
+    {
+      "id": "GOV-001",
+      "category": "Governance",
+      "name": "Reserved Label Pollution",
+      "severity": "WARNING",
+      "rationale": "Using 'kubernetes.io/' or 'k8s.io/' labels for internal logic is prohibited."
+    },
+    {
+      "id": "GOV-002",
+      "category": "Governance",
+      "name": "PriorityClass Collision",
+      "severity": "WARNING",
+      "rationale": "Multiple PriorityClasses with the same value cause non-deterministic scheduling priority."
+    },
+    {
+      "id": "GOV-003",
+      "category": "Governance",
+      "name": "Cluster-Scope Safety",
+      "severity": "ERROR",
+      "rationale": "Namespace-scoped resources referenced in Cluster-scoped roles can lead to security leaks."
+    },
+    {
+      "id": "PRO-001",
+      "category": "Prophetic",
+      "name": "API Deprecation Prediction",
+      "severity": "WARNING",
+      "rationale": "Predicting when an API version will be removed based on target cluster version."
+    },
+    {
+      "id": "BST-001",
+      "category": "Best Practices",
+      "name": "Missing Resource Limits",
+      "severity": "WARNING",
+      "rationale": "Unbounded containers can cause node-wide OOM events and starve other pods."
+    },
+    {
+      "id": "BST-002",
+      "category": "Best Practices",
+      "name": "Missing Probes",
+      "severity": "WARNING",
+      "rationale": "Pods without Readiness/Liveness probes are difficult to manage during rollouts."
+    },
+    {
+      "id": "BST-003",
+      "category": "Best Practices",
+      "name": "Read-Only Root FS",
+      "severity": "INFO",
+      "rationale": "Enforcing a read-only root filesystem prevents attackers from persisting binaries."
+    },
+    {
+      "id": "BST-004",
+      "category": "Best Practices",
+      "name": "ServiceAccount Auto-Mount",
+      "severity": "INFO",
+      "rationale": "Disabling auto-mount for the default ServiceAccount token reduces token exposure."
+    },
+    {
+      "id": "BST-005",
+      "category": "Best Practices",
+      "name": "Capabilities Hazard",
+      "severity": "WARNING",
+      "rationale": "Adding sensitive capabilities like 'SYS_ADMIN' or 'NET_ADMIN' increases pod risk."
+    },
+    {
+      "id": "GTO-001",
+      "category": "GitOps",
+      "name": "GitOps Controller Default Drift",
+      "severity": "WARNING",
+      "rationale": "Omitting live controller defaults causes perpetual sync-flapping in ArgoCD and Flux."
+    },
+    {
+      "id": "GTO-002",
+      "category": "GitOps",
+      "name": "Unordered Sync-Wave Hazard",
+      "severity": "ERROR",
+      "rationale": "Deploying CustomResources before CustomResourceDefinitions crashes admission without sync waves."
+    },
+    {
+      "id": "STO-003",
+      "category": "Storage",
+      "name": "StatefulSet Volume Immutability Crash",
+      "severity": "ERROR",
+      "rationale": "In-place mutations to StatefulSet volumeClaimTemplates trigger fatal Kubernetes admission rejections."
+    },
+    {
+      "id": "REL-011",
+      "category": "Reliability",
+      "name": "HA Topology Spread Fake-Out",
+      "severity": "WARNING",
+      "rationale": "Multi-replica workloads without topologySpreadConstraints risk simultaneous failure during single-zone outages."
+    },
+    {
+      "id": "NET-007",
+      "category": "Networking",
+      "name": "Protocol Contract Mismatch",
+      "severity": "ERROR",
+      "rationale": "gRPC and WebSocket services require explicit appProtocol and Ingress annotations to avoid HTTP 502 errors."
+    },
+    {
+      "id": "NET-008",
+      "category": "Networking",
+      "name": "Ingress Path Shadowing Blackhole",
+      "severity": "ERROR",
+      "rationale": "Broad Ingress path prefixes swallow specific sub-paths, causing silent 404 routing blackholes."
+    },
+    {
+      "id": "RES-003",
+      "category": "Reliability",
+      "name": "BestEffort QoS OOM Eviction Hazard",
+      "severity": "WARNING",
+      "rationale": "Containers lacking resources are assigned BestEffort QoS and terminated first under memory pressure."
+    },
+    {
+      "id": "NET-009",
+      "category": "Networking",
+      "name": "Dual-Stack IPv6 Service CIDR Clashes",
+      "severity": "WARNING",
+      "rationale": "Omitting ipFamilyPolicy on LoadBalancer Services defaults to SingleStack, causing silent traffic blackholes on dual-stack clusters."
+    },
+    {
+      "id": "SEC-012",
+      "category": "Security",
+      "name": "Deprecated Ingress NGINX Configuration Snippet",
+      "severity": "ERROR",
+      "rationale": "Mitigation for CVE-2021-25742 disables configuration-snippet by default; requires migration to native Ingress annotations."
+    },
+    {
+      "id": "AUT-002",
+      "category": "Autoscaling",
+      "name": "HPA vs VPA Autoscaler Metric Contention",
+      "severity": "ERROR",
+      "rationale": "Simultaneous horizontal and vertical autoscaling on identical metrics creates destabilizing thrashing loops and pod OOM crashes."
+    },
+    {
+      "id": "GTO-003",
+      "category": "GitOps",
+      "name": "Sync-Wave Inversion Hazard",
+      "severity": "ERROR",
+      "rationale": "Workload sync-wave is less than or equal to a referenced dependency (ConfigMap/Secret), risking crashloop admission crashes."
+    }
+  ]
+}
