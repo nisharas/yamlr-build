@@ -200,6 +200,10 @@ pub fn heal_resource_sanitization(
     telemetry: &mut NativeTelemetry,
 ) -> Vec<String> {
     let mut changes = Vec::new();
+    let kind = manifest.root.find_value("kind").unwrap_or_default();
+    if kind == "CustomResourceDefinition" {
+        return changes;
+    }
 
     for c_node in manifest.root.find_nodes_by_key_recursive_mut("containers") {
         for container in &mut c_node.children {

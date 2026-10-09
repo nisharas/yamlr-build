@@ -278,7 +278,7 @@ impl AuditRegistry {
 
             // 12. NETWORKING: Protocol Contract Mismatch (NET-007) & Ingress Path Shadowing (NET-008)
             if id.kind == "Service" {
-                let has_grpc_or_h2 = id.ports.iter().any(|&p| p == 50051 || p == 9090)
+                let has_grpc_or_h2 = id.ports.iter().any(|&p| p == 50051)
                     || id.container_port_defs.iter().any(|(name, _)| {
                         name.as_deref()
                             .map(|n| {

@@ -19,6 +19,10 @@ fn align_configmaps_recursive(
     telemetry: &mut NativeTelemetry,
     changes: &mut Vec<String>,
 ) {
+    if node.key == "data" || node.key == "stringData" || node.key == "binaryData" {
+        return;
+    }
+
     let key_lower = node.key.to_lowercase();
 
     // 1. env[].valueFrom.configMapKeyRef or envFrom[].configMapRef
@@ -97,6 +101,11 @@ pub fn heal_configmap_references(
     telemetry: &mut NativeTelemetry,
 ) -> Vec<String> {
     let mut changes = Vec::new();
+    let kind = manifest.root.find_value("kind").unwrap_or_default();
+    if kind == "CustomResourceDefinition" {
+        return changes;
+    }
+
     let ns = manifest
         .root
         .find_node("metadata")

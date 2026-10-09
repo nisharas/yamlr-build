@@ -42,6 +42,13 @@ pub fn heal_network_policy_egress(
         .and_then(|m| m.find_value("name"))
         .unwrap_or_else(|| "unnamed-netpol".to_string());
 
+    let opt_in = manifest
+        .root
+        .find_annotation("yamlr.dev/dns-egress")
+        .or_else(|| manifest.root.find_annotation("yamlr.io/dns-egress"))
+        .map(|v| v.trim().trim_matches('"') == "true")
+        .unwrap_or(false);
+
     if let Some(spec) = manifest.root.find_node_mut("spec") {
         // Check if Egress is in policyTypes
         let has_egress_policy_type = spec
@@ -57,6 +64,13 @@ pub fn heal_network_policy_egress(
             .unwrap_or(false);
 
         if has_egress_policy_type {
+            // Canonical Default Deny Egress: has podSelector but no egress block.
+            // Do not puncture default-deny zero-trust boundaries without explicit opt-in.
+            let is_default_deny = spec.find_node("egress").is_none() && spec.find_node("podSelector").is_some();
+            if is_default_deny && !opt_in {
+                return changes;
+            }
+
             let needs_injection = match spec.find_node("egress") {
                 Some(egress_node) => !has_dns_egress_rule(egress_node),
                 None => true,
@@ -277,5 +291,24 @@ mod tests {
         let spec = manifest.root.find_node("spec").unwrap();
         let egress = spec.find_node("egress").unwrap();
         assert!(has_dns_egress_rule(egress));
+    }
+
+    #[test]
+    fn test_preserve_default_deny_egress() {
+        let yaml = r#"
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-egress
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+"#;
+        let mut manifest = crate::structurer::native_structurize(crate::sharder::native_shard(yaml));
+        let mut telemetry = NativeTelemetry::default();
+        let changes = heal_network_policy_egress(&mut manifest, &mut telemetry);
+        assert!(changes.is_empty());
+        assert!(manifest.root.find_node("spec").unwrap().find_node("egress").is_none());
     }
 }

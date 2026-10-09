@@ -26,11 +26,18 @@ pub fn heal_daemonset_update_strategy(
         .and_then(|m| m.find_value("name"))
         .unwrap_or_else(|| "unnamed-daemonset".to_string());
 
+    let opt_in = manifest
+        .root
+        .find_annotation("yamlr.dev/upgrade-on-delete")
+        .or_else(|| manifest.root.find_annotation("yamlr.io/upgrade-on-delete"))
+        .map(|v| v.trim().trim_matches('"') == "true")
+        .unwrap_or(false);
+
     if let Some(spec) = manifest.root.find_node_mut("spec") {
         if let Some(strategy) = spec.find_node_mut("updateStrategy") {
             let current_type = strategy.find_value("type").unwrap_or_default();
             let clean_type = current_type.trim().trim_matches('"').trim_matches('\'');
-            if clean_type == "OnDelete" {
+            if clean_type == "OnDelete" && opt_in {
                 if let Some(type_node) = strategy.find_node_mut("type") {
                     type_node.value = Some("RollingUpdate".to_string());
                     for s in &mut type_node.shards {

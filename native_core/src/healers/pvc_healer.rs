@@ -17,6 +17,10 @@ fn align_pvc_refs_recursive(
     telemetry: &mut NativeTelemetry,
     changes: &mut Vec<String>,
 ) {
+    if node.key == "data" || node.key == "stringData" || node.key == "binaryData" {
+        return;
+    }
+
     let key_lower = node.key.to_lowercase();
     if key_lower == "persistentvolumeclaim" {
         if let Some(claim_node) = node.find_node_mut("claimName") {
@@ -62,6 +66,11 @@ pub fn heal_pvc_references(
     telemetry: &mut NativeTelemetry,
 ) -> Vec<String> {
     let mut changes = Vec::new();
+    let kind = manifest.root.find_value("kind").unwrap_or_default();
+    if kind == "CustomResourceDefinition" {
+        return changes;
+    }
+
     let ns = manifest
         .root
         .find_node("metadata")

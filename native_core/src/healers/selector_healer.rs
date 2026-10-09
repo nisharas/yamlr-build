@@ -200,6 +200,15 @@ pub fn heal_service_selectors_with_identities(
         return changes;
     }
 
+    // Kubernetes API schema forbids selectors on ExternalName services
+    if let Some(spec) = manifest.root.find_node("spec") {
+        if let Some(svc_type) = spec.find_value("type") {
+            if svc_type.trim().trim_matches('"').trim_matches('\'') == "ExternalName" {
+                return changes;
+            }
+        }
+    }
+
     let svc_name = manifest
         .root
         .find_node("metadata")

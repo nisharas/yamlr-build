@@ -67,9 +67,7 @@ fn heal_service_protocols(
 
                 // Check for gRPC indicators
                 let is_grpc = port_num == 50051
-                    || port_num == 9090
                     || target_port == "50051"
-                    || target_port == "9090"
                     || port_name.contains("grpc")
                     || port_name.contains("h2c");
 
@@ -154,7 +152,7 @@ fn heal_ingress_backend_protocols(
                         }
                     }
                     if let Some(p_num) = port.find_value("number") {
-                        if p_num == "50051" || p_num == "9090" {
+                        if p_num == "50051" {
                             targets_grpc = true;
                             break;
                         }
@@ -164,7 +162,7 @@ fn heal_ingress_backend_protocols(
                 // Check cross-resource identities for matching service with gRPC
                 for id in identities {
                     if id.kind == "Service" && id.name == target_svc_name {
-                        if id.ports.contains(&50051) || id.ports.contains(&9090) {
+                        if id.ports.contains(&50051) {
                             targets_grpc = true;
                             break;
                         }

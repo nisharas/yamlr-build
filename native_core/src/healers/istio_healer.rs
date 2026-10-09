@@ -106,15 +106,30 @@ fn heal_virtual_service(
                     }
 
                     if !weight_nodes_indices.is_empty() && total_weight != 100 {
-                        let even_split = 100 / destinations.len() as i32;
-                        let remainder = 100 % destinations.len() as i32;
+                        let mut assigned_weights = Vec::new();
+                        if total_weight > 0 {
+                            let mut current_sum = 0;
+                            for (_, w) in &weight_nodes_indices {
+                                let scaled = ((*w as f64 / total_weight as f64) * 100.0).round() as i32;
+                                assigned_weights.push(scaled);
+                                current_sum += scaled;
+                            }
+                            let diff = 100 - current_sum;
+                            if diff != 0 {
+                                if let Some((max_idx, _)) = assigned_weights.iter().enumerate().max_by_key(|(_, &v)| v) {
+                                    assigned_weights[max_idx] += diff;
+                                }
+                            }
+                        } else {
+                            let even_split = 100 / destinations.len() as i32;
+                            let remainder = 100 % destinations.len() as i32;
+                            for i in 0..destinations.len() {
+                                assigned_weights.push(if i == 0 { even_split + remainder } else { even_split });
+                            }
+                        }
 
                         for (i, dst) in destinations.iter_mut().enumerate() {
-                            let assigned = if i == 0 {
-                                even_split + remainder
-                            } else {
-                                even_split
-                            };
+                            let assigned = assigned_weights.get(i).copied().unwrap_or(0);
                             if let Some(w_node) = dst.find_node_mut("weight") {
                                 w_node.value = Some(assigned.to_string());
                                 for s in &mut w_node.shards {

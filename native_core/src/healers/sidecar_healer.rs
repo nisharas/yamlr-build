@@ -47,6 +47,13 @@ pub fn heal_legacy_sidecars(
                     sidecar_indices.push((idx, name));
                 }
             }
+
+            // CRITICAL SCHEMA GUARD: Kubernetes requires spec.containers to contain at least 1 item.
+            // If all containers match known sidecars (e.g. DaemonSet running datadog-agent),
+            // it is the PRIMARY workload container and must never be extracted into initContainers.
+            if containers.children.len() <= sidecar_indices.len() {
+                sidecar_indices.clear();
+            }
         }
 
         if sidecar_indices.is_empty() {
@@ -218,5 +225,28 @@ mod tests {
             sidecar.find_value("restartPolicy"),
             Some("Always".to_string())
         );
+    }
+
+    #[test]
+    fn test_preserve_single_container_sidecar() {
+        let yaml = r#"
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: datadog-agent
+spec:
+  template:
+    spec:
+      containers:
+      - name: datadog-agent
+        image: gcr.io/datadog/agent:latest
+"#;
+        let mut manifest = crate::structurer::native_structurize(crate::sharder::native_shard(yaml));
+        let mut telemetry = NativeTelemetry::default();
+        let changes = heal_legacy_sidecars(&mut manifest, &mut telemetry);
+        assert!(changes.is_empty());
+        let spec = manifest.root.find_pod_specs().into_iter().next().unwrap();
+        assert_eq!(spec.find_node("containers").unwrap().children.len(), 1);
+        assert!(spec.find_node("initContainers").is_none());
     }
 }
