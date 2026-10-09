@@ -341,3 +341,73 @@ fn test_execute_heal_rejects_admission_review_output() {
         );
     }
 }
+
+#[test]
+fn test_directory_mode_multi_file_identity_graph_cross_healing() {
+    let dir = tempdir().unwrap();
+    let deploy_file = dir.path().join("deployment.yaml");
+    let svc_file = dir.path().join("service.yaml");
+
+    let deploy_yaml = r#"apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payment-api
+  namespace: prod
+  labels:
+    app: payment-processor
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: payment-processor
+  template:
+    metadata:
+      labels:
+        app: payment-processor
+    spec:
+      containers:
+        - name: payment
+          image: payments:1.0.0
+          ports:
+            - containerPort: 8080
+              name: http
+"#;
+
+    let svc_yaml = r#"apiVersion: v1
+kind: Service
+metadata:
+  name: payment-api-svc
+  namespace: prod
+spec:
+  selector:
+    app: payment-processr
+  ports:
+    - port: 80
+      targetPort: 80
+"#;
+
+    fs::write(&deploy_file, deploy_yaml).unwrap();
+    fs::write(&svc_file, svc_yaml).unwrap();
+
+    let args = vec![
+        "yamlr".to_string(),
+        "heal".to_string(),
+        dir.path().to_str().unwrap().to_string(),
+        "--apply".to_string(),
+        "--exit-zero".to_string(),
+    ];
+
+    let code = execute_heal(&args);
+    assert_eq!(code, EXIT_SUCCESS);
+
+    let healed_svc = fs::read_to_string(&svc_file).unwrap();
+    assert!(
+        healed_svc.contains("payment-processor"),
+        "Service selector must be aligned across files using workspace identity graph"
+    );
+    assert!(
+        healed_svc.contains("targetPort: 8080"),
+        "Service targetPort must be aligned to containerPort 8080 across files"
+    );
+}
+

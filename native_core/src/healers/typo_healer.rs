@@ -252,6 +252,18 @@ fn heal_node_recursive(
 ) {
     let parent_path = path.join(".");
 
+    // Guard: CustomResourceDefinition OpenAPI schemas and arbitrary schema properties are 100% immune to typo coercion
+    if kind == "CustomResourceDefinition"
+        && (parent_path.starts_with("spec.versions")
+            || parent_path.starts_with("spec.validation")
+            || parent_path.contains("schema"))
+    {
+        return;
+    }
+    if parent_path.contains("openAPIV3Schema") || parent_path.contains("properties.") {
+        return;
+    }
+
     // Select candidate properties based on current AST hierarchy
     let candidates: Option<&[&str]> = if path.is_empty() {
         Some(ROOT_KEYS)
@@ -262,6 +274,8 @@ fn heal_node_recursive(
             Some(SERVICE_SPEC_KEYS)
         } else if kind == "Ingress" {
             Some(INGRESS_SPEC_KEYS)
+        } else if kind == "CustomResourceDefinition" {
+            None
         } else {
             Some(WORKLOAD_SPEC_KEYS)
         }
@@ -286,15 +300,16 @@ fn heal_node_recursive(
         Some(RESOURCE_KEYS)
     } else if parent_path.ends_with(".env") || parent_path == "env" || parent_path.ends_with(".env.-") {
         Some(ENV_KEYS)
-    } else if parent_path.ends_with("containers")
-        || parent_path.ends_with("containers.-")
-        || parent_path.ends_with("initContainers")
-        || parent_path.ends_with("initContainers.-")
-        || parent_path.ends_with("ephemeralContainers")
-        || parent_path.ends_with("ephemeralContainers.-")
-        || parent_path.contains("containers.")
-        || parent_path.contains("initContainers.")
-        || parent_path.contains("ephemeralContainers.")
+    } else if kind != "CustomResourceDefinition"
+        && (parent_path.ends_with("containers")
+            || parent_path.ends_with("containers.-")
+            || parent_path.ends_with("initContainers")
+            || parent_path.ends_with("initContainers.-")
+            || parent_path.ends_with("ephemeralContainers")
+            || parent_path.ends_with("ephemeralContainers.-")
+            || parent_path.contains(".containers.-.")
+            || parent_path.contains(".initContainers.-.")
+            || parent_path.contains(".ephemeralContainers.-."))
     {
         Some(CONTAINER_KEYS)
     } else if parent_path.contains("ingress") {

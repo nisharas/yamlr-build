@@ -9,7 +9,7 @@ use walkdir::WalkDir;
 
 use crate::cli::{EXIT_SUCCESS, EXIT_SYSTEM_ERROR, EXIT_USAGE, EXIT_VIOLATIONS};
 use crate::healing::native_reconstruct_from_semantic;
-use crate::models::{NativeSchema, NativeTelemetry};
+use crate::models::{NativeIdentity, NativeSchema, NativeTelemetry};
 use crate::schemas::native_get_schema_for_version;
 use crate::sharder::native_shard;
 use crate::structurer::native_structurize;
@@ -88,12 +88,18 @@ pub fn execute_heal(args: &[String]) -> i32 {
     }
 
     let path = Path::new(&target);
+    let workspace_identities = if path.exists() {
+        index_workspace_identities(path)
+    } else {
+        Vec::new()
+    };
 
     if is_kustomize && path.is_dir() {
         total_files += 1;
         match crate::parsers::kustomize::render_kustomize_directory(path) {
             Ok(rendered) => {
-                let (healed, changes) = heal_manifest_string_with_schemas(&rendered, &schemas);
+                let (healed, changes) =
+                    heal_manifest_string_with_schemas_and_identities(&rendered, &schemas, &workspace_identities);
                 if !changes.is_empty() {
                     total_healed += 1;
                     println!(
@@ -175,7 +181,7 @@ pub fn execute_heal(args: &[String]) -> i32 {
         }
     } else if path.is_file() {
         total_files += 1;
-        match heal_file(path, &schemas, dry_run, diff, apply) {
+        match heal_file(path, &schemas, &workspace_identities, dry_run, diff, apply) {
             Ok(true) => total_healed += 1,
             Ok(false) => {}
             Err(error) => {
@@ -200,7 +206,7 @@ pub fn execute_heal(args: &[String]) -> i32 {
                 if let Some(ext) = p.extension() {
                     if ext == "yaml" || ext == "yml" {
                         total_files += 1;
-                        match heal_file(p, &schemas, dry_run, diff, apply) {
+                        match heal_file(p, &schemas, &workspace_identities, dry_run, diff, apply) {
                             Ok(true) => total_healed += 1,
                             Ok(false) => {}
                             Err(error) => {
@@ -221,20 +227,9 @@ pub fn execute_heal(args: &[String]) -> i32 {
     let generate_stubs = parsed.get_flag("generate-stubs");
 
     if generate_stubs {
-        let discovery = match crate::discovery::native_discover_resources(target.clone()) {
-            Ok(discovery) => discovery,
-            Err(error) => {
-                eprintln!("[ERROR] Resource discovery failed: {}", error);
-                return EXIT_SYSTEM_ERROR;
-            }
-        };
-        let identities: Vec<_> = discovery
-            .iter()
-            .filter_map(|d| d.identity.clone())
-            .collect();
         let mut telemetry = NativeTelemetry::new();
         let (stubs, stub_changes) = crate::healers::stub_healer::generate_stubs_for_missing_targets(
-            &identities,
+            &workspace_identities,
             &mut telemetry,
         );
         if !stubs.is_empty() {
@@ -434,9 +429,17 @@ pub fn heal_manifest_string_for_version(content: &str, k8s_version: &str) -> (St
     heal_manifest_string_with_schemas(content, &schemas)
 }
 
-fn heal_manifest_string_with_schemas(
+pub fn heal_manifest_string_with_schemas(
     content: &str,
     schemas: &[NativeSchema],
+) -> (String, Vec<String>) {
+    heal_manifest_string_with_schemas_and_identities(content, schemas, &[])
+}
+
+pub fn heal_manifest_string_with_schemas_and_identities(
+    content: &str,
+    schemas: &[NativeSchema],
+    workspace_identities: &[NativeIdentity],
 ) -> (String, Vec<String>) {
     if content.trim().is_empty() {
         return (content.to_string(), Vec::new());
@@ -458,15 +461,33 @@ fn heal_manifest_string_with_schemas(
     };
 
     // Extract all identities across multi-document stream for cross-resource alignment
-    let mut all_identities = Vec::new();
+    let mut local_identities = Vec::new();
     for raw_doc in clean_content.split("---") {
         if raw_doc.trim().is_empty() {
             continue;
         }
         let doc_shards = native_shard(raw_doc);
         if let Some(id) = crate::identity::extract_native_identity(doc_shards) {
-            all_identities.push(id);
+            local_identities.push(id);
         }
+    }
+
+    // Merge workspace identities with local stream identities (local definitions take precedence)
+    let mut all_identities = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    for id in &local_identities {
+        let key = (id.kind.clone(), id.namespace.clone(), id.name.clone());
+        if !id.kind.is_empty() || !id.name.is_empty() {
+            seen.insert(key);
+        }
+        all_identities.push(id.clone());
+    }
+    for id in workspace_identities {
+        let key = (id.kind.clone(), id.namespace.clone(), id.name.clone());
+        if (!id.kind.is_empty() || !id.name.is_empty()) && !seen.insert(key) {
+            continue;
+        }
+        all_identities.push(id.clone());
     }
 
     let (healed_yaml, changes) = if clean_content.contains("---") {
@@ -587,9 +608,31 @@ pub fn get_manifest_apply_priority(content: &str) -> u8 {
     }
 }
 
+/// Pre-indexes resource identities across a workspace or directory to enable cross-file reference resolution.
+fn index_workspace_identities(path: &Path) -> Vec<NativeIdentity> {
+    let search_path = if path.is_file() {
+        path.parent()
+            .map(|p| {
+                if p.as_os_str().is_empty() {
+                    ".".to_string()
+                } else {
+                    p.to_string_lossy().into_owned()
+                }
+            })
+            .unwrap_or_else(|| ".".to_string())
+    } else {
+        path.to_string_lossy().into_owned()
+    };
+
+    crate::discovery::native_discover_resources(search_path)
+        .map(|discovery| discovery.into_iter().filter_map(|d| d.identity).collect())
+        .unwrap_or_default()
+}
+
 fn heal_file(
     path: &Path,
     schemas: &[NativeSchema],
+    workspace_identities: &[NativeIdentity],
     dry_run: bool,
     show_diff: bool,
     apply: bool,
@@ -597,7 +640,8 @@ fn heal_file(
     let content = fs::read_to_string(path)
         .map_err(|error| format!("failed to read '{}': {}", path.display(), error))?;
 
-    let (healed_content, changes) = heal_manifest_string_with_schemas(&content, schemas);
+    let (healed_content, changes) =
+        heal_manifest_string_with_schemas_and_identities(&content, schemas, workspace_identities);
     if changes.is_empty() {
         return Ok(false);
     }
