@@ -60,15 +60,15 @@ fn find_pod_specs_mut(node: &mut SemanticNode) -> Vec<&mut SemanticNode> {
     pod_specs
 }
 
-/// Coerces a mapping to an array if the field is strictly expected to be an array in K8s.
-pub fn coerce_object_to_array(
-    node: &mut SemanticNode,
+/// Coerces a specific named child field from an object into an array if written as a single mapping.
+pub fn coerce_field_if_mapping(
+    parent: &mut SemanticNode,
+    field_name: &str,
     telemetry: &mut NativeTelemetry,
     changes: &mut Vec<String>,
 ) {
-    for child in &mut node.children {
-        if FORCED_ARRAY_FIELDS.contains(&child.key.as_str()) && !child.children.is_empty() {
-            // If the child is already a list item ('-' or has list item shard, or nested under comment), skip
+    if let Some(child) = parent.find_node_mut(field_name) {
+        if !child.children.is_empty() {
             let is_already_list = child.children.iter().any(|c| {
                 c.key == "-"
                     || c.shards.first().map_or(false, |s| s.is_list_item)
@@ -90,14 +90,23 @@ pub fn coerce_object_to_array(
 
                 let msg = format!(
                     "Remediation [STRUCT-005]: Coerced mapping for '{}' into required Kubernetes sequence (list).",
-                    child.key
+                    field_name
                 );
                 native_record_healing_impact(telemetry, &msg);
                 changes.push(msg);
             }
         }
+    }
+}
 
-        coerce_object_to_array(child, telemetry, changes);
+/// Legacy compatibility wrapper for coerce_object_to_array.
+pub fn coerce_object_to_array(
+    node: &mut SemanticNode,
+    telemetry: &mut NativeTelemetry,
+    changes: &mut Vec<String>,
+) {
+    for field in FORCED_ARRAY_FIELDS {
+        coerce_field_if_mapping(node, field, telemetry, changes);
     }
 }
 
@@ -248,27 +257,72 @@ pub fn heal_structural_issues(
     telemetry: &mut NativeTelemetry,
 ) -> Vec<String> {
     let mut changes = Vec::new();
+    let kind = manifest.root.find_value("kind").unwrap_or_default();
 
-    // 1. Array vs Mapping enforcement
-    coerce_object_to_array(&mut manifest.root, telemetry, &mut changes);
+    // 1. Meta-Schema Invariant:
+    // CustomResourceDefinitions contain OpenAPI v3 schema definitions, not runtime workloads.
+    // Structural coercion and workload lifters must NEVER mutate CRD schemas.
+    if kind == "CustomResourceDefinition" {
+        return changes;
+    }
 
-    // 2. Pod spec and container structural repairs
+    // 2. Data Boundary Invariant:
+    // ConfigMap and Secret data blocks are opaque user payloads.
+    if kind == "ConfigMap" || kind == "Secret" {
+        return changes;
+    }
+
+    // 3. Pod spec and container structural repairs
     let pod_specs = find_pod_specs_mut(&mut manifest.root);
     for pod_spec in pod_specs {
+        // Coerce PodSpec-level array fields
+        for field in [
+            "containers",
+            "initContainers",
+            "ephemeralContainers",
+            "volumes",
+            "imagePullSecrets",
+        ] {
+            coerce_field_if_mapping(pod_spec, field, telemetry, &mut changes);
+        }
+
         // Misplaced volumes inside container
         lift_misplaced_volumes(pod_spec, telemetry, &mut changes);
 
-        // EnvFrom misnested container properties
+        // EnvFrom misnested container properties and container-level array coercion
         if let Some(containers) = pod_spec.find_node_mut("containers") {
             for container in &mut containers.children {
+                for field in ["volumeMounts", "ports", "env"] {
+                    coerce_field_if_mapping(container, field, telemetry, &mut changes);
+                }
                 lift_envfrom_misnested_fields(container, telemetry, &mut changes);
             }
         }
 
         if let Some(init_containers) = pod_spec.find_node_mut("initContainers") {
             for init_container in &mut init_containers.children {
+                for field in ["volumeMounts", "ports", "env"] {
+                    coerce_field_if_mapping(init_container, field, telemetry, &mut changes);
+                }
                 lift_envfrom_misnested_fields(init_container, telemetry, &mut changes);
             }
+        }
+    }
+
+    // 4. Role / ClusterRole rules coercion
+    if kind == "Role" || kind == "ClusterRole" {
+        coerce_field_if_mapping(&mut manifest.root, "rules", telemetry, &mut changes);
+    }
+
+    // 5. Ingress & Service networking coercion
+    if kind == "Ingress" {
+        if let Some(spec) = manifest.root.find_node_mut("spec") {
+            coerce_field_if_mapping(spec, "rules", telemetry, &mut changes);
+            coerce_field_if_mapping(spec, "tls", telemetry, &mut changes);
+        }
+    } else if kind == "Service" {
+        if let Some(spec) = manifest.root.find_node_mut("spec") {
+            coerce_field_if_mapping(spec, "ports", telemetry, &mut changes);
         }
     }
 
@@ -351,5 +405,59 @@ mod tests {
             "Ports should no longer be in envFrom item"
         );
         assert_eq!(changes.len(), 1);
+    }
+
+    #[test]
+    fn test_crd_immune_to_structural_coercion() {
+        let mut telemetry = NativeTelemetry::default();
+        let mut manifest = SemanticManifest {
+            root: SemanticNode {
+                key: String::new(),
+                value: None,
+                indent: 0,
+                is_empty_flow: false,
+                shards: Vec::new(),
+                children: vec![
+                    SemanticNode {
+                        key: "kind".to_string(),
+                        value: Some("CustomResourceDefinition".to_string()),
+                        indent: 0,
+                        is_empty_flow: false,
+                        shards: Vec::new(),
+                        children: Vec::new(),
+                    },
+                    SemanticNode {
+                        key: "spec".to_string(),
+                        value: None,
+                        indent: 0,
+                        is_empty_flow: false,
+                        shards: Vec::new(),
+                        children: vec![SemanticNode {
+                            key: "imagePullSecrets".to_string(),
+                            value: None,
+                            indent: 2,
+                            is_empty_flow: false,
+                            shards: Vec::new(),
+                            children: vec![SemanticNode {
+                                key: "type".to_string(),
+                                value: Some("array".to_string()),
+                                indent: 4,
+                                is_empty_flow: false,
+                                shards: Vec::new(),
+                                children: Vec::new(),
+                            }],
+                        }],
+                    },
+                ],
+            },
+            indent_step: 2,
+            integrity_violations: Vec::new(),
+        };
+
+        let changes = heal_structural_issues(&mut manifest, &mut telemetry);
+        assert!(changes.is_empty(), "CRD must not be mutated by structural healers");
+        let spec = manifest.root.find_node("spec").unwrap();
+        let ips = spec.find_node("imagePullSecrets").unwrap();
+        assert!(ips.find_node("-").is_none(), "imagePullSecrets in CRD schema must not be coerced to array");
     }
 }

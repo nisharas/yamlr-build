@@ -456,6 +456,8 @@ def test_floating_tag_pinned():
 kind: Deployment
 metadata:
   name: tagged-app
+  annotations:
+    yamlr.dev/pin-tags: "true"
 spec:
   template:
     spec:

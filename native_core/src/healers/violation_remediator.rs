@@ -14,38 +14,56 @@ pub fn remediate_integrity_violations(
     for violation in manifest.integrity_violations.clone() {
         match violation.rule_id.as_str() {
             "REL-003" => {
-                // Scaling War (HPA vs Replicas)
-                if let Some(spec) = manifest.root.find_node_mut("spec") {
-                    if let Some(idx) = spec.children.iter().position(|c| c.key == "replicas") {
-                        spec.children.remove(idx);
-                        let msg = "Remediation [REL-003]: Removed hardcoded 'replicas' to allow HPA scaling.".to_string();
-                        native_record_healing_impact(telemetry, &msg);
-                        changes.push(msg);
+                // Scaling War (HPA vs Replicas) - Opt-in per Trust Gate
+                let hpa_opt_in = manifest
+                    .root
+                    .find_annotation("yamlr.dev/hpa-scaling")
+                    .or_else(|| manifest.root.find_annotation("yamlr.io/hpa-scaling"))
+                    .map(|v| v.trim().trim_matches('"') == "true")
+                    .unwrap_or(false);
+
+                if hpa_opt_in {
+                    if let Some(spec) = manifest.root.find_node_mut("spec") {
+                        if let Some(idx) = spec.children.iter().position(|c| c.key == "replicas") {
+                            spec.children.remove(idx);
+                            let msg = "Remediation [REL-003]: Removed hardcoded 'replicas' to allow HPA scaling.".to_string();
+                            native_record_healing_impact(telemetry, &msg);
+                            changes.push(msg);
+                        }
                     }
                 }
             }
             "OPS-002" => {
-                // Floating Tag (Change latest to stable if possible)
-                for container in manifest.root.find_nodes_by_key_recursive_mut("image") {
-                    let mut needs_update = None;
-                    if let Some(val) = &container.value {
-                        let clean_val = val.trim_matches('"').trim_matches('\'');
-                        if clean_val.ends_with(":latest") {
-                            needs_update =
-                                Some((val.clone(), clean_val.replace(":latest", ":stable-pinned")));
+                // Floating Tag Pinning - Opt-in per Feature Scorecard Trust Gate
+                let pin_opt_in = manifest
+                    .root
+                    .find_annotation("yamlr.dev/pin-tags")
+                    .or_else(|| manifest.root.find_annotation("yamlr.io/pin-tags"))
+                    .map(|v| v.trim().trim_matches('"') == "true")
+                    .unwrap_or(false);
+
+                if pin_opt_in {
+                    for container in manifest.root.find_nodes_by_key_recursive_mut("image") {
+                        let mut needs_update = None;
+                        if let Some(val) = &container.value {
+                            let clean_val = val.trim_matches('"').trim_matches('\'');
+                            if clean_val.ends_with(":latest") {
+                                needs_update =
+                                    Some((val.clone(), clean_val.replace(":latest", ":stable-pinned")));
+                            }
                         }
-                    }
-                    if let Some((old_val, new_val)) = needs_update {
-                        container.value = Some(new_val.clone());
-                        for s in &mut container.shards {
-                            s.value = Some(new_val.clone());
+                        if let Some((old_val, new_val)) = needs_update {
+                            container.value = Some(new_val.clone());
+                            for s in &mut container.shards {
+                                s.value = Some(new_val.clone());
+                            }
+                            let msg = format!(
+                                "Remediation [OPS-002]: Pinned image '{}' to stable digest-simulation.",
+                                old_val
+                            );
+                            native_record_healing_impact(telemetry, &msg);
+                            changes.push(msg);
                         }
-                        let msg = format!(
-                            "Remediation [OPS-002]: Pinned image '{}' to stable digest-simulation.",
-                            old_val
-                        );
-                        native_record_healing_impact(telemetry, &msg);
-                        changes.push(msg);
                     }
                 }
             }
@@ -57,16 +75,25 @@ pub fn remediate_integrity_violations(
                 changes.extend(dep_changes);
             }
             "SEC-002" => {
-                // Image Pull Policy
-                for container in manifest
+                // Image Pull Policy - Opt-in
+                let pull_opt_in = manifest
                     .root
-                    .find_nodes_by_key_recursive_mut("imagePullPolicy")
-                {
-                    if container.value.as_deref() != Some("Always") {
-                        container.value = Some("Always".to_string());
-                        let msg = "Remediation [SEC-002]: Enforced 'imagePullPolicy: Always' on container.".to_string();
-                        native_record_healing_impact(telemetry, &msg);
-                        changes.push(msg);
+                    .find_annotation("yamlr.dev/pull-policy")
+                    .or_else(|| manifest.root.find_annotation("yamlr.io/pull-policy"))
+                    .map(|v| v.trim().trim_matches('"') == "true")
+                    .unwrap_or(false);
+
+                if pull_opt_in {
+                    for container in manifest
+                        .root
+                        .find_nodes_by_key_recursive_mut("imagePullPolicy")
+                    {
+                        if container.value.as_deref() != Some("Always") {
+                            container.value = Some("Always".to_string());
+                            let msg = "Remediation [SEC-002]: Enforced 'imagePullPolicy: Always' on container.".to_string();
+                            native_record_healing_impact(telemetry, &msg);
+                            changes.push(msg);
+                        }
                     }
                 }
             }

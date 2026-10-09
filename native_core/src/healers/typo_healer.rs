@@ -157,6 +157,30 @@ pub static PROBE_KEYS: &[&str] = &[
     "terminationGracePeriodSeconds",
 ];
 
+pub static SECURITY_CONTEXT_KEYS: &[&str] = &[
+    "runAsUser",
+    "runAsGroup",
+    "runAsNonRoot",
+    "readOnlyRootFilesystem",
+    "privileged",
+    "allowPrivilegeEscalation",
+    "capabilities",
+    "seLinuxOptions",
+    "seccompProfile",
+];
+
+pub static RESOURCE_KEYS: &[&str] = &[
+    "limits",
+    "requests",
+    "claims",
+];
+
+pub static ENV_KEYS: &[&str] = &[
+    "name",
+    "value",
+    "valueFrom",
+];
+
 /// Calculates standard Levenshtein edit distance between two UTF-8 strings.
 pub fn levenshtein(a: &str, b: &str) -> usize {
     let a_bytes = a.as_bytes();
@@ -256,12 +280,21 @@ fn heal_node_recursive(
         Some(SERVICE_REFERENCE_KEYS)
     } else if parent_path.ends_with(".ports") || parent_path == "ports" || parent_path.contains("spec.ports") {
         Some(SERVICE_PORT_KEYS)
+    } else if parent_path.ends_with(".securityContext") || parent_path == "securityContext" {
+        Some(SECURITY_CONTEXT_KEYS)
+    } else if parent_path.ends_with(".resources") || parent_path == "resources" {
+        Some(RESOURCE_KEYS)
+    } else if parent_path.ends_with(".env") || parent_path == "env" || parent_path.ends_with(".env.-") {
+        Some(ENV_KEYS)
     } else if parent_path.ends_with("containers")
         || parent_path.ends_with("containers.-")
         || parent_path.ends_with("initContainers")
         || parent_path.ends_with("initContainers.-")
         || parent_path.ends_with("ephemeralContainers")
         || parent_path.ends_with("ephemeralContainers.-")
+        || parent_path.contains("containers.")
+        || parent_path.contains("initContainers.")
+        || parent_path.contains("ephemeralContainers.")
     {
         Some(CONTAINER_KEYS)
     } else if parent_path.contains("ingress") {

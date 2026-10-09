@@ -80,6 +80,13 @@ pub fn heal_service_account_references(
     telemetry: &mut NativeTelemetry,
 ) -> Vec<String> {
     let mut changes = Vec::new();
+    let kind = manifest.root.find_value("kind").unwrap_or_default();
+
+    // Meta-Schema & Config Boundary Invariants
+    if kind == "CustomResourceDefinition" || kind == "ConfigMap" || kind == "Secret" {
+        return changes;
+    }
+
     let ns = manifest
         .root
         .find_node("metadata")
@@ -94,7 +101,14 @@ pub fn heal_service_account_references(
         })
         .collect();
 
-    align_workload_sa_recursive(&mut manifest.root, &ns, &sas, telemetry, &mut changes);
+    let pod_specs = manifest.root.find_pod_specs_mut();
+    if pod_specs.is_empty() {
+        align_workload_sa_recursive(&mut manifest.root, &ns, &sas, telemetry, &mut changes);
+    } else {
+        for pod_spec in pod_specs {
+            align_workload_sa_recursive(pod_spec, &ns, &sas, telemetry, &mut changes);
+        }
+    }
     changes
 }
 

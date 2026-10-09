@@ -29,12 +29,6 @@ pub fn infer_app_protocol(
         if name_lower.contains("dns") {
             return Some("dns");
         }
-        if name_lower.contains("tcp") {
-            return Some("tcp");
-        }
-        if name_lower.contains("udp") {
-            return Some("udp");
-        }
     }
 
     if let Some(num) = port_number {

@@ -194,7 +194,7 @@ mod tests {
 
     #[test]
     fn test_wasm_heal_repairs_and_returns_diff() {
-        let bad_yaml = "apiVersion: apps/v1\nkind: Deployment\nspec:\n  template:\n    spec:\n      containers:\n        - name: web\n          image: nginx:latest\n";
+        let bad_yaml = "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  annotations:\n    yamlr.dev/pin-tags: \"true\"\nspec:\n  template:\n    spec:\n      containers:\n        - name: web\n          image: nginx:latest\n";
         let res_json = wasm_heal(bad_yaml);
         let parsed: WasmHealResponse = serde_json::from_str(&res_json).unwrap();
         assert!(parsed.rules_applied > 0);
