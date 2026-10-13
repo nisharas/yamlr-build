@@ -128,6 +128,7 @@ pub fn lift_envfrom_misnested_fields(
             }
         }
 
+        let mut direct_lifted = Vec::new();
         for idx in direct_indices_to_remove.into_iter().rev() {
             let mut field_node = env_from.children.remove(idx);
             field_node.indent = container_indent + 2;
@@ -137,14 +138,17 @@ pub fn lift_envfrom_misnested_fields(
             );
             native_record_healing_impact(telemetry, &msg);
             changes.push(msg);
-            lifted_nodes.push(field_node);
+            direct_lifted.push(field_node);
         }
+        direct_lifted.reverse();
+        lifted_nodes.extend(direct_lifted);
 
-        // 1b. Lift misnested container fields inside envFrom list items
+        let mut lifted_item_nodes = Vec::new();
         for env_item in &mut env_from.children {
             let mut indices_to_remove = Vec::new();
             for (idx, field) in env_item.children.iter().enumerate() {
-                if MISNESTED_CONTAINER_KEYS.contains(&field.key.as_str()) {
+                // Only lift if field is misnested inside envFrom item (indent > container_indent + 2)
+                if MISNESTED_CONTAINER_KEYS.contains(&field.key.as_str()) && field.indent > container_indent + 2 {
                     indices_to_remove.push(idx);
                 }
             }
@@ -158,8 +162,12 @@ pub fn lift_envfrom_misnested_fields(
                 );
                 native_record_healing_impact(telemetry, &msg);
                 changes.push(msg);
-                lifted_nodes.push(field_node);
+                lifted_item_nodes.push(field_node);
             }
+
+            // Reverse lifted_item_nodes to preserve original top-to-bottom document order
+            lifted_item_nodes.reverse();
+            lifted_nodes.append(&mut lifted_item_nodes);
 
             // 2. Repair malformed ref structure (sibling 'name' next to empty configMapRef/secretRef)
             let mut sibling_name_val = None;

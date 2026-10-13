@@ -1,8 +1,13 @@
 //! High-speed manifest healing CLI handler in native Rust.
 
-use clap::{Arg, ArgAction, Command};
-use serde::Deserialize;
-use std::fs;
+pub(crate) use crate::cli::heal_args::parse_heal_arguments;
+pub use crate::cli::heal_topology::{get_manifest_apply_priority, has_critical_topological_inversion};
+pub(crate) use crate::cli::heal_topology::index_workspace_identities;
+#[allow(unused_imports)]
+pub(crate) use crate::cli::heal_writer::{heal_file, print_diff};
+pub(crate) use crate::cli::heal_adapters::{
+    handle_policy_ingestion, handle_stub_generation, heal_helm_directory, heal_kustomize_directory,
+};
 use std::path::Path;
 use std::time::Instant;
 use walkdir::WalkDir;
@@ -40,6 +45,7 @@ pub fn execute_heal(args: &[String]) -> i32 {
     let apply = parsed.get_flag("apply");
     let diff = parsed.get_flag("diff");
     let dry_run = parsed.get_flag("dry-run") || (!apply && !diff);
+    let verify_kubectl = parsed.get_flag("verify-kubectl");
 
     let is_helm = parsed.get_flag("helm");
     let is_kustomize = parsed.get_flag("kustomize");
@@ -68,6 +74,7 @@ pub fn execute_heal(args: &[String]) -> i32 {
     let schemas = native_get_schema_for_version(&k8s_version);
     let mut total_files = 0;
     let mut total_healed = 0;
+    let mut telemetry = NativeTelemetry::new();
 
     if target == "-" {
         use std::io::Read;
@@ -96,92 +103,29 @@ pub fn execute_heal(args: &[String]) -> i32 {
 
     if is_kustomize && path.is_dir() {
         total_files += 1;
-        match crate::parsers::kustomize::render_kustomize_directory(path) {
-            Ok(rendered) => {
-                let (healed, changes) =
-                    heal_manifest_string_with_schemas_and_identities(&rendered, &schemas, &workspace_identities);
-                if !changes.is_empty() {
-                    total_healed += 1;
-                    println!(
-                        "[HEAL] Kustomize overlay: {}",
-                        crate::path_utils::normalize_display_path(path)
-                    );
-                    for c in &changes {
-                        println!("       + {}", c);
-                    }
-                    if diff {
-                        print_diff(&rendered, &healed);
-                    }
-                    if apply && !dry_run {
-                        let out_path = path.join("kustomize_healed.yaml");
-                        if let Err(error) = fs::write(&out_path, &healed) {
-                            eprintln!(
-                                "[ERROR] Failed to write healed Kustomize output '{}': {}",
-                                out_path.display(),
-                                error
-                            );
-                            return EXIT_SYSTEM_ERROR;
-                        }
-                        println!(
-                            "       [APPLIED] Written composite overlay to '{}'.",
-                            out_path.display()
-                        );
-                    }
-                }
-            }
-            Err(e) => {
-                eprintln!("[ERROR] Kustomize rendering failed: {}", e);
-                return 2;
-            }
+        match heal_kustomize_directory(
+            path,
+            &schemas,
+            &workspace_identities,
+            diff,
+            apply,
+            dry_run,
+        ) {
+            Ok(true) => total_healed += 1,
+            Ok(false) => {}
+            Err(code) => return code,
         }
     } else if is_helm && path.is_dir() {
-        let chart_str = path.to_str().unwrap_or(".");
-        let helm_results = match crate::parsers::helm::heal_umbrella_chart(chart_str) {
-            Ok(results) => results,
-            Err(error) => {
-                eprintln!("[ERROR] Helm chart scan incomplete: {}", error);
-                return EXIT_SYSTEM_ERROR;
+        match heal_helm_directory(path, diff, apply, dry_run) {
+            Ok((scanned, healed)) => {
+                total_files += scanned;
+                total_healed += healed;
             }
-        };
-        total_files += helm_results.len();
-        for hr in helm_results {
-            if hr.had_changes {
-                total_healed += 1;
-                println!("[HEAL] Helm values: {}", hr.file_path);
-                for c in &hr.changes {
-                    println!("       + {}", c);
-                }
-                if diff {
-                    let orig = match fs::read_to_string(&hr.file_path) {
-                        Ok(content) => content,
-                        Err(error) => {
-                            eprintln!(
-                                "[ERROR] Failed to read Helm values file '{}': {}",
-                                hr.file_path, error
-                            );
-                            return EXIT_SYSTEM_ERROR;
-                        }
-                    };
-                    print_diff(&orig, &hr.healed_yaml);
-                }
-                if apply && !dry_run {
-                    if let Err(error) = fs::write(&hr.file_path, &hr.healed_yaml) {
-                        eprintln!(
-                            "[ERROR] Failed to write healed Helm values file '{}': {}",
-                            hr.file_path, error
-                        );
-                        return EXIT_SYSTEM_ERROR;
-                    }
-                    println!(
-                        "       [APPLIED] Written healed values to '{}'.",
-                        hr.file_path
-                    );
-                }
-            }
+            Err(code) => return code,
         }
     } else if path.is_file() {
         total_files += 1;
-        match heal_file(path, &schemas, &workspace_identities, dry_run, diff, apply) {
+        match heal_file(path, &schemas, &workspace_identities, dry_run, diff, apply, verify_kubectl, &mut telemetry) {
             Ok(true) => total_healed += 1,
             Ok(false) => {}
             Err(error) => {
@@ -206,12 +150,11 @@ pub fn execute_heal(args: &[String]) -> i32 {
                 if let Some(ext) = p.extension() {
                     if ext == "yaml" || ext == "yml" {
                         total_files += 1;
-                        match heal_file(p, &schemas, &workspace_identities, dry_run, diff, apply) {
+                        match heal_file(p, &schemas, &workspace_identities, dry_run, diff, apply, verify_kubectl, &mut telemetry) {
                             Ok(true) => total_healed += 1,
                             Ok(false) => {}
                             Err(error) => {
-                                eprintln!("[ERROR] Heal incomplete: {}", error);
-                                return EXIT_SYSTEM_ERROR;
+                                eprintln!("[WARN] Skipped '{}': {}", p.display(), error);
                             }
                         }
                     }
@@ -227,91 +170,20 @@ pub fn execute_heal(args: &[String]) -> i32 {
     let generate_stubs = parsed.get_flag("generate-stubs");
 
     if generate_stubs {
-        let mut telemetry = NativeTelemetry::new();
-        let (stubs, stub_changes) = crate::healers::stub_healer::generate_stubs_for_missing_targets(
-            &workspace_identities,
-            &mut telemetry,
-        );
-        if !stubs.is_empty() {
-            println!(
-                "\n[STUB GENERATION] Generated {} missing resource stubs:",
-                stubs.len()
-            );
-            for c in &stub_changes {
-                println!("  + {}", c);
-            }
-            if apply && !dry_run {
-                let stubs_file = if Path::new(&target).is_file() {
-                    Path::new(&target)
-                        .parent()
-                        .unwrap_or(Path::new("."))
-                        .join("yamlr_generated_stubs.yaml")
-                } else {
-                    Path::new(&target).join("yamlr_generated_stubs.yaml")
-                };
-                let combined = stubs.join("\n---\n");
-                if let Err(error) = fs::write(&stubs_file, combined) {
-                    eprintln!(
-                        "[ERROR] Failed to write generated stubs to '{}': {}",
-                        stubs_file.display(),
-                        error
-                    );
-                    return EXIT_SYSTEM_ERROR;
-                }
-                println!("  [OK] Saved stubs to '{}'.", stubs_file.display());
-            } else {
-                println!("  [DRY-RUN] Pass '--apply' to write stubs to disk.");
-            }
+        if let Err(code) = handle_stub_generation(&target, &workspace_identities, apply, dry_run) {
+            return code;
         }
     }
 
     if let Some(opa_file) = parsed.get_one::<String>("ingest-opa") {
-        match crate::remediation_io::ingest_and_heal_policy_file(
-            Path::new(&opa_file),
-            Path::new(&target),
-            "opa",
-            apply && !dry_run,
-        ) {
-            Ok(actions) => {
-                if !actions.is_empty() {
-                    println!(
-                        "\n[POLICY INGESTION - OPA] Remediated {} manifest(s):",
-                        actions.len()
-                    );
-                    for a in &actions {
-                        println!("  + {}", a);
-                    }
-                }
-            }
-            Err(e) => {
-                eprintln!("[ERROR] Ingesting OPA report failed: {}", e);
-                return 2;
-            }
+        if let Err(code) = handle_policy_ingestion(&opa_file, &target, "opa", apply, dry_run) {
+            return code;
         }
     }
 
     if let Some(kyverno_file) = parsed.get_one::<String>("ingest-kyverno") {
-        match crate::remediation_io::ingest_and_heal_policy_file(
-            Path::new(&kyverno_file),
-            Path::new(&target),
-            "kyverno",
-            apply && !dry_run,
-        ) {
-            Ok(actions) => {
-                if !actions.is_empty() {
-                    println!(
-                        "\n[POLICY INGESTION - KYVERNO] Remediated {} manifest(s):",
-                        actions.len()
-                    );
-                    for a in &actions {
-                        println!("  + {}", a);
-                    }
-                }
-            }
-            Err(e) => {
-                eprintln!("[ERROR] Ingesting Kyverno report failed: {}", e);
-                return 2;
-            }
+        if let Err(code) = handle_policy_ingestion(&kyverno_file, &target, "kyverno", apply, dry_run) {
+            return code;
         }
     }
 
@@ -332,12 +204,16 @@ pub fn execute_heal(args: &[String]) -> i32 {
         );
     }
 
+    telemetry.scans_completed = total_files;
+    telemetry.heals_completed = total_healed;
+    telemetry.total_time_saved_ms = (telemetry.potential_outages_prevented as u64 * 15 * 60 * 1000)
+        + (telemetry.heals_completed as u64 * 5 * 60 * 1000);
+
+    if parsed.get_flag("summary") {
+        println!("{}", crate::telemetry::native_get_telemetry_dashboard(&telemetry));
+    }
+
     if parsed.get_flag("otel") {
-        let mut telemetry = crate::models::NativeTelemetry::default();
-        telemetry.scans_completed = total_files;
-        telemetry.heals_completed = total_healed;
-        telemetry.total_risk_mitigated = (total_healed as f64) * 10.0;
-        telemetry.total_time_saved_ms = elapsed.as_millis() as u64;
         eprintln!(
             "\n{}",
             crate::otel_exporter::export_otel_metrics(&telemetry)
@@ -351,73 +227,6 @@ pub fn execute_heal(args: &[String]) -> i32 {
     } else {
         EXIT_SUCCESS
     }
-}
-
-pub(crate) fn parse_heal_arguments(args: &[String]) -> Result<clap::ArgMatches, clap::Error> {
-    let command_name = if args
-        .get(1)
-        .is_some_and(|arg| arg.eq_ignore_ascii_case("fix"))
-    {
-        "fix"
-    } else {
-        "heal"
-    };
-    let mut command = Command::new(command_name)
-        .disable_version_flag(true)
-        .arg(Arg::new("target").value_name("PATH").num_args(0..=1))
-        .arg(
-            Arg::new("k8s-version")
-                .long("k8s-version")
-                .visible_alias("kube-version")
-                .short('k')
-                .value_name("VERSION")
-                .value_parser(crate::schemas::validate_k8s_version),
-        )
-        .arg(
-            Arg::new("output")
-                .long("output")
-                .short('o')
-                .value_name("FORMAT")
-                .value_parser(["text", "json", "sarif"])
-                .ignore_case(true),
-        )
-        .arg(Arg::new("ingest-opa").long("ingest-opa").value_name("PATH"))
-        .arg(
-            Arg::new("ingest-kyverno")
-                .long("ingest-kyverno")
-                .value_name("PATH"),
-        )
-        .arg(
-            Arg::new("apply")
-                .long("apply")
-                .short('a')
-                .action(ArgAction::SetTrue),
-        )
-        .arg(
-            Arg::new("dry-run")
-                .long("dry-run")
-                .short('d')
-                .action(ArgAction::SetTrue),
-        )
-        .arg(
-            Arg::new("generate-stubs")
-                .long("generate-stubs")
-                .visible_alias("create-stubs")
-                .action(ArgAction::SetTrue),
-        )
-        .arg(
-            Arg::new("otel")
-                .long("otel")
-                .visible_alias("export-metrics")
-                .action(ArgAction::SetTrue),
-        );
-    for name in ["diff", "helm", "kustomize", "exit-zero"] {
-        command = command.arg(Arg::new(name).long(name).action(ArgAction::SetTrue));
-    }
-    crate::cli::parse_command_args(
-        command.group(clap::ArgGroup::new("source-adapter").args(["helm", "kustomize"])),
-        args,
-    )
 }
 
 pub fn heal_manifest_string(content: &str) -> (String, Vec<String>) {
@@ -441,28 +250,85 @@ pub fn heal_manifest_string_with_schemas_and_identities(
     schemas: &[NativeSchema],
     workspace_identities: &[NativeIdentity],
 ) -> (String, Vec<String>) {
+    let mut telemetry = NativeTelemetry::new();
+    heal_manifest_string_with_schemas_and_identities_and_telemetry(
+        content,
+        schemas,
+        workspace_identities,
+        &mut telemetry,
+    )
+}
+
+pub fn heal_manifest_string_with_schemas_and_identities_and_telemetry(
+    content: &str,
+    schemas: &[NativeSchema],
+    workspace_identities: &[NativeIdentity],
+    telemetry: &mut NativeTelemetry,
+) -> (String, Vec<String>) {
     if content.trim().is_empty() {
         return (content.to_string(), Vec::new());
     }
 
+    // Block Scalar Body Indentation Normalization (Rule SYN-015 / Trap 69)
+    let (clean_content, mut pre_heal_changes) =
+        crate::healers::block_scalar_healer::heal_block_scalar_indentation(content);
+    for change in &pre_heal_changes {
+        crate::telemetry::native_record_healing_impact(telemetry, change);
+    }
+
+    // Orphaned Indented Block Realignment (Rule SYN-016 / Trap 71)
+    let (clean_content, orphan_changes) =
+        crate::healers::orphaned_indent_healer::heal_orphaned_indented_blocks(&clean_content);
+    for change in &orphan_changes {
+        crate::telemetry::native_record_healing_impact(telemetry, change);
+    }
+    pre_heal_changes.extend(orphan_changes);
+
+    // Over-indented Sequence Items Normalization (Rule SYN-017 / Trap 72)
+    let (clean_content, seq_changes) =
+        crate::healers::sequence_indent_healer::heal_overindented_sequence_items(&clean_content);
+    for change in &seq_changes {
+        crate::telemetry::native_record_healing_impact(telemetry, change);
+    }
+    pre_heal_changes.extend(seq_changes);
+
+    // Malformed Standalone Anchor Declarations Normalization (Rule SYN-018 / Trap 73)
+    let (clean_content, anchor_changes) =
+        crate::healers::anchor_declaration_healer::heal_malformed_anchor_declarations(&clean_content);
+    for change in &anchor_changes {
+        crate::telemetry::native_record_healing_impact(telemetry, change);
+    }
+    pre_heal_changes.extend(anchor_changes);
+
+    // Empty Flow Map with Indented Children Normalization (Rule SYN-019 / Trap 77)
+    let (clean_content, empty_flow_changes) =
+        crate::healers::orphaned_indent_healer::heal_empty_flow_with_indented_children(&clean_content);
+    for change in &empty_flow_changes {
+        crate::telemetry::native_record_healing_impact(telemetry, change);
+    }
+    pre_heal_changes.extend(empty_flow_changes);
+
     // Check for Helm values configuration document
-    if crate::parsers::helm::is_helm_values_content(content) {
-        return crate::parsers::helm::heal_values_yaml(content);
+    if crate::parsers::helm::is_helm_values_content(&clean_content) {
+        let (values_healed, values_changes) = crate::parsers::helm::heal_values_yaml(&clean_content);
+        let mut total_changes = pre_heal_changes;
+        total_changes.extend(values_changes);
+        return (values_healed, total_changes);
     }
 
     // Helm & Go Template Masking (Feature 13 of 15)
-    let (clean_content, mask_reg) = if content.contains("{{") && content.contains("}}") {
-        crate::healers::template_masker::mask_template_expressions(content)
+    let (clean_content, mask_reg) = if clean_content.contains("{{") && clean_content.contains("}}") {
+        crate::healers::template_masker::mask_template_expressions(&clean_content)
     } else {
         (
-            content.to_string(),
+            clean_content,
             crate::healers::template_masker::TemplateMaskRegistry::default(),
         )
     };
 
     // Extract all identities across multi-document stream for cross-resource alignment
     let mut local_identities = Vec::new();
-    for raw_doc in clean_content.split("---") {
+    for raw_doc in crate::parsers::streaming::stream_document_slices(&clean_content) {
         if raw_doc.trim().is_empty() {
             continue;
         }
@@ -490,7 +356,10 @@ pub fn heal_manifest_string_with_schemas_and_identities(
         all_identities.push(id.clone());
     }
 
-    let (healed_yaml, changes) = if clean_content.contains("---") {
+    let doc_slices: Vec<&str> =
+        crate::parsers::streaming::stream_document_slices(&clean_content).collect();
+
+    let (healed_yaml, changes) = if doc_slices.len() > 1 {
         let line_ending = if clean_content.contains("\r\n") {
             "\r\n"
         } else {
@@ -501,7 +370,7 @@ pub fn heal_manifest_string_with_schemas_and_identities(
         let mut any_doc_changed = false;
         let mut transaction_aborted = false;
 
-        for raw_doc in clean_content.split("---") {
+        for raw_doc in &doc_slices {
             if raw_doc.trim().is_empty() {
                 continue;
             }
@@ -509,7 +378,8 @@ pub fn heal_manifest_string_with_schemas_and_identities(
                 transaction_aborted = true;
                 break;
             }
-            let (doc_healed, doc_changes) = heal_single_document(raw_doc, &all_identities, schemas);
+            let (doc_healed, doc_changes) =
+                heal_single_document(raw_doc, &all_identities, schemas, telemetry);
 
             if !doc_changes.is_empty() {
                 if native_shard(&doc_healed).is_empty() {
@@ -518,35 +388,42 @@ pub fn heal_manifest_string_with_schemas_and_identities(
                 }
                 any_doc_changed = true;
                 total_changes.extend(doc_changes);
-                healed_docs.push(doc_healed);
+                healed_docs.push(doc_healed.trim().to_string());
             } else {
                 healed_docs.push(raw_doc.trim().to_string());
             }
         }
 
-        let mut ordered_docs = healed_docs;
-        let orig_order: Vec<String> = ordered_docs.clone();
-        ordered_docs.sort_by_key(|doc| get_manifest_apply_priority(doc));
-        let order_changed = ordered_docs != orig_order;
-
-        if order_changed {
-            total_changes.push("[TOPOLOGY-001] Sorted multi-document stream to ensure CRDs and foundational resources precede dependents".to_string());
-        }
+        let (ordered_docs, order_changed) = if has_critical_topological_inversion(&healed_docs) {
+            let mut ordered = healed_docs.clone();
+            ordered.sort_by_key(|doc| get_manifest_apply_priority(doc));
+            let changed = ordered != healed_docs;
+            if changed {
+                total_changes.push("[TOPOLOGY-001] Sorted multi-document stream to ensure CRDs and foundational resources precede dependents".to_string());
+            }
+            (ordered, changed)
+        } else {
+            (healed_docs, false)
+        };
 
         if transaction_aborted || (!any_doc_changed && !order_changed) {
             (clean_content.to_string(), Vec::new())
         } else {
+            let has_leading_boundary = clean_content.trim_start().starts_with("---");
             let separator = format!("{line_ending}---{line_ending}");
             let combined = ordered_docs.join(&separator);
-            let final_yaml = if combined.ends_with(line_ending) {
-                combined
+            let mut final_yaml = if has_leading_boundary {
+                format!("---{line_ending}{combined}")
             } else {
-                format!("{}{}", combined, line_ending)
+                combined
             };
+            if !final_yaml.ends_with(line_ending) {
+                final_yaml.push_str(line_ending);
+            }
             (final_yaml, total_changes)
         }
     } else {
-        heal_single_document(&clean_content, &all_identities, schemas)
+        heal_single_document(&clean_content, &all_identities, schemas, telemetry)
     };
 
     // Unmask Helm/Go template expressions
@@ -556,30 +433,55 @@ pub fn heal_manifest_string_with_schemas_and_identities(
         healed_yaml
     };
 
-    (final_content, changes)
+    let mut all_changes = pre_heal_changes;
+    all_changes.extend(changes);
+
+    (final_content, all_changes)
 }
 
 fn heal_single_document(
     content: &str,
     identities: &[crate::models::NativeIdentity],
     schemas: &[NativeSchema],
+    telemetry: &mut NativeTelemetry,
 ) -> (String, Vec<String>) {
     let shards = native_shard(content);
     if shards.is_empty() {
         return (content.to_string(), Vec::new());
     }
 
-    let mut manifest = native_structurize(shards);
-    let mut telemetry = NativeTelemetry::new();
-    let changes = crate::healing::native_heal_manifest_with_schemas(
+    let mut manifest = native_structurize(shards.clone());
+    let mut changes = crate::healing::native_heal_manifest_with_schemas(
         &mut manifest,
         identities,
-        &mut telemetry,
+        telemetry,
         schemas,
     );
 
+    let has_syntax_repair = shards.iter().any(|s| {
+        if s.raw_line.trim().is_empty() || s.raw_line.starts_with('#') || s.is_doc_boundary || s.is_table_continuation || s.is_block {
+            return false;
+        }
+        let raw_indent = s.raw_line.len() - s.raw_line.trim_start().len();
+        // Missing colon on a key-value pair OR healed indentation shift (e.g. metadata:\nname: web)
+        (!s.is_list_item && !s.raw_line.contains(':') && (!s.key.is_empty() || s.value.is_some()))
+            || (!s.is_table_continuation && s.indent > raw_indent)
+    });
+
     if changes.is_empty() {
+        if has_syntax_repair {
+            let healed = native_reconstruct_from_semantic(&manifest);
+            if !healed.trim().is_empty() && healed != content {
+                let msg = "Remediation [SYN-001]: Realigned missing key-value colon delimiters and malformed indentation to canonical Kubernetes YAML.".to_string();
+                crate::telemetry::native_record_healing_impact(telemetry, &msg);
+                return (healed, vec![msg]);
+            }
+        }
         return (content.to_string(), Vec::new());
+    }
+
+    if has_syntax_repair {
+        changes.push("Remediation [SYN-001]: Realigned missing key-value colon delimiters and malformed indentation to canonical Kubernetes YAML.".to_string());
     }
 
     let healed = native_reconstruct_from_semantic(&manifest);
@@ -588,153 +490,6 @@ fn heal_single_document(
     }
 
     (healed, changes)
-}
-
-/// Assigns topological apply priority to Kubernetes resource kinds.
-/// Lower numbers MUST be applied before higher numbers in kubectl apply streams.
-pub fn get_manifest_apply_priority(content: &str) -> u8 {
-    let shards = native_shard(content);
-    let kind = crate::identity::extract_native_identity_ref(&shards)
-        .map(|id| id.kind)
-        .unwrap_or_default();
-
-    match kind.as_str() {
-        "Namespace" | "CustomResourceDefinition" | "ServiceAccount" => 1,
-        "ClusterRole" | "Role" | "ClusterRoleBinding" | "RoleBinding" => 2,
-        "ConfigMap" | "Secret" | "StorageClass" | "PersistentVolumeClaim" => 3,
-        "Deployment" | "StatefulSet" | "DaemonSet" | "Job" | "CronJob" | "Pod" => 4,
-        "Service" | "Ingress" | "NetworkPolicy" | "Gateway" | "HTTPRoute" => 5,
-        _ => 6,
-    }
-}
-
-/// Pre-indexes resource identities across a workspace or directory to enable cross-file reference resolution.
-fn index_workspace_identities(path: &Path) -> Vec<NativeIdentity> {
-    let search_path = if path.is_file() {
-        path.parent()
-            .map(|p| {
-                if p.as_os_str().is_empty() {
-                    ".".to_string()
-                } else {
-                    p.to_string_lossy().into_owned()
-                }
-            })
-            .unwrap_or_else(|| ".".to_string())
-    } else {
-        path.to_string_lossy().into_owned()
-    };
-
-    crate::discovery::native_discover_resources(search_path)
-        .map(|discovery| discovery.into_iter().filter_map(|d| d.identity).collect())
-        .unwrap_or_default()
-}
-
-fn heal_file(
-    path: &Path,
-    schemas: &[NativeSchema],
-    workspace_identities: &[NativeIdentity],
-    dry_run: bool,
-    show_diff: bool,
-    apply: bool,
-) -> Result<bool, String> {
-    let content = fs::read_to_string(path)
-        .map_err(|error| format!("failed to read '{}': {}", path.display(), error))?;
-
-    let (healed_content, changes) =
-        heal_manifest_string_with_schemas_and_identities(&content, schemas, workspace_identities);
-    if changes.is_empty() {
-        return Ok(false);
-    }
-
-    println!("[HEAL] {}", crate::path_utils::normalize_display_path(path));
-    for c in &changes {
-        println!("       + {}", c);
-    }
-
-    if show_diff {
-        print_diff(&content, &healed_content);
-    }
-
-    if apply && !dry_run {
-        let bak_path = path.with_extension(format!(
-            "{}.bak",
-            path.extension().and_then(|e| e.to_str()).unwrap_or("yaml")
-        ));
-        if let Err(error) = fs::copy(path, &bak_path) {
-            return Err(format!(
-                "failed to create safety backup '{}': {}",
-                bak_path.display(),
-                error
-            ));
-        }
-
-        if let Err(e) = fs::write(path, &healed_content) {
-            let rollback = fs::copy(&bak_path, path);
-            return Err(match rollback {
-                Ok(_) => format!(
-                    "write failed for '{}': {}; original restored from '{}'",
-                    path.display(),
-                    e,
-                    bak_path.display()
-                ),
-                Err(rollback_error) => format!(
-                    "write failed for '{}': {}; rollback from '{}' also failed: {}",
-                    path.display(),
-                    e,
-                    bak_path.display(),
-                    rollback_error
-                ),
-            });
-        }
-
-        // Post-Write Invariant Self-Verification across all documents in stream
-        let mut post_verify_ok = true;
-        for doc in serde_yaml::Deserializer::from_str(&healed_content) {
-            if serde_yaml::Value::deserialize(doc).is_err() {
-                post_verify_ok = false;
-                break;
-            }
-        }
-        if post_verify_ok {
-            post_verify_ok = !native_shard(&healed_content).is_empty();
-        }
-
-        if !post_verify_ok {
-            eprintln!(
-                "       [ROLLBACK] Post-write invariant violation! Restoring from {}",
-                bak_path.display()
-            );
-            return match fs::copy(&bak_path, path) {
-                Ok(_) => Err(format!(
-                    "post-write YAML validation failed for '{}'; original restored from '{}'",
-                    path.display(),
-                    bak_path.display()
-                )),
-                Err(error) => Err(format!(
-                    "post-write YAML validation failed for '{}'; rollback from '{}' also failed: {}",
-                    path.display(),
-                    bak_path.display(),
-                    error
-                )),
-            };
-        }
-
-        fs::remove_file(&bak_path).map_err(|error| {
-            format!(
-                "healed '{}' successfully but could not remove backup '{}': {}",
-                path.display(),
-                bak_path.display(),
-                error
-            )
-        })?;
-        println!("       [APPLIED] Written to disk with invariant self-verification.");
-    }
-
-    Ok(true)
-}
-
-fn print_diff(original: &str, healed: &str) {
-    crate::cli::diff_viewer::render_inline_diff(original, healed);
 }
 
 #[cfg(test)]

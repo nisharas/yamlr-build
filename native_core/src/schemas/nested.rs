@@ -194,7 +194,17 @@ pub(super) fn validate_nested_properties(
     shards.dedup_by_key(|shard| shard.line_no);
     let source = shards
         .iter()
-        .map(|shard| shard.raw_line.as_str())
+        .map(|shard| {
+            if shard.key == "value" {
+                if let Some(val) = &shard.value {
+                    if (val.starts_with('"') && val.ends_with('"')) || (val.starts_with('\'') && val.ends_with('\'')) {
+                        let indent = " ".repeat(shard.indent);
+                        return format!("{indent}value: {val}");
+                    }
+                }
+            }
+            shard.raw_line.clone()
+        })
         .collect::<Vec<_>>()
         .join("\n");
     let value: serde_yaml::Value = match serde_yaml::from_str(&source) {
@@ -232,7 +242,11 @@ fn visit(
     violations: &mut Vec<SchemaViolation>,
 ) {
     if segments.is_empty() {
-        if !matches_type(value, &property.prop_type) {
+        if !property.required && value.is_null() {
+            return;
+        }
+        let is_tolerated_bool_string = property.prop_type == "string" && value.is_bool();
+        if !matches_type(value, &property.prop_type) && !is_tolerated_bool_string {
             violations.push(SchemaViolation {
                 field_path: path.into(),
                 message: format!(
@@ -328,7 +342,15 @@ fn matches_type(value: &serde_yaml::Value, kind: &str) -> bool {
         "array" => value.is_sequence(),
         "object" => value.is_mapping(),
         "string" => value.is_string(),
-        "integer" => value.as_i64().is_some() || value.as_u64().is_some(),
+        "integer" => {
+            value.as_i64().is_some()
+                || value.as_u64().is_some()
+                || value.as_str().map_or(false, |s| {
+                    s.starts_with('0')
+                        && s.len() > 1
+                        && s.chars().all(|c| ('0'..='7').contains(&c))
+                })
+        }
         "number" => value.is_number(),
         "boolean" => value.is_bool(),
         "null" => value.is_null(),
@@ -422,6 +444,12 @@ mod tests {
     #[test]
     fn external_scalar_aliases_are_not_treated_as_objects() {
         let content = "apiVersion: v1\nkind: Service\nmetadata:\n  name: test\n  creationTimestamp: null\nspec:\n  ports:\n    - port: 80\n      targetPort: http\n";
+        assert!(validate(content).is_empty(), "{:?}", validate(content));
+    }
+
+    #[test]
+    fn test_empty_flow_object_on_newline() {
+        let content = "apiVersion: v1\nkind: Service\nmetadata:\n  name: test\n  labels:\n    {}\nspec:\n  ports:\n    - port: 80\n";
         assert!(validate(content).is_empty(), "{:?}", validate(content));
     }
 }
