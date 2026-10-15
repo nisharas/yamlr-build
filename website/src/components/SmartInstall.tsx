@@ -143,15 +143,20 @@ export default function SmartInstall() {
                                             {copied ? <Check size={18} className="text-emerald-500" /> : <Copy size={18} />}
                                         </button>
                                     </div>
-                                    {activeOS === "windows" && (
-                                        <a
-                                            href="https://github.com/yamlr/yamlr/releases/latest/download/yamlr-windows-amd64.exe"
-                                            className="inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl border border-slate-300 dark:border-slate-700 hover:border-[#4285F4] text-slate-700 dark:text-slate-300 text-xs font-bold transition-all shrink-0 hover:bg-slate-50 dark:hover:bg-slate-800"
-                                        >
-                                            <Download size={14} />
-                                            Download .exe
-                                        </a>
-                                    )}
+                                    </div>
+                                    <a
+                                        href={
+                                            activeOS === "windows"
+                                                ? "https://github.com/yamlr/yamlr/releases/latest/download/yamlr-windows-x86_64.zip"
+                                                : activeOS === "macos"
+                                                ? "https://github.com/yamlr/yamlr/releases/latest/download/yamlr-macos-aarch64.tar.gz"
+                                                : "https://github.com/yamlr/yamlr/releases/latest/download/yamlr-linux-x86_64.tar.gz"
+                                        }
+                                        className="inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl border border-slate-300 dark:border-slate-700 hover:border-[#4285F4] text-slate-700 dark:text-slate-300 text-xs font-bold transition-all shrink-0 hover:bg-slate-50 dark:hover:bg-slate-800"
+                                    >
+                                        <Download size={14} />
+                                        {activeOS === "windows" ? "Download .zip" : "Download .tar.gz"}
+                                    </a>
                                 </div>
                             </div>
                         )}

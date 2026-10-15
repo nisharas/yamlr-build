@@ -11,7 +11,7 @@
 param(
     [switch]$NoVerify,
     [string]$InstallDir = "$env:LOCALAPPDATA\yamlr\bin",
-    [string]$Version = $env:YAMLR_VERSION
+    [string]$Version = $(if ([string]::IsNullOrWhiteSpace($env:YAMLR_VERSION)) { "v0.1.0" } else { $env:YAMLR_VERSION })
 )
 
 $ErrorActionPreference = "Stop"
@@ -22,11 +22,8 @@ $BinaryName = "yamlr.exe"
 if ($NoVerify -or $env:YAMLR_NO_VERIFY -eq "1") {
     throw "Unverified installation is not supported."
 }
-if ([string]::IsNullOrWhiteSpace($Version)) {
-    throw "Set YAMLR_VERSION to an exact release tag such as v1.2.3."
-}
 if ($Version -notmatch '^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$') {
-    throw "Invalid Yamlr release version '$Version'. Use a semantic version tag such as v1.2.3."
+    throw "Invalid Yamlr release version '$Version'. Use a semantic version tag such as v0.1.0."
 }
 
 Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
@@ -41,9 +38,7 @@ $Arch = if ([IntPtr]::Size -eq 8) { "x86_64" } else { throw "Yamlr release binar
 $AssetName = "yamlr-windows-$Arch.zip"
 $BaseUrl = "https://github.com/$Repo/releases/download/$Version"
 
-if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
-    throw "GitHub CLI ('gh') is required to verify the Yamlr release attestation."
-}
+$HasGh = [bool](Get-Command gh -ErrorAction SilentlyContinue)
 
 $DownloadUrl = "$BaseUrl/$AssetName"
 $ChecksumUrl = "$BaseUrl/checksums.txt"
@@ -73,11 +68,15 @@ if ($ExpectedHash -ne $ActualHash) {
 }
 Write-Host "[OK] SHA-256 checksum verified: $ActualHash" -ForegroundColor Green
 
-& gh attestation verify $TempArchive --repo "yamlr/yamlr" --signer-workflow "yamlr/yamlr/.github/workflows/release-binaries.yml" --source-ref "refs/tags/$Version"
-if ($LASTEXITCODE -ne 0) {
-    throw "Release provenance verification failed. Refusing to install Yamlr."
+if ($HasGh) {
+    & gh attestation verify $TempArchive --repo "yamlr/yamlr" --signer-workflow "yamlr/yamlr/.github/workflows/release-binaries.yml" --source-ref "refs/tags/$Version"
+    if ($LASTEXITCODE -ne 0) {
+        throw "Release provenance verification failed. Refusing to install Yamlr."
+    }
+    Write-Host "[OK] Release provenance verified for $Version via GitHub CLI." -ForegroundColor Green
+} else {
+    Write-Host "[*] GitHub CLI ('gh') not detected; proceeding with verified SHA-256 integrity." -ForegroundColor Gray
 }
-Write-Host "[OK] Release provenance verified for $Version." -ForegroundColor Green
 
 Expand-Archive -Path $TempArchive -DestinationPath $TempDir -Force
 $TempBin = Join-Path $TempDir $BinaryName

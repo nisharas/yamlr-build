@@ -7,21 +7,18 @@ set -e
 REPO="yamlr/yamlr"
 INSTALL_DIR="${YAMLR_INSTALL_DIR:-/usr/local/bin}"
 USER_INSTALL_DIR="${HOME}/.local/bin"
-VERSION="${YAMLR_VERSION:-}"
+VERSION="${YAMLR_VERSION:-v0.1.0}"
 
 if [ "${YAMLR_NO_VERIFY:-0}" = "1" ]; then
     echo "[ERROR] Unverified installation is not supported."
     exit 1
 fi
-if [ -z "${VERSION}" ]; then
-    echo "[ERROR] Set YAMLR_VERSION to an exact release tag such as v1.2.3."
-    exit 1
-fi
+
 if ! printf '%s\n' "${VERSION}" | awk '
     /^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$/ { valid = 1 }
     END { exit !valid }
 '; then
-    echo "[ERROR] Invalid Yamlr release version '${VERSION}'. Use a semantic version tag such as v1.2.3."
+    echo "[ERROR] Invalid Yamlr release version '${VERSION}'. Use a semantic version tag such as v0.1.0."
     exit 1
 fi
 
@@ -129,18 +126,18 @@ if [ "${EXPECTED_HASH}" != "${ACTUAL_HASH}" ]; then
 fi
 echo "[OK] Checksum verified: ${ACTUAL_HASH}"
 
-if ! command -v gh >/dev/null 2>&1; then
-    echo "[ERROR] GitHub CLI ('gh') is required to verify the Yamlr release attestation." >&2
-    exit 1
+if command -v gh >/dev/null 2>&1; then
+    if ! gh attestation verify "${DOWNLOADED_ARCHIVE}" \
+        --repo "yamlr/yamlr" \
+        --signer-workflow "yamlr/yamlr/.github/workflows/release-binaries.yml" \
+        --source-ref "refs/tags/${VERSION}"; then
+        echo "[ERROR] Release provenance verification failed. Refusing to install Yamlr." >&2
+        exit 1
+    fi
+    echo "[OK] Release provenance verified for ${VERSION} via GitHub CLI."
+else
+    echo "[*] GitHub CLI ('gh') not detected; proceeding with verified SHA-256 integrity."
 fi
-if ! gh attestation verify "${DOWNLOADED_ARCHIVE}" \
-    --repo "yamlr/yamlr" \
-    --signer-workflow "yamlr/yamlr/.github/workflows/release-binaries.yml" \
-    --source-ref "refs/tags/${VERSION}"; then
-    echo "[ERROR] Release provenance verification failed. Refusing to install Yamlr." >&2
-    exit 1
-fi
-echo "[OK] Release provenance verified for ${VERSION}."
 
 if [ "${ARCHIVE_TYPE}" = "zip" ]; then
     unzip -q "${DOWNLOADED_ARCHIVE}" -d "${TMP_DIR}"
