@@ -34,6 +34,19 @@ fn align_configmaps_recursive(
                 let mut best_target = None;
                 let mut best_ratio = 0.0;
                 for cm in cms {
+                    let is_kustomize_match = cm.name.len() == clean.len() + 11
+                        && cm.name.starts_with(clean)
+                        && cm.name.chars().nth(clean.len()) == Some('-')
+                        && cm.name[clean.len() + 1..]
+                            .chars()
+                            .all(|c| c.is_ascii_alphanumeric());
+
+                    if is_kustomize_match {
+                        best_target = Some(cm.name.clone());
+                        best_ratio = 1.0;
+                        break;
+                    }
+
                     let ratio = crate::healers::selector_healer::similarity_ratio(clean, &cm.name);
                     if ratio >= CM_SIMILARITY_THRESHOLD && ratio > best_ratio {
                         best_ratio = ratio;
@@ -66,6 +79,19 @@ fn align_configmaps_recursive(
                 let mut best_target = None;
                 let mut best_ratio = 0.0;
                 for cm in cms {
+                    let is_kustomize_match = cm.name.len() == clean.len() + 11
+                        && cm.name.starts_with(clean)
+                        && cm.name.chars().nth(clean.len()) == Some('-')
+                        && cm.name[clean.len() + 1..]
+                            .chars()
+                            .all(|c| c.is_ascii_alphanumeric());
+
+                    if is_kustomize_match {
+                        best_target = Some(cm.name.clone());
+                        best_ratio = 1.0;
+                        break;
+                    }
+
                     let ratio = crate::healers::selector_healer::similarity_ratio(clean, &cm.name);
                     if ratio >= CM_SIMILARITY_THRESHOLD && ratio > best_ratio {
                         best_ratio = ratio;
@@ -112,11 +138,12 @@ pub fn heal_configmap_references(
         .and_then(|m| m.find_value("namespace"))
         .unwrap_or_else(|| "default".to_string());
 
+    let effective_ns = if ns.is_empty() { "default" } else { &ns };
     let cms: Vec<&NativeIdentity> = identities
         .iter()
         .filter(|id| {
-            id.kind == "ConfigMap"
-                && (id.namespace == ns || id.namespace.is_empty() || id.namespace == "default")
+            let target_ns = if id.namespace.is_empty() { "default" } else { &id.namespace };
+            id.kind == "ConfigMap" && target_ns == effective_ns
         })
         .collect();
 

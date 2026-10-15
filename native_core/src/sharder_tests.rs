@@ -177,3 +177,14 @@ fn test_native_shard_doc_chunks() {
         .iter()
         .any(|s| s.key == "kind" && s.value.as_deref() == Some("Deployment")));
 }
+
+#[test]
+fn test_stray_carriage_return_sanitization() {
+    // Trap 38: Accidental carriage return inside scalar value before comment
+    let content = "replicas: 3\r # prod\nimage: nginx:latest\r";
+    let shards = native_shard(content);
+    assert_eq!(shards[0].key, "replicas");
+    assert_eq!(shards[0].value.as_deref(), Some("3"));
+    assert_eq!(shards[1].key, "image");
+    assert_eq!(shards[1].value.as_deref(), Some("nginx:latest"));
+}

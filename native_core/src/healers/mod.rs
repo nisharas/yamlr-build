@@ -31,6 +31,7 @@ pub mod structural_healer;
 pub mod stub_healer;
 pub mod template_masker;
 pub mod topology_spread_healer;
+pub mod typo_dictionaries;
 pub mod typo_healer;
 
 // Reference & Operational Healing Subsystem (Phase 3)
@@ -46,6 +47,7 @@ pub mod deployment_revision_healer;
 pub mod dual_stack_healer;
 pub mod external_secret_healer;
 pub mod hpa_target_healer;
+pub mod ingress_annotation_healer;
 pub mod ingress_snippet_healer;
 pub mod ingress_tls_healer;
 pub mod kustomize_healer;
@@ -66,3 +68,28 @@ pub mod linkerd_healer;
 pub mod pipeline_healer;
 pub mod velero_healer;
 pub mod violation_remediator;
+
+// Advanced Human Error & Type Safety Healers (Phase 8)
+pub mod cis_security_healer;
+pub mod cluster_dump_healer;
+pub mod configmap_secret_healer;
+pub mod dangling_key_healer;
+pub mod dns_network_healer;
+pub mod downward_api_healer;
+pub mod graceful_rollout_healer;
+pub mod image_pull_healer;
+pub mod memory_unit_healer;
+pub mod numeric_type_healer;
+pub mod storage_ops_healer;
+pub mod annotation_contract_healer;
+pub mod node_selector_healer;
+pub mod topology_key_healer;
+pub mod session_affinity_healer;
+pub mod job_contract_healer;
+pub mod volume_contract_healer;
+pub mod service_network_contract_healer;
+pub mod block_scalar_healer;
+pub mod encoding_transcoder_healer;
+pub mod orphaned_indent_healer;
+pub mod sequence_indent_healer;
+pub mod anchor_declaration_healer;

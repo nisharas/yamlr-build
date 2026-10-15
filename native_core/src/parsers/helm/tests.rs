@@ -155,4 +155,25 @@ database:
             healed.contains("validated oci registry") || healed.contains("Validated OCI registry")
         );
     }
+
+    #[test]
+    fn test_heal_values_ambiguous_boolean_strings() {
+        let raw = r#"# Feature toggles
+enabled: "false"
+create: 'false'
+active: "true"
+otherString: "false" # Arbitrary string, should NOT be normalized
+"#;
+        let (healed, changes) = heal_values_yaml(raw);
+        assert!(changes.iter().any(|c| c.contains("TYP-001")));
+        assert!(healed.contains("enabled: false"));
+        assert!(healed.contains("create: false"));
+        assert!(healed.contains("active: true"));
+        assert!(healed.contains("otherString: \"false\""));
+
+        // Idempotency check
+        let (pass2, changes2) = heal_values_yaml(&healed);
+        assert!(changes2.is_empty());
+        assert_eq!(pass2, healed);
+    }
 }

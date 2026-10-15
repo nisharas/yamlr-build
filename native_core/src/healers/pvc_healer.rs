@@ -77,11 +77,12 @@ pub fn heal_pvc_references(
         .and_then(|m| m.find_value("namespace"))
         .unwrap_or_else(|| "default".to_string());
 
+    let effective_ns = if ns.is_empty() { "default" } else { &ns };
     let pvcs: Vec<&NativeIdentity> = identities
         .iter()
         .filter(|id| {
-            id.kind == "PersistentVolumeClaim"
-                && (id.namespace == ns || id.namespace.is_empty() || id.namespace == "default")
+            let target_ns = if id.namespace.is_empty() { "default" } else { &id.namespace };
+            id.kind == "PersistentVolumeClaim" && target_ns == effective_ns
         })
         .collect();
 
@@ -106,6 +107,18 @@ pub fn heal_storage_class_binding_modes(
         .unwrap_or(false);
 
     if !is_storage_class {
+        return changes;
+    }
+
+    let opt_in = manifest
+        .root
+        .find_annotation("yamlr.io/wait-for-first-consumer")
+        .or_else(|| manifest.root.find_annotation("yamlr.dev/wait-for-first-consumer"))
+        .or_else(|| manifest.root.find_annotation("yamlr.io/topology-binding"))
+        .map(|v| v.trim().trim_matches('"') == "true")
+        .unwrap_or(false);
+
+    if !opt_in {
         return changes;
     }
 
@@ -187,6 +200,28 @@ mod tests {
                         key: "kind".into(),
                         value: Some("StorageClass".into()),
                         children: vec![],
+                        shards: vec![],
+                        indent: 0,
+                        is_empty_flow: false,
+                    },
+                    SemanticNode {
+                        key: "metadata".into(),
+                        value: None,
+                        children: vec![SemanticNode {
+                            key: "annotations".into(),
+                            value: None,
+                            children: vec![SemanticNode {
+                                key: "yamlr.io/wait-for-first-consumer".into(),
+                                value: Some("\"true\"".into()),
+                                children: vec![],
+                                shards: vec![],
+                                indent: 4,
+                                is_empty_flow: false,
+                            }],
+                            shards: vec![],
+                            indent: 2,
+                            is_empty_flow: false,
+                        }],
                         shards: vec![],
                         indent: 0,
                         is_empty_flow: false,

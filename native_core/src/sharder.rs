@@ -17,7 +17,7 @@ pub fn native_find_comment_split(text: &str) -> i32 {
     let mut in_single_quote = false;
     let mut escaped = false;
 
-    for (i, c) in text.chars().enumerate() {
+    for (byte_idx, c) in text.char_indices() {
         if escaped {
             escaped = false;
             continue;
@@ -33,8 +33,8 @@ pub fn native_find_comment_split(text: &str) -> i32 {
         }
 
         if c == '#' && !in_double_quote && !in_single_quote {
-            if i == 0 || text.as_bytes()[i - 1].is_ascii_whitespace() {
-                return i as i32;
+            if byte_idx == 0 || text.as_bytes()[byte_idx - 1].is_ascii_whitespace() {
+                return byte_idx as i32;
             }
         }
     }
@@ -70,8 +70,9 @@ pub fn native_shard(content: &str) -> Vec<NativeShard> {
     }
 
     let stripped = native_strip_bom(content);
-    let mut content_clean = String::with_capacity(stripped.len());
-    for c in stripped.chars() {
+    let (anchored_content, _) = crate::parsers::anchor_resolver::resolve_cross_doc_anchors(stripped);
+    let mut content_clean = String::with_capacity(anchored_content.len());
+    for c in anchored_content.chars() {
         if c.is_control() && c != '\n' && c != '\r' && c != '\t' {
             continue;
         }
@@ -91,6 +92,7 @@ pub fn native_shard(content: &str) -> Vec<NativeShard> {
     let mut key_registry: HashMap<usize, Vec<String>> = HashMap::new();
     let mut current_indent = 0;
     let mut layout_buffer: Vec<String> = Vec::new();
+    let mut active_parent_map: Option<(String, usize)> = None;
 
     // Split by \n but track if it was preceded by \r
     let lines: Vec<&str> = content_clean.split('\n').collect();
@@ -224,7 +226,9 @@ pub fn native_shard(content: &str) -> Vec<NativeShard> {
         // Lexical Physics Heuristics Pass
         let next_line_peek = lines.get(i + 1).copied();
         let healed_code_part = if !is_inside_block && !code_part.is_empty() {
-            crate::parsers::heuristics::preprocess_line(code_part, next_line_peek, None, false)
+            let p_key = active_parent_map.as_ref().map(|(k, _)| k.as_str());
+            let p_ind = active_parent_map.as_ref().map(|(_, ind)| *ind);
+            crate::parsers::heuristics::preprocess_line_with_context(code_part, next_line_peek, indent, p_key, p_ind, false, false)
         } else {
             code_part.to_string()
         };
@@ -270,6 +274,7 @@ pub fn native_shard(content: &str) -> Vec<NativeShard> {
 
             is_inside_block = false;
             key_registry.clear();
+            active_parent_map = None;
             shards.push(NativeShard {
                 line_no: i + 1,
                 indent: 0,
@@ -300,10 +305,14 @@ pub fn native_shard(content: &str) -> Vec<NativeShard> {
 
         // List-Typo Recovery
         // Recognizes '-name: pod' as a list item '- name: pod'
+        // Guards against CLI flags (--port), JVM options (-XX:, -Xmx:), and schema property maps
         let is_list_item = code_part.starts_with("- ");
+        let first_char = code_part.chars().nth(1).unwrap_or(' ');
         let is_list_typo = code_part.starts_with("-")
             && code_part.len() > 1
-            && code_part.chars().nth(1).unwrap() != ' ';
+            && !code_part.starts_with("--")
+            && first_char.is_ascii_lowercase()
+            && shards.last().map_or(true, |prev| prev.key != "properties");
 
         let final_is_list_item = is_list_item || is_list_typo;
 
@@ -319,7 +328,11 @@ pub fn native_shard(content: &str) -> Vec<NativeShard> {
             code_part
         };
 
-        let mut final_indent = indent;
+        let mut final_indent = if indent == 0 && code_part.starts_with(' ') {
+            code_part.len() - code_part.trim_start().len()
+        } else {
+            indent
+        };
         if !shards.is_empty() {
             let prev = &shards[shards.len() - 1];
             if !prev.key.is_empty() && prev.value.is_none() && is_list_item && indent == 0 {
@@ -490,11 +503,16 @@ pub fn native_shard(content: &str) -> Vec<NativeShard> {
                     clean_val = clean_val.replace('\0', " [NULL] ");
                 }
 
+                // Trap 38: Strip stray carriage returns glued to unquoted scalar values before comments or line ends
+                if clean_val.contains('\r') {
+                    clean_val = clean_val.replace('\r', "");
+                }
+
                 // Clean-Stream Sanitization
                 clean_val = clean_val
                     .chars()
                     .map(|c| {
-                        if c.is_control() && c != '\t' && c != '\n' && c != '\r' {
+                        if c.is_control() && c != '\t' && c != '\n' {
                             ' '
                         } else {
                             c
@@ -519,6 +537,13 @@ pub fn native_shard(content: &str) -> Vec<NativeShard> {
             if !clean_val.is_empty() {
                 value = Some(clean_val.to_string());
             }
+        }
+
+        if !key.is_empty() && value.is_none() && !final_is_list_item {
+            active_parent_map = Some((key.clone(), final_indent));
+        } else if final_indent <= active_parent_map.as_ref().map(|(_, ind)| *ind).unwrap_or(0) && !key.is_empty() && value.is_some() {
+            // Sibling mapping at or above parent indent resets active parent map
+            active_parent_map = None;
         }
 
         shards.push(NativeShard {

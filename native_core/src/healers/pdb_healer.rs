@@ -21,6 +21,13 @@ pub fn heal_pdb_deadlocks(
         return changes;
     }
 
+    let relax_opt_in = manifest
+        .root
+        .find_annotation("yamlr.io/relax-deadlock")
+        .or_else(|| manifest.root.find_annotation("yamlr.dev/relax-deadlock"))
+        .map(|v| v.trim().trim_matches('"') == "true")
+        .unwrap_or(false);
+
     if let Some(spec) = manifest.root.find_node_mut("spec") {
         let mut min_avail_val = None;
         let mut max_unavail_val = None;
@@ -51,10 +58,11 @@ pub fn heal_pdb_deadlocks(
             }
         }
 
-        // 2. Check minAvailable: 100% -> Heals to 50% or maxUnavailable: 1
+        // 2. Check minAvailable: 100% -> Only relaxes to 50% if user explicitly opts in
+        // via 'yamlr.io/relax-deadlock: true', because 100% minAvailable might be intentional.
         if let Some(ref val) = min_avail_val {
             let clean = val.trim().trim_matches(|c| c == '\'' || c == '"');
-            if clean == "100%" {
+            if clean == "100%" && relax_opt_in {
                 if let Some(min_node) = spec.find_node_mut("minAvailable") {
                     min_node.value = Some("50%".to_string());
                     for s in &mut min_node.shards {
@@ -234,6 +242,28 @@ mod tests {
                         indent: 0,
                         is_empty_flow: false,
                         children: vec![],
+                        shards: vec![],
+                    },
+                    SemanticNode {
+                        key: "metadata".to_string(),
+                        value: None,
+                        indent: 0,
+                        is_empty_flow: false,
+                        children: vec![SemanticNode {
+                            key: "annotations".to_string(),
+                            value: None,
+                            indent: 2,
+                            is_empty_flow: false,
+                            children: vec![SemanticNode {
+                                key: "yamlr.io/relax-deadlock".to_string(),
+                                value: Some("\"true\"".to_string()),
+                                indent: 4,
+                                is_empty_flow: false,
+                                children: vec![],
+                                shards: vec![],
+                            }],
+                            shards: vec![],
+                        }],
                         shards: vec![],
                     },
                     SemanticNode {

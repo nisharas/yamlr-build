@@ -118,7 +118,7 @@ fn distill_crd_file(path: &Path, out_dir: &Path) -> Result<usize, (i32, String)>
     })?;
 
     let mut generated = 0;
-    for doc in content.split("---") {
+    for doc in crate::parsers::streaming::stream_document_slices(&content) {
         let trimmed = doc.trim();
         if trimmed.is_empty() {
             continue;

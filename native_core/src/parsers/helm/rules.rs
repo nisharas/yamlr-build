@@ -14,6 +14,7 @@ pub const RULE_HPA_001: &str = "Helm [HPA-001]";
 pub const RULE_RES_001: &str = "Helm [RES-001]";
 pub const RULE_PROBE_001: &str = "Helm [PROBE-001]";
 pub const RULE_DEP_001: &str = "Helm [DEP-001]";
+pub const RULE_TYP_001: &str = "Helm [TYP-001]";
 
 pub fn msg_pinned_tag(old_tag: &str) -> String {
     format!(
@@ -110,5 +111,12 @@ pub fn msg_normalize_oci_registry(repo: &str) -> String {
     format!(
         "{}: Recognized modern OCI registry URI scheme '{}' in values.yaml.",
         RULE_DEP_001, repo
+    )
+}
+
+pub fn msg_normalize_ambiguous_boolean(key: &str, old_val: &str, new_val: &str) -> String {
+    format!(
+        "{}: Normalized ambiguous string boolean '{}' to literal '{}' on key '{}' to prevent Go template truthiness errors in values.yaml.",
+        RULE_TYP_001, old_val, new_val, key
     )
 }

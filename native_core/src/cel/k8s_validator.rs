@@ -64,14 +64,34 @@ pub fn validate_k8s_cel_rules(
                 }
             }
             Err(e) => {
+                // If the CEL expression refers to apiserver admission state, external webhook authorizers,
+                // or cluster-scoped state (e.g. request.userInfo, authorizer.check, webhook), emit a non-blocking
+                // notice rather than hard erroring offline static validation.
+                let is_cluster_or_webhook_dependent = r.rule.contains("request.")
+                    || r.rule.contains("authorizer.")
+                    || r.rule.contains("params.")
+                    || r.rule.contains("oldObject.")
+                    || e.contains("Unknown field: request")
+                    || e.contains("Unknown field: params")
+                    || e.contains("webhook");
+
+                let (severity, prefix) = if is_cluster_or_webhook_dependent {
+                    (
+                        "Info".to_string(),
+                        "CEL [CLUSTER_WEBHOOK_DEFERRED]: Rule deferred to cluster admission webhook",
+                    )
+                } else {
+                    ("High".to_string(), "CEL evaluation error in rule")
+                };
+
                 violations.push(SchemaViolation {
                     field_path: if r.field_path.is_empty() {
                         "spec".to_string()
                     } else {
                         r.field_path.clone()
                     },
-                    message: format!("CEL evaluation error in rule '{}': {}", r.rule, e),
-                    severity: "High".to_string(),
+                    message: format!("{} '{}': {}", prefix, r.rule, e),
+                    severity,
                     suggested_value: r.rule.clone(),
                     line_no,
                 });

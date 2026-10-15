@@ -26,6 +26,14 @@ pub static KNOWN_SIDECAR_NAMES: &[&str] = &[
 /// Helper: Identifies if a container name indicates a sidecar proxy/agent.
 pub fn is_known_sidecar_name(name: &str) -> bool {
     let lower = name.to_lowercase();
+    if lower.contains("init")
+        || lower.contains("bootstrap")
+        || lower.contains("setup")
+        || lower.contains("prepare")
+        || lower.contains("config")
+    {
+        return false;
+    }
     KNOWN_SIDECAR_NAMES.iter().any(|&s| lower.contains(s))
 }
 
@@ -38,6 +46,32 @@ pub fn heal_legacy_sidecars(
 
     // Workload specs or Pod specs
     for spec in manifest.root.find_pod_specs_mut() {
+        // First check existing initContainers for known sidecars missing restartPolicy: Always
+        if let Some(init_containers) = spec.find_node_mut("initContainers") {
+            for c in &mut init_containers.children {
+                let name = c.find_value("name").unwrap_or_default();
+                if is_known_sidecar_name(&name) {
+                    if c.find_node("restartPolicy").is_none() {
+                        let indent = c.indent + 2;
+                        c.children.push(SemanticNode {
+                            key: "restartPolicy".to_string(),
+                            value: Some("Always".to_string()),
+                            indent,
+                            is_empty_flow: false,
+                            children: Vec::new(),
+                            shards: Vec::new(),
+                        });
+                        let msg = format!(
+                            "Remediation [{}]: Injected 'restartPolicy: Always' for native sidecar '{}'.",
+                            SIDECAR_RULE_ID, name
+                        );
+                        native_record_healing_impact(telemetry, &msg);
+                        changes.push(msg);
+                    }
+                }
+            }
+        }
+
         // Collect indices of sidecar containers in `containers`
         let mut sidecar_indices = Vec::new();
         if let Some(containers) = spec.find_node("containers") {
@@ -57,31 +91,6 @@ pub fn heal_legacy_sidecars(
         }
 
         if sidecar_indices.is_empty() {
-            // Also check if any existing initContainer is a sidecar missing restartPolicy: Always
-            if let Some(init_containers) = spec.find_node_mut("initContainers") {
-                for c in &mut init_containers.children {
-                    let name = c.find_value("name").unwrap_or_default();
-                    if is_known_sidecar_name(&name) {
-                        if c.find_node("restartPolicy").is_none() {
-                            let indent = c.indent + 2;
-                            c.children.push(SemanticNode {
-                                key: "restartPolicy".to_string(),
-                                value: Some("Always".to_string()),
-                                indent,
-                                is_empty_flow: false,
-                                children: Vec::new(),
-                                shards: Vec::new(),
-                            });
-                            let msg = format!(
-                                "Remediation [{}]: Injected 'restartPolicy: Always' for native sidecar '{}'.",
-                                SIDECAR_RULE_ID, name
-                            );
-                            native_record_healing_impact(telemetry, &msg);
-                            changes.push(msg);
-                        }
-                    }
-                }
-            }
             continue;
         }
 

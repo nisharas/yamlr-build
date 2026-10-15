@@ -1,3 +1,4 @@
+pub mod anchor_resolver;
 pub mod helm;
 pub mod heuristics;
 pub mod interner;
@@ -9,6 +10,7 @@ pub mod terraform;
 
 pub mod shard_finder;
 
+pub use anchor_resolver::*;
 pub use interner::*;
 pub use reconstructor::*;
 pub use shard_finder::*;

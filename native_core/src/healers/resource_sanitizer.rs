@@ -194,6 +194,57 @@ pub fn sanitize_inverted_resources(
     }
 }
 
+/// Sanitizes resource quantities:
+/// Trap 27: Removes spaces inside quantity strings (`512 Mi` -> `512Mi`, `500 m` -> `500m`).
+/// Trap 28: Corrects decimal millicores misunderstanding (`0.5m` -> `500m`).
+pub fn sanitize_resource_quantities(
+    resources_node: &mut SemanticNode,
+    telemetry: &mut NativeTelemetry,
+    changes: &mut Vec<String>,
+) {
+    for section_name in ["requests", "limits"] {
+        if let Some(section) = resources_node.find_node_mut(section_name) {
+            for prop in &mut section.children {
+                let raw_val_opt = prop.value.clone();
+                if let Some(raw_val) = raw_val_opt {
+                    let unquoted = raw_val.trim().trim_matches('"').trim_matches('\'').to_string();
+
+                    // Trap 27: Space inside unit multiplier `512 Mi` -> `512Mi`, `500 m` -> `500m`
+                    if unquoted.contains(' ') {
+                        let parts: Vec<&str> = unquoted.split_whitespace().collect();
+                        if parts.len() == 2 && parts[0].chars().all(|c| c.is_ascii_digit() || c == '.') {
+                            let collapsed = format!("{}{}", parts[0], parts[1]);
+                            prop.value = Some(format!("\"{}\"", collapsed));
+                            let msg = format!(
+                                "Remediation [RES-003]: Collapsed whitespace in resource quantity '{}' -> '{}' under {}.{}.",
+                                unquoted, collapsed, section_name, prop.key
+                            );
+                            native_record_healing_impact(telemetry, &msg);
+                            changes.push(msg);
+                            continue;
+                        }
+                    }
+
+                    // Trap 28: Decimal millicores misunderstanding `0.5m` -> `500m`
+                    if prop.key == "cpu" && unquoted.starts_with("0.") && unquoted.ends_with('m') {
+                        if let Ok(fraction) = unquoted[..unquoted.len() - 1].parse::<f64>() {
+                            let corrected_millicores = (fraction * 1000.0) as i64;
+                            let healed = format!("{}m", corrected_millicores);
+                            prop.value = Some(format!("\"{}\"", healed));
+                            let msg = format!(
+                                "Remediation [RES-004]: Corrected decimal millicores notation '{}' -> '{}' under {}.cpu.",
+                                unquoted, healed, section_name
+                            );
+                            native_record_healing_impact(telemetry, &msg);
+                            changes.push(msg);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 /// Primary Entrypoint: Sanitizes and repairs resource limits and requests.
 pub fn heal_resource_sanitization(
     manifest: &mut SemanticManifest,
@@ -208,6 +259,7 @@ pub fn heal_resource_sanitization(
     for c_node in manifest.root.find_nodes_by_key_recursive_mut("containers") {
         for container in &mut c_node.children {
             if let Some(resources_node) = container.find_node_mut("resources") {
+                sanitize_resource_quantities(resources_node, telemetry, &mut changes);
                 normalize_flat_resources(resources_node, telemetry, &mut changes);
                 sanitize_inverted_resources(resources_node, telemetry, &mut changes);
             }
@@ -232,5 +284,52 @@ mod tests {
     fn test_parse_memory() {
         assert_eq!(parse_memory_mb("256Mi"), Some(256));
         assert_eq!(parse_memory_mb("1Gi"), Some(1024));
+    }
+
+    #[test]
+    fn test_sanitize_resource_quantities() {
+        let mut resources_node = SemanticNode {
+            key: "resources".to_string(),
+            value: None,
+            indent: 4,
+            is_empty_flow: false,
+            shards: Vec::new(),
+            children: vec![
+                SemanticNode {
+                    key: "limits".to_string(),
+                    value: None,
+                    indent: 6,
+                    is_empty_flow: false,
+                    shards: Vec::new(),
+                    children: vec![
+                        SemanticNode {
+                            key: "memory".to_string(),
+                            value: Some("\"512 Mi\"".to_string()), // Trap 27: space in quantity
+                            indent: 8,
+                            is_empty_flow: false,
+                            shards: Vec::new(),
+                            children: Vec::new(),
+                        },
+                        SemanticNode {
+                            key: "cpu".to_string(),
+                            value: Some("\"0.5m\"".to_string()), // Trap 28: decimal millicores typo
+                            indent: 8,
+                            is_empty_flow: false,
+                            shards: Vec::new(),
+                            children: Vec::new(),
+                        },
+                    ],
+                },
+            ],
+        };
+
+        let mut telemetry = NativeTelemetry::default();
+        let mut changes = Vec::new();
+        sanitize_resource_quantities(&mut resources_node, &mut telemetry, &mut changes);
+
+        assert_eq!(changes.len(), 2);
+        let limits = resources_node.find_node("limits").unwrap();
+        assert_eq!(limits.find_value("memory"), Some("\"512Mi\"".to_string()));
+        assert_eq!(limits.find_value("cpu"), Some("\"500m\"".to_string()));
     }
 }

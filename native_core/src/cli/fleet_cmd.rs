@@ -10,7 +10,8 @@ use std::time::Instant;
 use walkdir::WalkDir;
 
 use crate::cli::{
-    heal_cmd::heal_manifest_string, EXIT_SUCCESS, EXIT_SYSTEM_ERROR, EXIT_VIOLATIONS,
+    heal_cmd::heal_manifest_string_with_schemas_and_identities,
+    EXIT_SUCCESS, EXIT_SYSTEM_ERROR, EXIT_VIOLATIONS,
 };
 use crate::schemas::native_get_schema_for_version;
 
@@ -72,12 +73,15 @@ pub fn execute_fleet(args: &[String]) -> i32 {
         repos
     };
 
-    let _schemas = native_get_schema_for_version(&k8s_version);
+    let schemas = native_get_schema_for_version(&k8s_version);
     let mut summaries = Vec::new();
     let mut total_scanned = 0;
     let mut total_healed = 0;
 
     for repo in &repo_list {
+        let repo_identities = crate::discovery::native_discover_resources(repo.to_string_lossy().into_owned())
+            .map(|discovery| discovery.into_iter().filter_map(|d| d.identity).collect::<Vec<_>>())
+            .unwrap_or_default();
         let mut scanned = 0;
         let mut healed = 0;
         let mut healed_paths = Vec::new();
@@ -106,7 +110,11 @@ pub fn execute_fleet(args: &[String]) -> i32 {
                                 return EXIT_SYSTEM_ERROR;
                             }
                         };
-                        let (fixed, _) = heal_manifest_string(&content);
+                        let (fixed, _) = heal_manifest_string_with_schemas_and_identities(
+                            &content,
+                            &schemas,
+                            &repo_identities,
+                        );
                         if fixed != content {
                             healed_paths.push(p.strip_prefix(repo).unwrap_or(p).to_path_buf());
                             if apply {

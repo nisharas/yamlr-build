@@ -11,6 +11,8 @@ use crate::models::{NativeIdentity, NativeTelemetry, SemanticManifest, SemanticN
 use crate::telemetry::native_record_healing_impact;
 use std::collections::HashMap;
 
+pub const RULE_SEL_002: &str = "SEL-002";
+
 pub static WORKLOAD_KINDS: &[&str] = &[
     "Deployment",
     "StatefulSet",
@@ -231,10 +233,14 @@ pub fn heal_service_selectors_with_identities(
         }
     }
 
+    let effective_svc_ns = if svc_ns.is_empty() { "default" } else { &svc_ns };
     // Filter relevant workloads
     let workloads: Vec<&NativeIdentity> = identities
         .iter()
-        .filter(|id| WORKLOAD_KINDS.contains(&id.kind.as_str()) && id.namespace == svc_ns)
+        .filter(|id| {
+            let target_ns = if id.namespace.is_empty() { "default" } else { &id.namespace };
+            WORKLOAD_KINDS.contains(&id.kind.as_str()) && target_ns == effective_svc_ns
+        })
         .collect();
 
     // Check if selector already matches any workload
@@ -257,7 +263,50 @@ pub fn heal_service_selectors_with_identities(
             .find(|w| svc_name.starts_with(&w.name) || w.name.starts_with(&svc_name));
     }
 
-    // 2. By highest label similarity
+    // 2. By suffix-stripped name (e.g. web-svc -> web, web-service -> web, api-svc -> api)
+    if best_target.is_none() {
+        let base_svc_name = svc_name
+            .trim_end_matches("-svc")
+            .trim_end_matches("-service")
+            .trim_end_matches("-headless");
+        if !base_svc_name.is_empty() {
+            best_target = workloads.iter().find(|w| {
+                let base_w_name = w
+                    .name
+                    .trim_end_matches("-deploy")
+                    .trim_end_matches("-deployment")
+                    .trim_end_matches("-app");
+                base_svc_name == base_w_name
+                    || base_svc_name == w.name
+                    || svc_name.starts_with(base_w_name)
+            });
+        }
+    }
+
+    // 3. By shared port exposure (Service port matches container port in workload)
+    if best_target.is_none() {
+        let svc_ports: Vec<i32> = if let Some(spec) = manifest.root.find_node("spec") {
+            if let Some(ports_node) = spec.find_node("ports") {
+                ports_node
+                    .children
+                    .iter()
+                    .filter_map(|p| p.find_value("port").and_then(|v| v.parse::<i32>().ok()))
+                    .collect()
+            } else {
+                Vec::new()
+            }
+        } else {
+            Vec::new()
+        };
+
+        if !svc_ports.is_empty() {
+            best_target = workloads.iter().find(|w| {
+                w.ports.iter().any(|wp| svc_ports.contains(wp))
+            });
+        }
+    }
+
+    // 4. By highest label similarity
     if best_target.is_none() && !current_selector.is_empty() {
         let mut best_score = 0.50; // minimum threshold
         for w in &workloads {
@@ -278,6 +327,56 @@ pub fn heal_service_selectors_with_identities(
         }
     }
 
+    changes
+}
+
+/// Rule SEL-002 (Trap 40): Prunes redundant `values:` field when `operator` is `Exists` or `DoesNotExist`.
+///
+/// Why: In Kubernetes `matchExpressions` across `nodeAffinity`, `podAffinity`, and `topologySpreadConstraints`,
+/// operators `Exists` and `DoesNotExist` test purely for label key presence or absence. Setting a `values`
+/// array causes immediate kube-apiserver admission rejection (`values must be empty when operator is 'Exists' or 'DoesNotExist'`).
+pub fn heal_match_expressions_unary_operators(
+    manifest: &mut SemanticManifest,
+    telemetry: &mut NativeTelemetry,
+) -> Vec<String> {
+    let mut changes = Vec::new();
+    let kind = manifest.root.find_value("kind").unwrap_or_default();
+    if kind == "CustomResourceDefinition" {
+        return changes;
+    }
+
+    fn prune_unary_values(
+        node: &mut SemanticNode,
+        telemetry: &mut NativeTelemetry,
+        changes: &mut Vec<String>,
+    ) {
+        if node.key == "matchExpressions" {
+            for expr in &mut node.children {
+                let op = expr.find_value("operator");
+                if let Some(op_str) = op {
+                    let op_clean = op_str.trim().trim_matches(|c| c == '\'' || c == '"');
+                    if op_clean == "Exists" || op_clean == "DoesNotExist" {
+                        let target_key = expr.find_value("key").unwrap_or_else(|| "unknown".to_string());
+                        if let Some(pos) = expr.children.iter().position(|c| c.key == "values") {
+                            expr.children.remove(pos);
+                            let msg = format!(
+                                "Remediation [{}]: Pruned redundant 'values' array for unary operator '{}' on key '{}'.",
+                                RULE_SEL_002, op_clean, target_key
+                            );
+                            native_record_healing_impact(telemetry, &msg);
+                            changes.push(msg);
+                        }
+                    }
+                }
+            }
+        }
+
+        for child in &mut node.children {
+            prune_unary_values(child, telemetry, changes);
+        }
+    }
+
+    prune_unary_values(&mut manifest.root, telemetry, &mut changes);
     changes
 }
 
@@ -302,5 +401,141 @@ mod tests {
 
         let aligned = suggest_aligned_selector(&selector, &labels);
         assert_eq!(aligned.get("app"), Some(&"payment-api".to_string()));
+    }
+
+    #[test]
+    fn test_heal_match_expressions_unary_operators() {
+        let mut manifest = SemanticManifest {
+            root: SemanticNode {
+                key: "root".into(),
+                value: None,
+                children: vec![
+                    SemanticNode {
+                        key: "kind".into(),
+                        value: Some("Deployment".into()),
+                        children: vec![],
+                        shards: vec![],
+                        indent: 0,
+                        is_empty_flow: false,
+                    },
+                    SemanticNode {
+                        key: "spec".into(),
+                        value: None,
+                        children: vec![
+                            SemanticNode {
+                                key: "template".into(),
+                                value: None,
+                                children: vec![
+                                    SemanticNode {
+                                        key: "spec".into(),
+                                        value: None,
+                                        children: vec![
+                                            SemanticNode {
+                                                key: "affinity".into(),
+                                                value: None,
+                                                children: vec![
+                                                    SemanticNode {
+                                                        key: "nodeAffinity".into(),
+                                                        value: None,
+                                                        children: vec![
+                                                            SemanticNode {
+                                                                key: "matchExpressions".into(),
+                                                                value: None,
+                                                                children: vec![
+                                                                    SemanticNode {
+                                                                        key: "-".into(),
+                                                                        value: None,
+                                                                        children: vec![
+                                                                            SemanticNode {
+                                                                                key: "key".into(),
+                                                                                value: Some("zone".into()),
+                                                                                children: vec![],
+                                                                                shards: vec![],
+                                                                                indent: 14,
+                                                                                is_empty_flow: false,
+                                                                            },
+                                                                            SemanticNode {
+                                                                                key: "operator".into(),
+                                                                                value: Some("Exists".into()),
+                                                                                children: vec![],
+                                                                                shards: vec![],
+                                                                                indent: 14,
+                                                                                is_empty_flow: false,
+                                                                            },
+                                                                            SemanticNode {
+                                                                                key: "values".into(),
+                                                                                value: None,
+                                                                                children: vec![
+                                                                                    SemanticNode {
+                                                                                        key: "-".into(),
+                                                                                        value: Some("us-east-1a".into()),
+                                                                                        children: vec![],
+                                                                                        shards: vec![],
+                                                                                        indent: 16,
+                                                                                        is_empty_flow: false,
+                                                                                    },
+                                                                                ],
+                                                                                shards: vec![],
+                                                                                indent: 14,
+                                                                                is_empty_flow: false,
+                                                                            },
+                                                                        ],
+                                                                        shards: vec![],
+                                                                        indent: 12,
+                                                                        is_empty_flow: false,
+                                                                    },
+                                                                ],
+                                                                shards: vec![],
+                                                                indent: 10,
+                                                                is_empty_flow: false,
+                                                            },
+                                                        ],
+                                                        shards: vec![],
+                                                        indent: 8,
+                                                        is_empty_flow: false,
+                                                    },
+                                                ],
+                                                shards: vec![],
+                                                indent: 6,
+                                                is_empty_flow: false,
+                                            },
+                                        ],
+                                        shards: vec![],
+                                        indent: 4,
+                                        is_empty_flow: false,
+                                    },
+                                ],
+                                shards: vec![],
+                                indent: 2,
+                                is_empty_flow: false,
+                            },
+                        ],
+                        shards: vec![],
+                        indent: 2,
+                        is_empty_flow: false,
+                    },
+                ],
+                shards: vec![],
+                indent: 0,
+                is_empty_flow: false,
+            },
+            indent_step: 2,
+            integrity_violations: vec![],
+        };
+
+        let mut telemetry = NativeTelemetry::default();
+        let changes = heal_match_expressions_unary_operators(&mut manifest, &mut telemetry);
+        assert_eq!(changes.len(), 1);
+
+        // Verify values was pruned
+        let spec = manifest.root.find_node("spec").unwrap();
+        let tpl = spec.find_node("template").unwrap();
+        let tpl_spec = tpl.find_node("spec").unwrap();
+        let aff = tpl_spec.find_node("affinity").unwrap();
+        let na = aff.find_node("nodeAffinity").unwrap();
+        let me = na.find_node("matchExpressions").unwrap();
+        let item = &me.children[0];
+        assert!(item.find_node("values").is_none());
+        assert_eq!(item.find_value("operator"), Some("Exists".to_string()));
     }
 }

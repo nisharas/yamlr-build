@@ -51,7 +51,7 @@ pub fn eval_cel_expression(expr: &str, object: &Value) -> Result<bool, String> {
     // 4. Handle `has(object.path.to.field)`
     if trimmed.starts_with("has(") && trimmed.ends_with(')') {
         let field_path = &trimmed[4..trimmed.len() - 1].trim();
-        return Ok(resolve_cel_path(field_path, object).is_some());
+        return Ok(resolve_cel_path(field_path, object).map_or(false, |v| !v.is_null()));
     }
 
     // 5. Handle comparison operators: ==, !=, <=, >=, <, >

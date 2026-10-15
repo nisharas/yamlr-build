@@ -151,6 +151,39 @@ pub fn heal_service_ports(
         }
     }
 
+    // Trap 29: Docker Compose port range syntax resolution in Kubernetes (e.g. `port: 8000-8010`)
+    if let Some(spec) = manifest.root.find_node_mut("spec") {
+        if let Some(ports_node) = spec.find_node_mut("ports") {
+            for port_item in &mut ports_node.children {
+                for key_name in ["port", "targetPort", "containerPort"] {
+                    if let Some(p_node) = port_item.find_node_mut(key_name) {
+                        let val_clone = p_node.value.clone();
+                        if let Some(val) = val_clone {
+                            let unquoted = val.trim().trim_matches('"').trim_matches('\'').to_string();
+                            if unquoted.contains('-') && !unquoted.starts_with('-') {
+                                if let Some((start_p, _)) = unquoted.split_once('-') {
+                                    if let Ok(p_num) = start_p.trim().parse::<i32>() {
+                                        p_node.value = Some(p_num.to_string());
+                                        let msg = format!(
+                                            "Remediation [NET-012]: Resolved port range '{}' -> single port '{}' under Service '{}' {}.",
+                                            unquoted, p_num, svc_name, key_name
+                                        );
+                                        native_record_healing_impact(telemetry, &msg);
+                                        changes.push(msg);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Trap 53 / Rule NET-014: nodePort string unquoting and range validation (30000 - 32767)
+    let np_changes = heal_service_node_ports(manifest, telemetry);
+    changes.extend(np_changes);
+
     if available_ports.is_empty() {
         return changes;
     }
@@ -158,6 +191,7 @@ pub fn heal_service_ports(
     if let Some(spec) = manifest.root.find_node_mut("spec") {
         if let Some(ports_node) = spec.find_node_mut("ports") {
             for port_item in &mut ports_node.children {
+
                 align_service_port_entry(
                     port_item,
                     &available_ports,
@@ -165,6 +199,90 @@ pub fn heal_service_ports(
                     telemetry,
                     &mut changes,
                 );
+            }
+        }
+    }
+
+    changes
+}
+
+pub const RULE_NET_014: &str = "NET-014";
+
+/// Rule NET-014 (Trap 53): Validates, unquotes, and prunes invalid out-of-range `nodePort` values.
+///
+/// Why: In Kubernetes `Service`, `spec.ports[*].nodePort` must be:
+/// 1. Strict integer scalar (quoted `"30080"` causes admission rejection).
+/// 2. Within the cluster's nodePort allocation range (default: 30000 - 32767).
+///
+/// If an author declares a low port (e.g. `nodePort: 8080`, `nodePort: 80`), kube-apiserver immediately
+/// rejects the manifest with: `provided port is not in the valid range. The range of valid ports is 30000-32767`.
+///
+/// Zero-assumption:
+/// - If stringified and within 30000..=32767, unquote it to a standard integer.
+/// - If outside 30000..=32767, prune the explicit `nodePort` field so Kubernetes dynamically assigns
+///   a free port in the valid range without admission rejection.
+pub fn heal_service_node_ports(
+    manifest: &mut SemanticManifest,
+    telemetry: &mut NativeTelemetry,
+) -> Vec<String> {
+    let mut changes = Vec::new();
+    let kind = manifest.root.find_value("kind").unwrap_or_default();
+    if kind != "Service" {
+        return changes;
+    }
+
+    let svc_name = manifest
+        .root
+        .find_node("metadata")
+        .and_then(|m| m.find_value("name"))
+        .unwrap_or_else(|| "unnamed-service".to_string());
+
+    if let Some(spec) = manifest.root.find_node_mut("spec") {
+        if let Some(ports_node) = spec.find_node_mut("ports") {
+            for port_item in &mut ports_node.children {
+                let mut should_remove_node_port = false;
+
+                if let Some(np_node) = port_item.find_node_mut("nodePort") {
+                    if let Some(val) = &np_node.value {
+                        let trimmed = val.trim();
+                        let clean = trimmed.trim_matches(|c| c == '\'' || c == '"');
+                        if let Ok(np_num) = clean.parse::<i32>() {
+                            if (30000..=32767).contains(&np_num) {
+                                // Valid range: unquote if stringified
+                                let canonical = np_num.to_string();
+                                if *val != canonical {
+                                    let old_val = val.clone();
+                                    np_node.value = Some(canonical.clone());
+                                    for s in &mut np_node.shards {
+                                        s.value = Some(canonical.clone());
+                                    }
+                                    let msg = format!(
+                                        "Remediation [{}]: Unquoted integer nodePort '{}' -> {} on Service '{}'.",
+                                        RULE_NET_014, old_val, canonical, svc_name
+                                    );
+                                    native_record_healing_impact(telemetry, &msg);
+                                    changes.push(msg);
+                                }
+                            } else {
+                                // Invalid range (< 30000 or > 32767): flag for removal so K8s auto-assigns
+                                should_remove_node_port = true;
+                            }
+                        }
+                    }
+                }
+
+                if should_remove_node_port {
+                    if let Some(idx) = port_item.children.iter().position(|c| c.key == "nodePort") {
+                        let removed = port_item.children.remove(idx);
+                        let old_val = removed.value.unwrap_or_default();
+                        let msg = format!(
+                            "Remediation [{}]: Pruned out-of-range nodePort '{}' (valid range: 30000-32767) on Service '{}' to allow dynamic cluster allocation.",
+                            RULE_NET_014, old_val, svc_name
+                        );
+                        native_record_healing_impact(telemetry, &msg);
+                        changes.push(msg);
+                    }
+                }
             }
         }
     }
@@ -229,4 +347,62 @@ mod tests {
         let tp = port_entry.find_node("targetPort").unwrap();
         assert_eq!(tp.value, Some("http".to_string()));
     }
+
+    #[test]
+    fn test_heal_port_range_trap_29() {
+        let input_yaml = r#"apiVersion: v1
+kind: Service
+metadata:
+  name: my-app
+spec:
+  ports:
+  - port: 8000-8010
+    targetPort: 8000-8010
+"#;
+        let shards = crate::sharder::native_shard(input_yaml);
+        let mut manifest = crate::structurer::native_structurize(shards);
+        let mut telemetry = NativeTelemetry::default();
+        let changes = heal_service_ports(&mut manifest, &[], &mut telemetry);
+
+        assert!(!changes.is_empty());
+        let spec = manifest.root.find_node("spec").unwrap();
+        let ports = spec.find_node("ports").unwrap();
+        let first_item = &ports.children[0];
+        assert_eq!(first_item.find_value("port"), Some("8000".to_string()));
+        assert_eq!(first_item.find_value("targetPort"), Some("8000".to_string()));
+    }
+
+    #[test]
+    fn test_heal_service_node_ports_unquoting_and_pruning() {
+        let input_yaml = r#"apiVersion: v1
+kind: Service
+metadata:
+  name: nodeport-svc
+spec:
+  type: NodePort
+  ports:
+  - name: web
+    port: 80
+    targetPort: 80
+    nodePort: "30080"
+  - name: invalid-low
+    port: 8080
+    targetPort: 8080
+    nodePort: 8080
+"#;
+        let shards = crate::sharder::native_shard(input_yaml);
+        let mut manifest = crate::structurer::native_structurize(shards);
+        let mut telemetry = NativeTelemetry::default();
+        let changes = heal_service_ports(&mut manifest, &[], &mut telemetry);
+
+        assert_eq!(changes.len(), 2);
+        assert!(changes.iter().any(|c| c.contains("Unquoted integer nodePort '\"30080\"' -> 30080")));
+        assert!(changes.iter().any(|c| c.contains("Pruned out-of-range nodePort '8080'")));
+
+        let spec = manifest.root.find_node("spec").unwrap();
+        let ports = spec.find_node("ports").unwrap();
+        assert_eq!(ports.children[0].find_value("nodePort"), Some("30080".to_string()));
+        assert!(ports.children[1].find_node("nodePort").is_none());
+    }
 }
+

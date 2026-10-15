@@ -48,9 +48,9 @@ pub fn mask_template_expressions(content: &str) -> (String, TemplateMaskRegistry
                     let full_expr = &after_start[..end_idx + 2];
                     let is_key_position = after_start[end_idx + 2..].trim_start().starts_with(':');
                     let token = if is_key_position {
-                        format!("yamlr_tpl_key_{}", counter)
+                        format!("yamlr_tpl_key_{}__", counter)
                     } else {
-                        format!("yamlr-tpl-token-{}", counter)
+                        format!("__YAMLR_TPL_VAL_{}__", counter)
                     };
                     counter += 1;
 
@@ -92,7 +92,10 @@ pub fn mask_template_expressions(content: &str) -> (String, TemplateMaskRegistry
 pub fn unmask_template_expressions(content: &str, registry: &TemplateMaskRegistry) -> String {
     let mut restored = content.to_string();
 
-    for (token, original_expr) in &registry.placeholders {
+    let mut tokens: Vec<(&String, &String)> = registry.placeholders.iter().collect();
+    tokens.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
+
+    for (token, original_expr) in tokens {
         restored = restored.replace(token, original_expr);
     }
     restored
@@ -100,7 +103,10 @@ pub fn unmask_template_expressions(content: &str, registry: &TemplateMaskRegistr
 
 /// Returns true if the given string contains a Helm/Go template control placeholder or token.
 pub fn is_dynamic_block_token(text: &str) -> bool {
-    text.contains("__YAMLR_HELM_CTRL_") || text.contains("yamlr-tpl-token-")
+    text.contains("__YAMLR_HELM_CTRL_")
+        || text.contains("__YAMLR_TPL_VAL_")
+        || text.contains("yamlr_tpl_key_")
+        || text.contains("yamlr-tpl-token-")
 }
 
 /// Returns true if a SemanticNode or any of its shards/children is driven by a dynamic template directive (e.g. toYaml, include).

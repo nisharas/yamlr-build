@@ -139,8 +139,43 @@ pub fn ensure_container_probes(
 
     let c_indent = container.indent + 2;
 
+    let has_startup = container.find_node("startupProbe").is_some();
+
     // Liveness Probe
-    if container.find_node("livenessProbe").is_none() {
+    if let Some(liveness) = container.find_node_mut("livenessProbe") {
+        // Rule REL-014: Probe Startup CrashLoop Safeguard
+        // If container has liveness probe with missing or 0 initialDelaySeconds and no startupProbe,
+        // inject initialDelaySeconds: 10 to prevent early termination during slow initialization.
+        let initial_delay_val = liveness
+            .find_node("initialDelaySeconds")
+            .and_then(|n| n.value.as_ref())
+            .and_then(|v| v.trim_matches('"').parse::<i32>().ok())
+            .unwrap_or(0);
+
+        if !has_startup && initial_delay_val == 0 {
+            if let Some(delay_node) = liveness.find_node_mut("initialDelaySeconds") {
+                delay_node.value = Some("10".to_string());
+                for s in &mut delay_node.shards {
+                    s.value = Some("10".to_string());
+                }
+            } else {
+                liveness.children.push(SemanticNode {
+                    key: "initialDelaySeconds".to_string(),
+                    value: Some("10".to_string()),
+                    indent: liveness.indent + 2,
+                    is_empty_flow: false,
+                    children: Vec::new(),
+                    shards: Vec::new(),
+                });
+            }
+            let msg = format!(
+                "Remediation [REL-014]: Injected safe 'initialDelaySeconds: 10' on livenessProbe for container '{}' to prevent early CrashLoopBackOff.",
+                container_name
+            );
+            native_record_healing_impact(telemetry, &msg);
+            changes.push(msg);
+        }
+    } else {
         let probe = build_default_probe_node("livenessProbe", detected_port, is_http, c_indent);
         container.children.push(probe);
         let msg = format!(
@@ -164,7 +199,133 @@ pub fn ensure_container_probes(
     }
 }
 
-/// Primary Entrypoint: Ensures all workload containers have health probes defined.
+/// Primary Entrypoint for REL-014: Ensures existing livenessProbes have safe initialDelaySeconds.
+/// Runs unconditionally without requiring opt-in annotation because it fixes an existing, broken configuration.
+pub fn heal_probe_crashloop_safeguards(
+    manifest: &mut SemanticManifest,
+    telemetry: &mut NativeTelemetry,
+) -> Vec<String> {
+    let mut changes = Vec::new();
+    let kind = manifest.root.find_value("kind").unwrap_or_default();
+    if kind == "CustomResourceDefinition" {
+        return changes;
+    }
+
+    let opt_in = manifest
+        .root
+        .find_annotation("yamlr.io/probe-safeguards")
+        .or_else(|| manifest.root.find_annotation("yamlr.dev/probe-safeguards"))
+        .or_else(|| manifest.root.find_annotation("yamlr.io/probes"))
+        .or_else(|| manifest.root.find_annotation("yamlr.dev/probes"))
+        .map(|v| v.trim().trim_matches('"') == "true")
+        .unwrap_or(false);
+
+    for c_node in manifest.root.find_nodes_by_key_recursive_mut("containers") {
+        for container in &mut c_node.children {
+            let container_name = container
+                .find_value("name")
+                .unwrap_or_else(|| "unknown".to_string());
+            let has_startup = container.find_node("startupProbe").is_some();
+
+            // Trap 66 / Rule PRB-006: Deadlock prevention when timeoutSeconds >= periodSeconds
+            let probe_names = ["livenessProbe", "readinessProbe", "startupProbe"];
+            for p_name in &probe_names {
+                if let Some(probe_node) = container.find_node_mut(p_name) {
+                    let timeout = probe_node
+                        .find_node("timeoutSeconds")
+                        .and_then(|n| n.value.as_ref())
+                        .and_then(|v| v.trim_matches(|c| c == '\'' || c == '"').parse::<i32>().ok())
+                        .unwrap_or(1);
+                    let period = probe_node
+                        .find_node("periodSeconds")
+                        .and_then(|n| n.value.as_ref())
+                        .and_then(|v| v.trim_matches(|c| c == '\'' || c == '"').parse::<i32>().ok())
+                        .unwrap_or(10);
+
+                    if timeout >= period && timeout > 0 {
+                        let new_period = timeout + 1;
+                        if let Some(pn) = probe_node.find_node_mut("periodSeconds") {
+                            pn.value = Some(new_period.to_string());
+                            for s in &mut pn.shards {
+                                s.value = Some(new_period.to_string());
+                            }
+                        } else {
+                            probe_node.children.push(SemanticNode {
+                                key: "periodSeconds".to_string(),
+                                value: Some(new_period.to_string()),
+                                indent: probe_node.indent + 2,
+                                is_empty_flow: false,
+                                children: Vec::new(),
+                                shards: Vec::new(),
+                            });
+                        }
+                        let msg = format!(
+                            "Remediation [PRB-006]: Fixed probe deadlock on {} for container '{}': clamped periodSeconds ({}s) to {}s (must be > timeoutSeconds {}s).",
+                            p_name, container_name, period, new_period, timeout
+                        );
+                        native_record_healing_impact(telemetry, &msg);
+                        changes.push(msg);
+                    }
+                }
+            }
+
+            if let Some(liveness) = container.find_node_mut("livenessProbe") {
+                let initial_delay_val = liveness
+                    .find_node("initialDelaySeconds")
+                    .and_then(|n| n.value.as_ref())
+                    .and_then(|v| v.trim_matches('"').parse::<i32>().ok());
+
+                // 1. Definite error: negative initialDelaySeconds is illegal in K8s schema (< 0 -> 0)
+                if let Some(neg_val) = initial_delay_val {
+                    if neg_val < 0 {
+                        if let Some(delay_node) = liveness.find_node_mut("initialDelaySeconds") {
+                            delay_node.value = Some("0".to_string());
+                            for s in &mut delay_node.shards {
+                                s.value = Some("0".to_string());
+                            }
+                            let msg = format!(
+                                "Remediation [REL-014]: Corrected invalid negative 'initialDelaySeconds: {}' -> '0' on livenessProbe for container '{}'.",
+                                neg_val, container_name
+                            );
+                            native_record_healing_impact(telemetry, &msg);
+                            changes.push(msg);
+                            continue;
+                        }
+                    }
+                }
+
+                // 2. Policy safeguard: inject initialDelaySeconds: 10 if missing/0 and opted-in
+                if opt_in && !has_startup && initial_delay_val.unwrap_or(0) == 0 {
+                    if let Some(delay_node) = liveness.find_node_mut("initialDelaySeconds") {
+                        delay_node.value = Some("10".to_string());
+                        for s in &mut delay_node.shards {
+                            s.value = Some("10".to_string());
+                        }
+                    } else {
+                        liveness.children.push(SemanticNode {
+                            key: "initialDelaySeconds".to_string(),
+                            value: Some("10".to_string()),
+                            indent: liveness.indent + 2,
+                            is_empty_flow: false,
+                            children: Vec::new(),
+                            shards: Vec::new(),
+                        });
+                    }
+                    let msg = format!(
+                        "Remediation [REL-014]: Injected safe 'initialDelaySeconds: 10' on livenessProbe for container '{}' to prevent early CrashLoopBackOff.",
+                        container_name
+                    );
+                    native_record_healing_impact(telemetry, &msg);
+                    changes.push(msg);
+                }
+            }
+        }
+    }
+
+    changes
+}
+
+/// Injects synthesized liveness and readiness probes into containers when completely missing (Opt-in via annotation).
 pub fn heal_probes(
     manifest: &mut SemanticManifest,
     telemetry: &mut NativeTelemetry,
@@ -209,5 +370,117 @@ mod tests {
         assert_eq!(changes.len(), 2);
         assert!(container.find_node("livenessProbe").is_some());
         assert!(container.find_node("readinessProbe").is_some());
+    }
+
+    #[test]
+    fn test_probe_timeout_deadlock_prevention() {
+        let mut telemetry = NativeTelemetry::default();
+        let mut manifest = SemanticManifest {
+            root: SemanticNode {
+                key: "root".to_string(),
+                value: None,
+                indent: 0,
+                is_empty_flow: false,
+                shards: Vec::new(),
+                children: vec![
+                    SemanticNode {
+                        key: "kind".to_string(),
+                        value: Some("Deployment".to_string()),
+                        indent: 0,
+                        is_empty_flow: false,
+                        children: Vec::new(),
+                        shards: Vec::new(),
+                    },
+                    SemanticNode {
+                        key: "spec".to_string(),
+                        value: None,
+                        indent: 0,
+                        is_empty_flow: false,
+                        shards: Vec::new(),
+                        children: vec![
+                            SemanticNode {
+                                key: "template".to_string(),
+                                value: None,
+                                indent: 2,
+                                is_empty_flow: false,
+                                shards: Vec::new(),
+                                children: vec![
+                                    SemanticNode {
+                                        key: "spec".to_string(),
+                                        value: None,
+                                        indent: 4,
+                                        is_empty_flow: false,
+                                        shards: Vec::new(),
+                                        children: vec![
+                                            SemanticNode {
+                                                key: "containers".to_string(),
+                                                value: None,
+                                                indent: 6,
+                                                is_empty_flow: false,
+                                                shards: Vec::new(),
+                                                children: vec![
+                                                    SemanticNode {
+                                                        key: "-".to_string(),
+                                                        value: None,
+                                                        indent: 8,
+                                                        is_empty_flow: false,
+                                                        shards: Vec::new(),
+                                                        children: vec![
+                                                            SemanticNode {
+                                                                key: "name".to_string(),
+                                                                value: Some("api".to_string()),
+                                                                indent: 10,
+                                                                is_empty_flow: false,
+                                                                children: Vec::new(),
+                                                                shards: Vec::new(),
+                                                            },
+                                                            SemanticNode {
+                                                                key: "livenessProbe".to_string(),
+                                                                value: None,
+                                                                indent: 10,
+                                                                is_empty_flow: false,
+                                                                shards: Vec::new(),
+                                                                children: vec![
+                                                                    SemanticNode {
+                                                                        key: "timeoutSeconds".to_string(),
+                                                                        value: Some("10".to_string()),
+                                                                        indent: 12,
+                                                                        is_empty_flow: false,
+                                                                        children: Vec::new(),
+                                                                        shards: Vec::new(),
+                                                                    },
+                                                                    SemanticNode {
+                                                                        key: "periodSeconds".to_string(),
+                                                                        value: Some("5".to_string()), // timeout > period!
+                                                                        indent: 12,
+                                                                        is_empty_flow: false,
+                                                                        children: Vec::new(),
+                                                                        shards: Vec::new(),
+                                                                    },
+                                                                ],
+                                                            },
+                                                        ],
+                                                    },
+                                                ],
+                                            },
+                                        ],
+                                    },
+                                ],
+                            },
+                        ],
+                    },
+                ],
+            },
+            indent_step: 2,
+            integrity_violations: Vec::new(),
+        };
+
+        let changes = heal_probe_crashloop_safeguards(&mut manifest, &mut telemetry);
+        assert_eq!(changes.len(), 1);
+        assert!(changes[0].contains("PRB-006"));
+
+        let containers = manifest.root.find_nodes_by_key_recursive("containers");
+        let lp = containers[0].children[0].find_node("livenessProbe").unwrap();
+        assert_eq!(lp.find_value("periodSeconds"), Some("11".to_string()));
     }
 }

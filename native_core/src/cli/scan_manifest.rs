@@ -86,6 +86,44 @@ pub(super) fn process_manifest_string(
             });
         }
     }
+
+    // Syntax Self-Healing Audit Pass (Rule SYN-001):
+    // Detects when the parser's in-memory lexical physics heuristics had to recover
+    // invalid YAML syntax (e.g. missing colons, keyword fusion, unquoted markers).
+    // Flags them so the developer knows disk manifests require a write-back fix.
+    for shard in &shards {
+        if !shard.raw_line.trim().is_empty() && !shard.raw_line.starts_with('#') && !shard.is_doc_boundary {
+            let (raw_code, _) = if let Some(idx) = shard.raw_line.find('#') {
+                (&shard.raw_line[..idx], &shard.raw_line[idx..])
+            } else {
+                (shard.raw_line.as_str(), "")
+            };
+            let trimmed = raw_code.trim();
+            // If the raw code was a key-value or mapping without a colon delimiter
+            if !trimmed.is_empty()
+                && !trimmed.contains(':')
+                && !trimmed.starts_with('-')
+                && !trimmed.starts_with('{')
+                && !trimmed.starts_with('[')
+                && (!shard.key.is_empty() || shard.value.is_some())
+            {
+                *total_integrity += 1;
+                results.push(ViolationRecord {
+                    file: display_name.to_string(),
+                    check_type: "syntax".to_string(),
+                    rule_id: "SYN-001".to_string(),
+                    message: format!(
+                        "Syntax Self-Healing Available: Line {} lacks standard key-value colon delimiter ('{}'). Auto-healed in-memory, run 'yamlr fmt -w' or 'yamlr heal -a' to write back.",
+                        shard.line_no,
+                        trimmed
+                    ),
+                    severity: "warning".to_string(),
+                    line: shard.line_no.max(1),
+                });
+            }
+        }
+    }
+
     Ok(())
 }
 

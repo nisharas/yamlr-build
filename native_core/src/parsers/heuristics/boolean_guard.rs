@@ -73,7 +73,8 @@ pub fn apply_boolean_guard(line: &str, in_block: bool) -> String {
         }
 
         // Check against YAML 1.1 boolean set
-        if BOOLEAN_STRINGS.contains(trimmed_val) {
+        let is_env_boolean_value = key_part.trim() == "value" && (trimmed_val == "true" || trimmed_val == "false");
+        if BOOLEAN_STRINGS.contains(trimmed_val) || is_env_boolean_value {
             // Find whitespace preceding the value
             let val_start = val_part.find(trimmed_val).unwrap_or(0);
             let space_before = &val_part[..val_start];

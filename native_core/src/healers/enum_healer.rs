@@ -32,6 +32,9 @@ pub static VOLUME_MODE_ENUM: &[&str] = &["Filesystem", "Block"];
 pub static IP_FAMILY_POLICY_ENUM: &[&str] = &["SingleStack", "PreferDualStack", "RequireDualStack"];
 pub static EXTERNAL_TRAFFIC_POLICY_ENUM: &[&str] = &["Cluster", "Local"];
 pub static POD_MANAGEMENT_POLICY_ENUM: &[&str] = &["OrderedReady", "Parallel"];
+pub static PREEMPTION_POLICY_ENUM: &[&str] = &["PreemptLowerPriority", "Never"];
+pub static MOUNT_PROPAGATION_ENUM: &[&str] = &["None", "HostToContainer", "Bidirectional"];
+pub static FS_GROUP_CHANGE_POLICY_ENUM: &[&str] = &["OnRootMismatch", "Always"];
 
 pub static BOOLEAN_KEYS: &[&str] = &[
     "hostNetwork",
@@ -39,11 +42,13 @@ pub static BOOLEAN_KEYS: &[&str] = &[
     "hostIPC",
     "automountServiceAccountToken",
     "readOnly",
+    "readOnlyRootFilesystem",
     "privileged",
     "allowPrivilegeEscalation",
     "runAsNonRoot",
     "stdin",
     "tty",
+    "optional",
 ];
 
 /// Match an input enum string against expected candidates.
@@ -176,6 +181,9 @@ fn heal_enum_node_recursive(
             "ipFamilyPolicy" => Some(IP_FAMILY_POLICY_ENUM),
             "externalTrafficPolicy" => Some(EXTERNAL_TRAFFIC_POLICY_ENUM),
             "podManagementPolicy" => Some(POD_MANAGEMENT_POLICY_ENUM),
+            "preemptionPolicy" => Some(PREEMPTION_POLICY_ENUM),
+            "mountPropagation" => Some(MOUNT_PROPAGATION_ENUM),
+            "fsGroupChangePolicy" => Some(FS_GROUP_CHANGE_POLICY_ENUM),
             "-" => {
                 if parent_key == "accessModes" {
                     Some(ACCESS_MODES_ENUM)
@@ -276,5 +284,42 @@ mod tests {
         assert_eq!(coerce_boolean_value("no"), Some("false"));
         assert_eq!(coerce_boolean_value("\"true\""), Some("true"));
         assert_eq!(coerce_boolean_value("true"), None);
+    }
+
+    #[test]
+    fn test_fuzzy_match_preemption_and_mount_propagation() {
+        // Trap 45: preemptionPolicy casing
+        assert_eq!(
+            fuzzy_match_enum("never", PREEMPTION_POLICY_ENUM),
+            Some("Never")
+        );
+        assert_eq!(
+            fuzzy_match_enum("preemptlowerpriority", PREEMPTION_POLICY_ENUM),
+            Some("PreemptLowerPriority")
+        );
+
+        // Trap 46: mountPropagation casing
+        assert_eq!(
+            fuzzy_match_enum("bidirectional", MOUNT_PROPAGATION_ENUM),
+            Some("Bidirectional")
+        );
+        assert_eq!(
+            fuzzy_match_enum("hosttocontainer", MOUNT_PROPAGATION_ENUM),
+            Some("HostToContainer")
+        );
+        assert_eq!(
+            fuzzy_match_enum("none", MOUNT_PROPAGATION_ENUM),
+            Some("None")
+        );
+
+        // Trap 50: fsGroupChangePolicy casing
+        assert_eq!(
+            fuzzy_match_enum("onrootmismatch", FS_GROUP_CHANGE_POLICY_ENUM),
+            Some("OnRootMismatch")
+        );
+        assert_eq!(
+            fuzzy_match_enum("always", FS_GROUP_CHANGE_POLICY_ENUM),
+            Some("Always")
+        );
     }
 }

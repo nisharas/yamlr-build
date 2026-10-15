@@ -179,12 +179,11 @@ pub fn format_manifest_content(content: &str) -> String {
         return content.to_string();
     }
 
-    let docs: Vec<&str> = content.split("\n---").collect();
+    let docs: Vec<&str> = crate::parsers::streaming::stream_document_slices(content).collect();
     if docs.len() > 1 {
         let mut formatted_docs = Vec::new();
         for doc in docs {
-            let trimmed = doc.trim_start_matches('\n').trim_start_matches('-');
-            let shards = native_shard(trimmed);
+            let shards = native_shard(doc);
             if shards.is_empty() {
                 formatted_docs.push(doc.to_string());
             } else {
@@ -194,7 +193,13 @@ pub fn format_manifest_content(content: &str) -> String {
                 formatted_docs.push(formatted);
             }
         }
-        return formatted_docs.join("\n---\n");
+        let has_leading = content.trim_start().starts_with("---");
+        let combined = formatted_docs.join("\n---\n");
+        return if has_leading {
+            format!("---\n{}", combined)
+        } else {
+            combined
+        };
     }
 
     let shards = native_shard(content);

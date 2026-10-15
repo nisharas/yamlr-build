@@ -57,7 +57,9 @@ def verify_golden_build():
 
     # 2. Python CLI & Gateway Suite
     print("\n[2/5] Running Python CLI & Wrapper Tests (pytest)...")
-    code, stdout, stderr, dur = run_cmd([sys.executable, "-m", "pytest", "tests", "-q"], cwd=str(root))
+    venv_py = root / ".venv" / "Scripts" / "python.exe"
+    py_exec = str(venv_py) if venv_py.exists() else sys.executable
+    code, stdout, stderr, dur = run_cmd([py_exec, "-m", "pytest", "tests", "-q"], cwd=str(root))
     py_passed = (code == 0) and ("passed" in stdout)
     report["tiers"]["python_suite"] = {
         "passed": py_passed,

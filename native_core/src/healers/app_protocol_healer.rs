@@ -43,6 +43,22 @@ pub fn infer_app_protocol(
     }
 }
 
+/// Helper: Extracts mutable references to individual ServicePort items,
+/// safely handling wrapper nodes created by leading comments or formatting shards.
+fn get_port_items_mut<'a>(ports: &'a mut SemanticNode) -> Vec<&'a mut SemanticNode> {
+    let mut items = Vec::new();
+    for child in &mut ports.children {
+        if child.key.is_empty() && !child.children.is_empty() {
+            for grand_child in &mut child.children {
+                items.push(grand_child);
+            }
+        } else {
+            items.push(child);
+        }
+    }
+    items
+}
+
 /// Aligns or injects missing `appProtocol` on Service ports.
 pub fn heal_app_protocols(
     manifest: &mut SemanticManifest,
@@ -62,12 +78,18 @@ pub fn heal_app_protocols(
 
     if let Some(spec) = manifest.root.find_node_mut("spec") {
         if let Some(ports) = spec.find_node_mut("ports") {
-            for port_node in &mut ports.children {
-                let current_app_proto = port_node.find_value("appProtocol");
-                let port_name = port_node.find_value("name");
+            let port_items = get_port_items_mut(ports);
+            for port_node in port_items {
+                let port_name = if port_node.key == "name" {
+                    port_node.value.clone()
+                } else {
+                    port_node.find_value("name")
+                };
                 let port_num = port_node
                     .find_value("port")
                     .and_then(|v| v.parse::<i32>().ok());
+
+                let current_app_proto = port_node.find_value("appProtocol");
 
                 if let Some(ref proto) = current_app_proto {
                     let proto_clean = proto.trim().trim_matches('"').trim_matches('\'');
@@ -86,8 +108,15 @@ pub fn heal_app_protocols(
                             changes.push(msg);
                         }
                     }
+                } else if !port_node.find_nodes_by_key_recursive("appProtocol").is_empty()
+                    || port_node.shards.iter().any(|s| s.key == "appProtocol")
+                {
+                    // Port item already has appProtocol in shards or subtree - skip injection
                 } else if let Some(inferred) = infer_app_protocol(port_name.as_deref(), port_num) {
-                    let indent = port_node.indent + 2;
+                    let indent = port_node
+                        .children
+                        .first()
+                        .map_or(port_node.indent + 2, |c| c.indent);
                     port_node.children.push(SemanticNode {
                         key: "appProtocol".to_string(),
                         value: Some(inferred.to_string()),
@@ -199,5 +228,28 @@ mod tests {
         let ports = spec.find_node("ports").unwrap();
         let port_0 = &ports.children[0];
         assert_eq!(port_0.find_value("appProtocol"), Some("http".to_string()));
+    }
+
+    #[test]
+    fn test_tekton_service_reproduction() {
+        let raw = "apiVersion: v1\nkind: Service\nmetadata:\n  name: tekton-pipelines-webhook\nspec:\n  ports:\n    # Define metrics and profiling for them to be accessible within service meshes.\n    - name: http-metrics\n      port: 9090\n      targetPort: metrics\n    - name: http-profiling\n      port: 8008\n      targetPort: profiling\n    - name: https-webhook\n      port: 443\n      targetPort: https-webhook\n    - name: probes\n      port: 8080\n      targetPort: probes\n      appProtocol: http\n";
+        let shards = crate::sharder::native_shard(raw);
+        let mut manifest = crate::structurer::native_structurize(shards);
+        let spec = manifest.root.find_node("spec").unwrap();
+        let ports = spec.find_node("ports").unwrap();
+        for (i, p) in ports.children.iter().enumerate() {
+            eprintln!("Before heal port {} (key='{}', val={:?}): children={:?}", i, p.key, p.value, p.children.iter().map(|c| (&c.key, &c.value)).collect::<Vec<_>>());
+        }
+        let mut telemetry = NativeTelemetry::default();
+        let _changes = heal_app_protocols(&mut manifest, &mut telemetry);
+        let spec = manifest.root.find_node("spec").unwrap();
+        let ports = spec.find_node("ports").unwrap();
+        for (i, p) in ports.children.iter().enumerate() {
+            eprintln!("After heal port {} (key='{}', val={:?}): children={:?}", i, p.key, p.value, p.children.iter().map(|c| (&c.key, &c.value)).collect::<Vec<_>>());
+        }
+        let reconstructed = crate::parsers::reconstructor::native_reconstruct_from_semantic(&manifest);
+        eprintln!("Reconstructed:\n{}", reconstructed);
+        let de: Result<serde_yaml::Value, _> = serde_yaml::from_str(&reconstructed);
+        assert!(de.is_ok(), "Deserialization failed: {:?}", de.err());
     }
 }

@@ -50,6 +50,123 @@ pub fn native_heal_manifest_with_schemas(
         crate::healers::resource_sanitizer::heal_resource_sanitization(manifest, telemetry);
     changes.extend(res_changes);
 
+    // Sanitizes fatal memory units and millibytes (Rule RES-004)
+    let mem_unit_changes =
+        crate::healers::memory_unit_healer::heal_memory_units(manifest, telemetry);
+    changes.extend(mem_unit_changes);
+
+    // Normalizes quoted integers on strict integer schema fields (Rule TYP-002)
+    let int_norm_changes =
+        crate::healers::numeric_type_healer::heal_quoted_integers(manifest, telemetry);
+    changes.extend(int_norm_changes);
+
+    // Aligns container image tags with imagePullPolicy (Rule IMG-002)
+    let img_pull_changes =
+        crate::healers::image_pull_healer::heal_image_pull_policy(manifest, telemetry);
+    changes.extend(img_pull_changes);
+
+    // Prunes dangling null arrays left behind by commented sequences (Rule SYN-008)
+    let array_prune_changes =
+        crate::healers::dangling_key_healer::heal_dangling_arrays(manifest, telemetry);
+    changes.extend(array_prune_changes);
+
+    // Scans for sensitive plaintext credentials in ConfigMaps (Rule SEC-016)
+    let cm_secret_changes =
+        crate::healers::configmap_secret_healer::scan_and_remediate_configmap_secrets(
+            manifest, telemetry,
+        );
+    changes.extend(cm_secret_changes);
+
+    // Safeguards livenessProbes with safe initialDelaySeconds against early CrashLoopBackOff (Rule REL-014)
+    let probe_guard_changes =
+        crate::healers::probe_healer::heal_probe_crashloop_safeguards(manifest, telemetry);
+    changes.extend(probe_guard_changes);
+
+    // Batch A: Graceful Rollouts, PreStop Draining & Probe Decoupling (Rules REL-015, REL-017)
+    let rollout_changes =
+        crate::healers::graceful_rollout_healer::heal_graceful_rollouts(manifest, telemetry);
+    changes.extend(rollout_changes);
+
+    // Batch B: CoreDNS ExternalName FQDN, HostPort Anti-Affinity & SessionAffinity (Rules NET-009, NET-010, NET-012, NET-013)
+    let dns_changes =
+        crate::healers::dns_network_healer::heal_external_name_dns(manifest, telemetry);
+    changes.extend(dns_changes);
+    let hostport_changes =
+        crate::healers::dns_network_healer::heal_hostport_anti_affinity(manifest, telemetry);
+    changes.extend(hostport_changes);
+    let headless_changes =
+        crate::healers::dns_network_healer::heal_headless_service_cluster_ip(manifest, telemetry);
+    changes.extend(headless_changes);
+    let affinity_timeout_changes =
+        crate::healers::dns_network_healer::heal_session_affinity_timeout(manifest, telemetry);
+    changes.extend(affinity_timeout_changes);
+
+    // Rule ANN-001 (Trap 48) & Rule ING-002 (Trap 52): Normalizes boolean annotation string contracts & ingressClassName
+    let annotation_contract_changes =
+        crate::healers::annotation_contract_healer::heal_annotation_contracts(manifest, telemetry);
+    changes.extend(annotation_contract_changes);
+
+    // Rule TYP-004 (Trap 51): Flattens sequence list syntax under nodeSelector into valid key-value map
+    let node_selector_changes =
+        crate::healers::node_selector_healer::heal_node_selector_syntax(manifest, telemetry);
+    changes.extend(node_selector_changes);
+
+    // Rule TOPO-001 (Trap 54): Modernizes deprecated beta topology and failure-domain keys to GA equivalents
+    let topology_key_changes =
+        crate::healers::topology_key_healer::heal_topology_keys(manifest, telemetry);
+    changes.extend(topology_key_changes);
+
+    // Rule NET-015 (Trap 55): Reconciles Service sessionAffinity with sessionAffinityConfig
+    let session_affinity_changes =
+        crate::healers::session_affinity_healer::heal_session_affinity_mismatch(manifest, telemetry);
+    changes.extend(session_affinity_changes);
+
+    // Rule JOB-001 (Trap 56), JOB-002 (Trap 63), JOB-003 (Trap 64): Job restartPolicy, TTL seconds, completionMode
+    let job_restart_changes =
+        crate::healers::job_contract_healer::heal_job_restart_policy(manifest, telemetry);
+    changes.extend(job_restart_changes);
+
+    // Rule SEC-023 (Trap 61) & Rule VOL-001 (Trap 65): Volume Contracts (hostPath type, emptyDir medium)
+    let vol_contract_changes =
+        crate::healers::volume_contract_healer::heal_volume_contracts(manifest, telemetry);
+    changes.extend(vol_contract_changes);
+
+    // Rule NET-016 (Trap 62): Service publishNotReadyAddresses boolean contract & annotation promotion
+    let svc_net_changes =
+        crate::healers::service_network_contract_healer::heal_service_publish_not_ready_addresses(manifest, telemetry);
+    changes.extend(svc_net_changes);
+
+    // Rule SEL-002 (Trap 40): Prunes redundant values: array when operator is Exists or DoesNotExist
+    let unary_changes =
+        crate::healers::selector_healer::heal_match_expressions_unary_operators(manifest, telemetry);
+    changes.extend(unary_changes);
+
+    // Batch C: CIS 5.1.5 Token Guard & ReadOnly RootFS /tmp Mounts (Rules SEC-017, SEC-018, SEC-019)
+    let cis_token_changes =
+        crate::healers::cis_security_healer::heal_service_account_token_automount(manifest, telemetry);
+    changes.extend(cis_token_changes);
+    let tmp_mount_changes =
+        crate::healers::cis_security_healer::heal_readonly_rootfs_tmp_mounts(manifest, telemetry);
+    changes.extend(tmp_mount_changes);
+    let docker_sock_changes =
+        crate::healers::cis_security_healer::scan_docker_socket_mounts(manifest, telemetry);
+    changes.extend(docker_sock_changes);
+
+    // Batch D: Operational Invariants, CronJobs, Scientific Floats & Map-to-Array (Rules OPS-004, OPS-005, TYP-003, SYN-009)
+    let ops_changes =
+        crate::healers::storage_ops_healer::heal_operational_and_storage_invariants(manifest, telemetry);
+    changes.extend(ops_changes);
+
+    // Rule GTO-003 (Trap 43): Purges server-only status blocks, creationTimestamp, and resourceVersion from live cluster dumps
+    let dump_changes =
+        crate::healers::cluster_dump_healer::heal_live_cluster_export_artifacts(manifest, telemetry);
+    changes.extend(dump_changes);
+
+    // Rule DAPI-001 (Trap 44): Normalizes Downward API fieldPath bracket syntax (metadata.labels['key'])
+    let dapi_changes =
+        crate::healers::downward_api_healer::heal_downward_api_field_paths(manifest, telemetry);
+    changes.extend(dapi_changes);
+
     // Heals PodDisruptionBudget deadlocks (Feature 16)
     let pdb_changes = crate::healers::pdb_healer::heal_pdb_deadlocks(manifest, telemetry);
     changes.extend(pdb_changes);
@@ -263,20 +380,24 @@ pub fn native_heal_manifest_with_schemas(
         }
     }
 
-    // Traversal for Images
-    for container in manifest.root.find_nodes_by_key_recursive("image") {
-        if let Some(image_val) = &container.value {
-            if let Some(violation) = crate::audit_engine::audit_image(image_val) {
-                if !suppressed_rules.contains(&violation.check_name.as_str())
-                    && !manifest
-                        .integrity_violations
-                        .iter()
-                        .any(|v| v.rule_id == violation.rule_id)
-                {
-                    let msg = format!("Auditor [{}]: {}", violation.severity, violation.message);
-                    native_record_healing_impact(telemetry, &msg);
-                    changes.push(msg);
-                    manifest.integrity_violations.push(violation);
+    // Traversal for Images (only in workloads, never in CRD schemas)
+    if kind != "CustomResourceDefinition" {
+        for container in manifest.root.find_nodes_by_key_recursive("image") {
+            if let Some(image_val) = &container.value {
+                if !image_val.is_empty() && image_val != "{}" {
+                    if let Some(violation) = crate::audit_engine::audit_image(image_val) {
+                        if !suppressed_rules.contains(&violation.check_name.as_str())
+                            && !manifest
+                                .integrity_violations
+                                .iter()
+                                .any(|v| v.rule_id == violation.rule_id)
+                        {
+                            let msg = format!("Auditor [{}]: {}", violation.severity, violation.message);
+                            native_record_healing_impact(telemetry, &msg);
+                            changes.push(msg);
+                            manifest.integrity_violations.push(violation);
+                        }
+                    }
                 }
             }
         }
@@ -437,6 +558,13 @@ pub fn native_heal_manifest_with_schemas(
     let snippet_changes =
         crate::healers::ingress_snippet_healer::heal_ingress_snippets(manifest, telemetry);
     changes.extend(snippet_changes);
+
+    // Ingress Network Whitelist CIDR Formatting (Rule NET-011)
+    let whitelist_changes =
+        crate::healers::ingress_annotation_healer::heal_ingress_whitelist_annotations(
+            manifest, telemetry,
+        );
+    changes.extend(whitelist_changes);
 
     // Autoscaler Metric Contention: HPA vs VPA Conflict Arbitrator (Rule AUT-002)
     let autoscaler_changes =

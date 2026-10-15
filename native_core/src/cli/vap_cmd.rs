@@ -128,7 +128,7 @@ pub struct IngestedVapPolicy {
 /// Parses a ValidatingAdmissionPolicy manifest into structured policies and CEL rules.
 pub fn parse_vap_manifest(content: &str) -> Result<Vec<IngestedVapPolicy>, String> {
     let mut policies = Vec::new();
-    for doc in content.split("---") {
+    for doc in crate::parsers::streaming::stream_document_slices(content) {
         let trimmed = doc.trim();
         if trimmed.is_empty() {
             continue;

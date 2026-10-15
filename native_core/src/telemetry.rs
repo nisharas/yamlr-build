@@ -33,17 +33,57 @@ pub fn native_get_telemetry_dashboard(telemetry: &NativeTelemetry) -> String {
 }
 
 pub fn native_record_healing_impact(telemetry: &mut NativeTelemetry, change: &str) {
-    if change.contains("namespace") {
+    if change.contains("REF-")
+        || change.contains("ConfigMap")
+        || change.contains("Secret")
+        || change.contains("PersistentVolumeClaim")
+        || change.contains("claimName")
+    {
+        telemetry.total_risk_mitigated += 15.0;
+        telemetry.potential_outages_prevented += 1;
+    } else if change.contains("NET-")
+        || change.contains("REL-011")
+        || change.contains("targetPort")
+        || change.contains("selector")
+    {
+        telemetry.total_risk_mitigated += 15.0;
+        telemetry.potential_outages_prevented += 1;
+    } else if change.contains("RBAC-")
+        || change.contains("SEC-011")
+        || change.contains("ServiceAccount")
+        || change.contains("roleRef")
+    {
         telemetry.total_risk_mitigated += 10.0;
         telemetry.potential_outages_prevented += 1;
-    } else if change.contains("resource limits") {
+    } else if change.contains("PDB-")
+        || change.contains("deadlock")
+        || change.contains("PodDisruptionBudget")
+    {
+        telemetry.total_risk_mitigated += 25.0;
+        telemetry.potential_outages_prevented += 1;
+    } else if change.contains("SEC-")
+        || change.contains("securityContext")
+        || change.contains("readOnlyRootFilesystem")
+        || change.contains("runAsNonRoot")
+    {
+        telemetry.total_risk_mitigated += 20.0;
+    } else if change.contains("resource limits") || change.contains("RES-") {
         telemetry.total_risk_mitigated += 20.0;
         telemetry.potential_outages_prevented += 2;
-    } else if change.contains("Prophetic Auditor") {
+    } else if change.contains("SCHEMA-")
+        || change.contains("PRO-")
+        || change.contains("MIG-")
+        || change.contains("TOPOLOGY-")
+        || change.contains("GTO-")
+        || change.contains("AUT-")
+        || change.contains("Auditor")
+        || change.contains("Aesthetics")
+        || change.contains("deprecated")
+    {
         telemetry.total_risk_mitigated += 5.0;
         telemetry.architectural_debt_reduced += 1.0;
-    } else if change.contains("Aesthetics") {
-        telemetry.architectural_debt_reduced += 5.0;
+    } else {
+        telemetry.total_risk_mitigated += 5.0;
     }
 }
 

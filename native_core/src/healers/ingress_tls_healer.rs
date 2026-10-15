@@ -34,11 +34,12 @@ pub fn heal_ingress_tls_secrets(
         .and_then(|m| m.find_value("namespace"))
         .unwrap_or_else(|| "default".to_string());
 
+    let effective_ns = if ns.is_empty() { "default" } else { &ns };
     let secrets: Vec<&NativeIdentity> = identities
         .iter()
         .filter(|id| {
-            id.kind == "Secret"
-                && (id.namespace == ns || id.namespace.is_empty() || id.namespace == "default")
+            let target_ns = if id.namespace.is_empty() { "default" } else { &id.namespace };
+            id.kind == "Secret" && target_ns == effective_ns
         })
         .collect();
 

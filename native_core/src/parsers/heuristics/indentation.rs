@@ -35,6 +35,51 @@ pub fn apply_snap_to_grid(line: &str) -> String {
     }
 }
 
+/// Known standard child keys under K8s parent sections like `metadata:`.
+/// When an author writes `metadata:\nname: web` with 0 indentation, this heuristic
+/// safely indents `name:` under `metadata:`.
+const KNOWN_METADATA_CHILD_KEYS: &[&str] = &[
+    "name",
+    "namespace",
+    "labels",
+    "annotations",
+    "generateName",
+    "ownerReferences",
+    "finalizers",
+];
+
+/// Indents dangling child keys that immediately follow an empty parent mapping header.
+pub fn apply_dangling_child_indentation(
+    line: &str,
+    line_indent: usize,
+    parent_key: Option<&str>,
+    parent_indent: Option<usize>,
+    in_block: bool,
+) -> String {
+    if in_block {
+        return line.to_string();
+    }
+
+    let stripped = line.trim_start();
+
+    if let (Some(parent), Some(p_indent)) = (parent_key, parent_indent) {
+        // Only trigger when the actual line indentation is 0 (dangling) and parent was at zero indent
+        if line_indent == 0 && p_indent == 0 {
+            let key = stripped.split(':').next().unwrap_or("").trim();
+            if parent == "metadata" && KNOWN_METADATA_CHILD_KEYS.contains(&key) {
+                let expected = p_indent + 2;
+                let mut out = String::with_capacity(expected + stripped.len());
+                out.push_str(&" ".repeat(expected));
+                out.push_str(stripped);
+                return out;
+            }
+        }
+    }
+
+    line.to_string()
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1,4 +1,6 @@
 use super::*;
+use serde::Deserialize;
+use std::fs;
 use tempfile::tempdir;
 
 #[test]

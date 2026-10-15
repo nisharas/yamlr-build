@@ -47,8 +47,19 @@ pub fn native_structurize(shards: Vec<NativeShard>) -> SemanticManifest {
         // --- Multiline Block Awareness / Table continuation ---
         if shard.is_table_continuation {
             if let Some(&(_, parent_idx)) = stack.last() {
-                if let Some(&last_child_idx) = arena[parent_idx].children.last() {
-                    arena[last_child_idx].shards.push(shard.clone());
+                let target_idx = if let Some(&last_child_idx) = arena[parent_idx].children.last() {
+                    last_child_idx
+                } else {
+                    parent_idx
+                };
+                arena[target_idx].shards.push(shard.clone());
+                if arena[target_idx].value.is_none() {
+                    arena[target_idx].value = shard.value.clone();
+                }
+                if let Some(ref val) = shard.value {
+                    if val == "{}" || val == "[]" {
+                        arena[target_idx].is_empty_flow = true;
+                    }
                 }
             }
             continue;
@@ -113,12 +124,12 @@ pub fn native_structurize(shards: Vec<NativeShard>) -> SemanticManifest {
                 node_key = interned.to_string();
             }
 
-            // Duplicate Sibling Detection
-            if !node_key.is_empty() && node_key != "-" {
+            // Duplicate Sibling Detection (only for direct mapping siblings at the exact same indent, not sequence items)
+            if !node_key.is_empty() && node_key != "-" && !shard.is_list_item && !arena[parent_idx].children.iter().any(|&c_idx| arena[c_idx].shards.first().map_or(false, |s| s.is_list_item)) {
                 let is_duplicate = arena[parent_idx]
                     .children
                     .iter()
-                    .any(|&c_idx| arena[c_idx].key == node_key);
+                    .any(|&c_idx| arena[c_idx].key == node_key && arena[c_idx].indent == shard_indent);
                 if is_duplicate {
                     integrity_violations.push(crate::models::IntegrityViolation {
                         check_name: "DUPLICATE-KEY".to_string(),
@@ -152,7 +163,8 @@ pub fn native_structurize(shards: Vec<NativeShard>) -> SemanticManifest {
                 arena.push(node);
                 arena[parent_idx].children.push(child_idx);
 
-                if shard.value.is_none() || shard.is_list_item {
+                let is_anchor_def = shard.value.as_deref().map_or(false, |v| v.starts_with('&'));
+                if shard.value.is_none() || shard.is_list_item || is_anchor_def {
                     stack.push((shard_indent, child_idx));
                 }
             }

@@ -65,7 +65,7 @@ pub fn native_run_pipeline_streaming(
             let integrity_violations = manifest.integrity_violations;
 
             if !content.trim().is_empty() {
-                for doc_content in content.split("---") {
+                for doc_content in crate::parsers::streaming::stream_document_slices(&content) {
                     if doc_content.trim().is_empty() {
                         continue;
                     }
@@ -178,7 +178,7 @@ pub fn native_run_pipeline(root_path: String, schemas: Vec<NativeSchema>) -> Nat
             let mut file_fixes = Vec::new();
 
             if !content.trim().is_empty() {
-                for doc_content in content.split("---") {
+                for doc_content in crate::parsers::streaming::stream_document_slices(&content) {
                     let trimmed = doc_content.trim();
                     if trimmed.is_empty() {
                         continue;

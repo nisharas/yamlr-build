@@ -42,13 +42,13 @@ pub fn heal_deployment_revision_limits(
                 .trim_matches('\'')
                 .parse::<i32>()
             {
-                if num > 100 || num < 1 {
-                    rev_node.value = Some("10".to_string());
+                if num < 0 {
+                    rev_node.value = Some("0".to_string());
                     for s in &mut rev_node.shards {
-                        s.value = Some("10".to_string());
+                        s.value = Some("0".to_string());
                     }
                     let msg = format!(
-                        "Remediation [{}]: Clamped excessive revisionHistoryLimit: {} -> 10 on {} '{}'.",
+                        "Remediation [{}]: Corrected invalid negative revisionHistoryLimit: {} -> 0 on {} '{}'.",
                         REVISION_HISTORY_RULE_ID, num, kind, workload_name
                     );
                     native_record_healing_impact(telemetry, &msg);

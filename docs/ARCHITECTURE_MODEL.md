@@ -282,6 +282,13 @@ graph TD
 | `native_core/src/cli/metrics_cmd.rs` | Standalone ROI & Quality Metrics Dispatcher | Instantaneous calculation of dev hours saved, financial ROI, and blast radius metrics. | `cli/mod.rs`, `main.rs` |
 | `native_core/src/cli/diff_viewer.rs` | Unified Inline Word Diff Viewer | Renders token-level inline diffs and executes standalone `yamlr diff <PATH>` command. | `main.rs`, `heal_cmd.rs` |
 | `native_core/src/cli/vap_cmd.rs` | ValidatingAdmissionPolicy CEL Exporter | Translates Yamlr forensic rules into native in-tree Kubernetes 1.26+ `ValidatingAdmissionPolicy` & binding manifests. | `cli/dispatch.rs`, `main.rs` |
+| `native_core/src/cli/heal_adapters.rs` | Kustomize & Helm Directory Healing Adapters | Executes directory overlay synthesis and umbrella chart healing under the 500-line modularity rule. | `heal_cmd.rs` |
+| `native_core/src/cli/heal_args.rs` | Heal CLI Argument Contract Parser | Isolated Clap parser and validation contract for `yamlr heal` flags and options. | `heal_cmd.rs` |
+| `native_core/src/cli/heal_topology.rs` | Topological Priority & Pre-Indexing Engine | Determines manifest application precedence and cross-file identity indexing for multi-document streams. | `heal_cmd.rs`, `discovery.rs` |
+| `native_core/src/cli/heal_writer.rs` | Invariant Self-Verification & Atomic Writer | Atomic disk write, `.bak` safety rollback, and post-write YAML validation pipeline. | `heal_cmd.rs`, `diff_viewer.rs` |
+| `native_core/src/cli/scan_args.rs` | Scan CLI Argument Contract Parser | Isolated Clap parser, option normalization, and contract validation for `yamlr scan`. | `scan_cmd.rs` |
+| `native_core/src/cli/scan_render.rs` | Text, JSON & SARIF 2.1 Scan Report Renderers | High-speed multi-format diagnostic report formatters with cross-resource code flow graphs. | `scan_cmd.rs`, `sarif/` |
+| `native_core/src/healers/typo_dictionaries.rs` | Kubernetes Schema & Typo Dictionaries | Standardized dictionaries and singular/plural collision guard patterns. | `typo_healer.rs` |
 
 ---
 

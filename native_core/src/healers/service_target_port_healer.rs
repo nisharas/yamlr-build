@@ -8,7 +8,21 @@ use crate::models::{NativeIdentity, NativeTelemetry, SemanticManifest};
 use crate::telemetry::native_record_healing_impact;
 
 pub const TARGET_PORT_RULE_ID: &str = "NET-011";
-pub const PORT_SIMILARITY_THRESHOLD: f64 = 0.60;
+pub const PORT_SIMILARITY_THRESHOLD: f64 = 0.75;
+
+fn is_protocol_mismatch(a: &str, b: &str) -> bool {
+    let protocols = [
+        "grpc", "https", "http", "tls", "tcp", "udp", "metrics", "admin", "probe", "health",
+    ];
+    for proto_a in &protocols {
+        for proto_b in &protocols {
+            if proto_a != proto_b && a.contains(proto_a) && b.contains(proto_b) {
+                return true;
+            }
+        }
+    }
+    false
+}
 
 /// Aligns Service targetPort names and numbers against container ports in matched workloads.
 pub fn heal_service_target_ports(
@@ -53,11 +67,13 @@ pub fn heal_service_target_ports(
         return changes;
     }
 
+    let effective_ns = if ns.is_empty() { "default" } else { &ns };
     // Find best matching workload in namespace
     let matched_workload = identities
         .iter()
         .filter(|id| {
-            (id.namespace == ns || id.namespace.is_empty() || id.namespace == "default")
+            let target_ns = if id.namespace.is_empty() { "default" } else { &id.namespace };
+            target_ns == effective_ns
                 && crate::healers::selector_healer::WORKLOAD_KINDS.contains(&id.kind.as_str())
         })
         .max_by(|a, b| {
@@ -128,6 +144,9 @@ pub fn heal_service_target_ports(
                             let mut best_target = None;
                             let mut best_ratio = 0.0;
                             for n in names {
+                                if is_protocol_mismatch(clean, n) {
+                                    continue;
+                                }
                                 let ratio =
                                     crate::healers::selector_healer::similarity_ratio(clean, n);
                                 if ratio >= PORT_SIMILARITY_THRESHOLD && ratio > best_ratio {

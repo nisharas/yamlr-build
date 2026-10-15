@@ -39,6 +39,25 @@ pub fn check_template_safety(line: &str) -> TemplateSafetyStatus {
     }
 }
 
+/// Normalizes duplicated or multiplied mustache template delimiters (Trap 36: `{{{{` -> `{{`, `}}}}` -> `}}`).
+/// Common copy-paste or macro expansion error in Helm charts.
+pub fn normalize_template_braces(line: &str) -> String {
+    if !line.contains("{{{") && !line.contains("}}}") {
+        return line.to_string();
+    }
+
+    let mut result = line.to_string();
+    // Collapse 3 or more consecutive '{' to '{{'
+    while result.contains("{{{") {
+        result = result.replace("{{{", "{{");
+    }
+    // Collapse 3 or more consecutive '}' to '}}'
+    while result.contains("}}}") {
+        result = result.replace("}}}", "}}");
+    }
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -60,5 +79,18 @@ mod tests {
         let status = check_template_safety("image: nginx:latest");
         assert!(!status.has_templates);
         assert!(!status.skip_punctuation_healing);
+    }
+
+    #[test]
+    fn test_normalize_template_braces() {
+        // Trap 36: Double mustache normalization
+        assert_eq!(
+            normalize_template_braces("image: \"{{{{ .Values.image.repository }}}}\""),
+            "image: \"{{ .Values.image.repository }}\""
+        );
+        assert_eq!(
+            normalize_template_braces("name: {{{ .Values.name }}}"),
+            "name: {{ .Values.name }}"
+        );
     }
 }

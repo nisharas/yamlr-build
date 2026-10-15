@@ -26,17 +26,36 @@ pub fn native_validate_ast_against_schema(
     if let Some(ref api_v) = doc_api_version {
         let clean_api_v = api_v.trim_matches('"').trim_matches('\'');
         matching_schema = schemas.iter().find(|s| {
-            s.kind == kind_str && !s.api_version.is_empty() && s.api_version == clean_api_v
+            s.kind.eq_ignore_ascii_case(kind_str) && !s.api_version.is_empty() && s.api_version.eq_ignore_ascii_case(clean_api_v)
         });
     }
     if matching_schema.is_none() {
-        matching_schema = schemas.iter().find(|s| s.kind == kind_str);
+        matching_schema = schemas.iter().find(|s| s.kind.eq_ignore_ascii_case(kind_str));
     }
 
     let schema = match matching_schema {
         Some(s) => s,
         None => return violations,
     };
+
+    // Flag casing mismatch on kind (e.g. 'ingress' vs 'Ingress')
+    if schema.kind != kind_str {
+        violations.push(SchemaViolation {
+            field_path: "kind".to_string(),
+            message: format!(
+                "Invalid Kind casing '{}', standard Kubernetes resource Kind is '{}'",
+                kind_str, schema.kind
+            ),
+            severity: "High".to_string(),
+            suggested_value: schema.kind.clone(),
+            line_no: manifest
+                .root
+                .find_node("kind")
+                .and_then(|node| node.shards.first().map(|shard| shard.line_no))
+                .filter(|line| *line > 0)
+                .unwrap_or(1),
+        });
+    }
 
     for prop in &schema.properties {
         if prop.name.starts_with('/') {

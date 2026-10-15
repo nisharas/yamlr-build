@@ -32,6 +32,53 @@ pub fn heal_ingress_shadowing(
 
     if let Some(spec) = manifest.root.find_node_mut("spec") {
         for paths in spec.find_nodes_by_key_recursive_mut("paths") {
+            // Trap 58 / Rule ING-003: Prepend mandatory leading slash to relative Ingress paths
+            for path_item in &mut paths.children {
+                if let Some(path_node) = path_item.find_node_mut("path") {
+                    if let Some(val) = &path_node.value {
+                        let trimmed = val.trim();
+                        let clean = trimmed.trim_matches(|c| c == '\'' || c == '"');
+                        if !clean.is_empty() && !clean.starts_with('/') {
+                            let fixed_path = format!("/{}", clean);
+                            let old_val = val.clone();
+                            path_node.value = Some(fixed_path.clone());
+                            for s in &mut path_node.shards {
+                                s.value = Some(fixed_path.clone());
+                            }
+                            let msg = format!(
+                                "Remediation [ING-003]: Prepended mandatory leading slash to Ingress '{}' path '{}' -> '{}'.",
+                                ing_name, old_val, fixed_path
+                            );
+                            native_record_healing_impact(telemetry, &msg);
+                            changes.push(msg);
+                        }
+                    }
+                }
+
+                // Trap 68 / Rule ING-004: Ingress backend service port mutual exclusivity (number vs name)
+                // In Kubernetes networking.k8s.io/v1 IngressBackend, ServiceBackendPort is a oneOf union:
+                // either `number: <int>` OR `name: <string>`. If both are specified, kube-apiserver fails validation.
+                if let Some(backend) = path_item.find_node_mut("backend") {
+                    if let Some(svc) = backend.find_node_mut("service") {
+                        if let Some(port) = svc.find_node_mut("port") {
+                            let has_number = port.find_node("number").is_some();
+                            let has_name = port.find_node("name").is_some();
+                            if has_number && has_name {
+                                let pruned_name = port.find_value("name").unwrap_or_default();
+                                port.children.retain(|c| c.key != "name");
+                                port.shards.retain(|s| s.key != "name");
+                                let msg = format!(
+                                    "Remediation [ING-004]: Resolved Ingress '{}' backend port mutual exclusivity conflict: retained 'number' and pruned redundant 'name: {}'.",
+                                    ing_name, pruned_name
+                                );
+                                native_record_healing_impact(telemetry, &msg);
+                                changes.push(msg);
+                            }
+                        }
+                    }
+                }
+            }
+
             if paths.children.len() <= 1 {
                 continue;
             }
@@ -310,5 +357,186 @@ mod tests {
 
         let changes = heal_ingress_shadowing(&mut manifest, &mut telemetry);
         assert!(changes.is_empty());
+    }
+
+    #[test]
+    fn test_ingress_path_leading_slash() {
+        let mut telemetry = NativeTelemetry::default();
+        let mut manifest =
+            create_ingress_with_paths(vec![("api/v1", "Prefix")]);
+
+        let changes = heal_ingress_shadowing(&mut manifest, &mut telemetry);
+        assert_eq!(changes.len(), 1);
+        assert!(changes[0].contains("[ING-003]"));
+
+        let spec = manifest.root.find_node("spec").unwrap();
+        let rules = spec.find_node("rules").unwrap();
+        let http = rules.children[0].find_node("http").unwrap();
+        let paths = http.find_node("paths").unwrap();
+        assert_eq!(paths.children[0].find_value("path"), Some("/api/v1".to_string()));
+    }
+
+    #[test]
+    fn test_ingress_backend_port_number_name_conflict() {
+        let mut telemetry = NativeTelemetry::default();
+        let mut manifest = SemanticManifest {
+            root: SemanticNode {
+                key: String::new(),
+                value: None,
+                indent: 0,
+                is_empty_flow: false,
+                shards: Vec::new(),
+                children: vec![
+                    SemanticNode {
+                        key: "kind".to_string(),
+                        value: Some("Ingress".to_string()),
+                        indent: 0,
+                        is_empty_flow: false,
+                        children: vec![],
+                        shards: vec![],
+                    },
+                    SemanticNode {
+                        key: "metadata".to_string(),
+                        value: None,
+                        indent: 0,
+                        is_empty_flow: false,
+                        shards: Vec::new(),
+                        children: vec![SemanticNode {
+                            key: "name".to_string(),
+                            value: Some("api-gw".to_string()),
+                            indent: 2,
+                            is_empty_flow: false,
+                            children: vec![],
+                            shards: vec![],
+                        }],
+                    },
+                    SemanticNode {
+                        key: "spec".to_string(),
+                        value: None,
+                        indent: 0,
+                        is_empty_flow: false,
+                        shards: Vec::new(),
+                        children: vec![SemanticNode {
+                            key: "rules".to_string(),
+                            value: None,
+                            indent: 2,
+                            is_empty_flow: false,
+                            shards: Vec::new(),
+                            children: vec![SemanticNode {
+                                key: "-".to_string(),
+                                value: None,
+                                indent: 4,
+                                is_empty_flow: false,
+                                shards: Vec::new(),
+                                children: vec![SemanticNode {
+                                    key: "http".to_string(),
+                                    value: None,
+                                    indent: 6,
+                                    is_empty_flow: false,
+                                    shards: Vec::new(),
+                                    children: vec![SemanticNode {
+                                        key: "paths".to_string(),
+                                        value: None,
+                                        indent: 8,
+                                        is_empty_flow: false,
+                                        shards: Vec::new(),
+                                        children: vec![SemanticNode {
+                                            key: "-".to_string(),
+                                            value: None,
+                                            indent: 10,
+                                            is_empty_flow: false,
+                                            shards: Vec::new(),
+                                            children: vec![
+                                                SemanticNode {
+                                                    key: "path".to_string(),
+                                                    value: Some("/api".to_string()),
+                                                    indent: 12,
+                                                    is_empty_flow: false,
+                                                    children: vec![],
+                                                    shards: vec![],
+                                                },
+                                                SemanticNode {
+                                                    key: "pathType".to_string(),
+                                                    value: Some("Prefix".to_string()),
+                                                    indent: 12,
+                                                    is_empty_flow: false,
+                                                    children: vec![],
+                                                    shards: vec![],
+                                                },
+                                                SemanticNode {
+                                                    key: "backend".to_string(),
+                                                    value: None,
+                                                    indent: 12,
+                                                    is_empty_flow: false,
+                                                    shards: Vec::new(),
+                                                    children: vec![SemanticNode {
+                                                        key: "service".to_string(),
+                                                        value: None,
+                                                        indent: 14,
+                                                        is_empty_flow: false,
+                                                        shards: Vec::new(),
+                                                        children: vec![
+                                                            SemanticNode {
+                                                                key: "name".to_string(),
+                                                                value: Some("api-svc".to_string()),
+                                                                indent: 16,
+                                                                is_empty_flow: false,
+                                                                children: vec![],
+                                                                shards: vec![],
+                                                            },
+                                                            SemanticNode {
+                                                                key: "port".to_string(),
+                                                                value: None,
+                                                                indent: 16,
+                                                                is_empty_flow: false,
+                                                                shards: Vec::new(),
+                                                                children: vec![
+                                                                    SemanticNode {
+                                                                        key: "number".to_string(),
+                                                                        value: Some("8080".to_string()),
+                                                                        indent: 18,
+                                                                        is_empty_flow: false,
+                                                                        children: vec![],
+                                                                        shards: vec![],
+                                                                    },
+                                                                    SemanticNode {
+                                                                        key: "name".to_string(),
+                                                                        value: Some("http".to_string()), // Conflict!
+                                                                        indent: 18,
+                                                                        is_empty_flow: false,
+                                                                        children: vec![],
+                                                                        shards: vec![],
+                                                                    },
+                                                                ],
+                                                            },
+                                                        ],
+                                                    }],
+                                                },
+                                            ],
+                                        }],
+                                    }],
+                                }],
+                            }],
+                        }],
+                    },
+                ],
+            },
+            indent_step: 2,
+            integrity_violations: Vec::new(),
+        };
+
+        let changes = heal_ingress_shadowing(&mut manifest, &mut telemetry);
+        assert_eq!(changes.len(), 1);
+        assert!(changes[0].contains("ING-004"));
+
+        let spec = manifest.root.find_node("spec").unwrap();
+        let rules = spec.find_node("rules").unwrap();
+        let http = rules.children[0].find_node("http").unwrap();
+        let paths = http.find_node("paths").unwrap();
+        let backend = paths.children[0].find_node("backend").unwrap();
+        let service = backend.find_node("service").unwrap();
+        let port = service.find_node("port").unwrap();
+        assert_eq!(port.find_value("number"), Some("8080".to_string()));
+        assert!(port.find_node("name").is_none());
     }
 }

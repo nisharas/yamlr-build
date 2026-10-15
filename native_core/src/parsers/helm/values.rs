@@ -48,6 +48,16 @@ pub fn heal_values_yaml(content: &str) -> (String, Vec<String>) {
         let key = shards[i].key.clone();
         let val_opt = shards[i].value.clone();
 
+        // 0. SYN-019 / Trap 74: Glued Unspaced Colon Delimiter ("memory:256Mi" -> "memory: 256Mi")
+        if let Some(val) = &val_opt {
+            let glued_pattern = format!("{}:{}", key, val);
+            if !key.is_empty() && shards[i].raw_line.contains(&glued_pattern) {
+                update_shard_raw_line(&mut shards[i], &key, val);
+                changes.push(format!("Remediation [SYN-019]: Aligned unspaced colon delimiter '{}:{}' -> '{}: {}'.", key, val, key, val));
+                modified = true;
+            }
+        }
+
         // 1. OPS-002: Floating Image Tags in values.yaml
         let unquoted_val = val_opt
             .as_deref()
@@ -131,8 +141,13 @@ pub fn heal_values_yaml(content: &str) -> (String, Vec<String>) {
             let val = val_opt.as_deref().unwrap();
             if !val.contains("{{") && !val.starts_with('$') && val != "\"\"" && val != "''" {
                 if !shards[i].comment.contains("SEC-003") {
-                    shards[i].comment =
-                        "# yamlr [SEC-003]: Consider referencing an existingSecret".to_string();
+                    let ann = "# yamlr [SEC-003]: Consider referencing an existingSecret";
+                    let new_comment = if shards[i].comment.trim().is_empty() {
+                        ann.to_string()
+                    } else {
+                        format!("{} {}", shards[i].comment.trim(), ann)
+                    };
+                    shards[i].comment = new_comment;
                     let indent = " ".repeat(shards[i].indent);
                     shards[i].raw_line =
                         format!("{}{}: {} {}", indent, shards[i].key, val, shards[i].comment);
@@ -151,7 +166,13 @@ pub fn heal_values_yaml(content: &str) -> (String, Vec<String>) {
         {
             let repo_val = val_opt.as_deref().unwrap();
             if !shards[i].comment.contains("DEP-001") {
-                shards[i].comment = "# yamlr [DEP-001]: Validated OCI registry".to_string();
+                let ann = "# yamlr [DEP-001]: Validated OCI registry";
+                let new_comment = if shards[i].comment.trim().is_empty() {
+                    ann.to_string()
+                } else {
+                    format!("{} {}", shards[i].comment.trim(), ann)
+                };
+                shards[i].comment = new_comment;
                 let indent = " ".repeat(shards[i].indent);
                 shards[i].raw_line = format!(
                     "{}{}: {} {}",
@@ -159,6 +180,39 @@ pub fn heal_values_yaml(content: &str) -> (String, Vec<String>) {
                 );
                 changes.push(msg_normalize_oci_registry(repo_val));
                 modified = true;
+            }
+        }
+
+        // 12. TYP-001: Ambiguous Boolean Normalization for Feature Toggle Keys
+        let is_toggle_key = matches!(
+            key.as_str(),
+            "enabled"
+                | "enable"
+                | "create"
+                | "install"
+                | "active"
+                | "default"
+                | "disabled"
+                | "autoCreate"
+                | "serviceAccount.create"
+                | "rbac.create"
+        );
+        if is_toggle_key {
+            if let Some(val_str) = &val_opt {
+                let trimmed = val_str.trim();
+                let is_quoted_false = trimmed == "\"false\"" || trimmed == "'false'";
+                let is_quoted_true = trimmed == "\"true\"" || trimmed == "'true'";
+                if is_quoted_false {
+                    shards[i].value = Some("false".to_string());
+                    update_shard_raw_line(&mut shards[i], &key, "false");
+                    changes.push(msg_normalize_ambiguous_boolean(&key, trimmed, "false"));
+                    modified = true;
+                } else if is_quoted_true {
+                    shards[i].value = Some("true".to_string());
+                    update_shard_raw_line(&mut shards[i], &key, "true");
+                    changes.push(msg_normalize_ambiguous_boolean(&key, trimmed, "true"));
+                    modified = true;
+                }
             }
         }
     }

@@ -6,7 +6,12 @@
 //! relative to their parent context.
 
 /// Normalizes list item indentation relative to the parent mapping indent.
-pub fn apply_list_indentation(line: &str, parent_indent: Option<usize>, in_block: bool) -> String {
+pub fn apply_list_indentation(
+    line: &str,
+    line_indent: usize,
+    parent_indent: Option<usize>,
+    in_block: bool,
+) -> String {
     if in_block {
         return line.to_string();
     }
@@ -16,11 +21,9 @@ pub fn apply_list_indentation(line: &str, parent_indent: Option<usize>, in_block
         return line.to_string();
     }
 
-    let current_indent = line.len() - stripped.len();
-
     if let Some(parent) = parent_indent {
         // 1. Flush-Left Recovery: "- item" at 0 while parent is indented
-        if current_indent == 0 && parent > 0 {
+        if line_indent == 0 && parent > 0 {
             let expected_indent = parent + 2;
             let mut out = String::with_capacity(expected_indent + stripped.len());
             out.push_str(&" ".repeat(expected_indent));
@@ -29,12 +32,12 @@ pub fn apply_list_indentation(line: &str, parent_indent: Option<usize>, in_block
         }
 
         // 2. Grid Misalignment: Odd-numbered indentations (3, 5, 7 spaces)
-        if current_indent > 0 && current_indent % 2 != 0 {
+        if line_indent > 0 && line_indent % 2 != 0 {
             let expected_indent = parent + 2;
-            let final_indent = if (current_indent as isize - expected_indent as isize).abs() <= 1 {
+            let final_indent = if (line_indent as isize - expected_indent as isize).abs() <= 1 {
                 expected_indent
             } else {
-                current_indent + 1 // Round up to even
+                line_indent + 1 // Round up to even
             };
 
             let mut out = String::with_capacity(final_indent + stripped.len());
@@ -56,7 +59,7 @@ mod tests {
         let parent_indent = Some(2); // e.g. "  containers:"
         let line = "- name: web";
         assert_eq!(
-            apply_list_indentation(line, parent_indent, false),
+            apply_list_indentation(line, 0, parent_indent, false),
             "    - name: web"
         );
     }
@@ -66,7 +69,7 @@ mod tests {
         let parent_indent = Some(2); // "  containers:"
         let line = "   - name: web"; // indent 3
         assert_eq!(
-            apply_list_indentation(line, parent_indent, false),
+            apply_list_indentation(line, 3, parent_indent, false),
             "    - name: web"
         );
     }

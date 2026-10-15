@@ -51,7 +51,19 @@ pub fn apply_keyword_fusion(line: &str, in_block: bool) -> String {
     for &key in SAFE_K8S_KEYWORDS {
         if stripped.starts_with(key) && stripped.len() > key.len() {
             let suffix = &stripped[key.len()..];
-            // If suffix starts with uppercase, digit, or 'v' (for apiVersion), it is likely fused
+            // Handle space-separated: "apiVersion v1" -> suffix is " v1"
+            if suffix.starts_with(' ') || suffix.starts_with('\t') {
+                let trimmed_suffix = suffix.trim();
+                if !trimmed_suffix.is_empty() {
+                    let mut out = String::with_capacity(indent_len + key.len() + 2 + trimmed_suffix.len());
+                    out.push_str(indent_str);
+                    out.push_str(key);
+                    out.push_str(": ");
+                    out.push_str(trimmed_suffix);
+                    return out;
+                }
+            }
+            // If suffix starts with uppercase, digit, or 'v' (for apiVersion), it is fused: "apiVersionv1"
             if let Some(first_char) = suffix.chars().next() {
                 if first_char.is_uppercase()
                     || first_char.is_ascii_digit()
@@ -82,6 +94,9 @@ pub fn apply_missing_colon(line: &str, next_line: Option<&str>, in_block: bool) 
         || stripped.contains(':')
         || stripped.contains('[')
         || stripped.contains('{')
+        || stripped.contains(';')
+        || stripped.contains(' ')
+        || stripped.contains('\t')
         || stripped.starts_with('-')
         || stripped.starts_with('#')
     {

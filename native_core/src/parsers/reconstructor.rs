@@ -224,9 +224,11 @@ pub fn reconstruct_node(node: &SemanticNode, output: &mut String, depth: usize) 
             }
 
             // RENDER CONTINUATION SHARDS (Multiline Strings)
-            for shard in child.shards.iter().skip(1) {
-                if shard.is_table_continuation {
-                    output.push_str(&format!("{}\n", shard.raw_line));
+            if !child.is_empty_flow {
+                for shard in child.shards.iter().skip(1) {
+                    if shard.is_table_continuation {
+                        output.push_str(&format!("{}\n", shard.raw_line));
+                    }
                 }
             }
 
@@ -253,6 +255,8 @@ pub fn reconstruct_node(node: &SemanticNode, output: &mut String, depth: usize) 
                     flow_val,
                     comment_str
                 ));
+            } else if child.key.is_empty() && (child.value.as_deref() == Some("{}") || child.value.as_deref() == Some("[]")) {
+                // Skip isolated flow bracket child if parent already rendered it
             } else {
                 if child.key == "-" {
                     output.push_str(&format!("{}{}{}\n", final_prefix, list_prefix, comment_str));
