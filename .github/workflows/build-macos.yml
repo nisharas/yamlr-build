@@ -30,6 +30,7 @@ jobs:
         with:
           toolchain: stable
           target: ${{ matrix.target }}
+          cache: false
 
       - name: Build native release binary
         run: |
